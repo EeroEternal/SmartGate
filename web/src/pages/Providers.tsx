@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
+import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
 
 interface Provider {
@@ -12,6 +13,19 @@ interface Provider {
   created_at: string
 }
 
+interface Endpoint {
+  id: string
+  account_id: string
+  account_name: string
+  name: string
+  upstream_model_id: string
+  enabled: boolean
+  health_status: string
+  cooldown_until?: string | null
+  priority: number
+  weight: number
+}
+
 const PROVIDER_TYPES = [
   { id: 'openai', name: 'OpenAI (or Compatible)' },
   { id: 'azure', name: 'Azure OpenAI' },
@@ -21,24 +35,38 @@ const PROVIDER_TYPES = [
 
 export default function Providers() {
   const [providers, setProviders] = useState<Provider[]>([])
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([])
   const [loading, setLoading] = useState(true)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    base_url: '',
-    api_key: '',
-  })
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState(false)
+  const [isEndpointModalOpen, setIsEndpointModalOpen] = useState(false)
+  const [formData, setFormData] = useState({ name: '', base_url: '', api_key: '' })
   const [providerType, setProviderType] = useState(PROVIDER_TYPES[0])
+  const [selectedAccount, setSelectedAccount] = useState<{ id: string; name: string } | null>(null)
+  const [endpointForm, setEndpointForm] = useState({
+    name: '',
+    upstream_model_id: '',
+    priority: '1',
+    weight: '1',
+  })
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    fetchProviders()
+    refresh()
   }, [])
 
-  const fetchProviders = async () => {
+  const refresh = async () => {
     try {
-      const data = await adminFetch('/api/admin/providers')
-      if (data.success) setProviders(data.data)
+      const [pData, eData] = await Promise.all([
+        adminFetch('/api/admin/providers'),
+        adminFetch('/api/admin/endpoints'),
+      ])
+      if (pData.success) {
+        setProviders(pData.data)
+        if (pData.data.length > 0 && !selectedAccount) {
+          setSelectedAccount({ id: pData.data[0].id, name: pData.data[0].name })
+        }
+      }
+      if (eData.success) setEndpoints(eData.data)
     } catch (error) {
       console.error('Failed to fetch providers:', error)
     } finally {
@@ -46,7 +74,7 @@ export default function Providers() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateProvider = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     try {
@@ -58,15 +86,39 @@ export default function Providers() {
         }),
       })
       if (data.success) {
-        setIsModalOpen(false)
+        setIsProviderModalOpen(false)
         setFormData({ name: '', base_url: '', api_key: '' })
         setProviderType(PROVIDER_TYPES[0])
-        fetchProviders()
-      } else {
-        alert(data.message || 'Failed to create provider')
+        await refresh()
       }
     } catch (error) {
-      console.error('Submit error:', error)
+      alert(error instanceof Error ? error.message : 'Network error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleCreateEndpoint = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAccount?.id) return
+    setSubmitting(true)
+    try {
+      const data = await adminFetch('/api/admin/endpoints', {
+        method: 'POST',
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          name: endpointForm.name,
+          upstream_model_id: endpointForm.upstream_model_id,
+          priority: parseInt(endpointForm.priority, 10) || 1,
+          weight: parseInt(endpointForm.weight, 10) || 1,
+        }),
+      })
+      if (data.success) {
+        setIsEndpointModalOpen(false)
+        setEndpointForm({ name: '', upstream_model_id: '', priority: '1', weight: '1' })
+        await refresh()
+      }
+    } catch (error) {
       alert(error instanceof Error ? error.message : 'Network error')
     } finally {
       setSubmitting(false)
@@ -74,97 +126,128 @@ export default function Providers() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Providers</h2>
-          <p className="text-sm text-zinc-500 mt-1">Manage upstream AI service providers.</p>
+          <p className="text-sm text-zinc-500 mt-1">
+            Manage provider accounts and the concrete endpoints behind them.
+          </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Provider
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsEndpointModalOpen(true)}
+            disabled={providers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-zinc-300 rounded-md hover:bg-zinc-50 disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" />
+            Add Endpoint
+          </button>
+          <button
+            onClick={() => setIsProviderModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800"
+          >
+            <Plus className="w-4 h-4" />
+            Add Provider
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Provider Accounts</div>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
+            <tr>
+              <th className="px-6 py-3 font-medium">Name</th>
+              <th className="px-6 py-3 font-medium">Type</th>
+              <th className="px-6 py-3 font-medium">Base URL</th>
+              <th className="px-6 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200">
+            {loading ? (
               <tr>
-                <th className="px-6 py-3 font-medium">Name</th>
-                <th className="px-6 py-3 font-medium">Type</th>
-                <th className="px-6 py-3 font-medium">Base URL</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium text-right">Actions</th>
+                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">Loading...</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
-                    Loading providers...
+            ) : providers.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
+                  No providers yet. Add one before creating endpoints.
+                </td>
+              </tr>
+            ) : (
+              providers.map((provider) => (
+                <tr key={provider.id} className="hover:bg-zinc-50/50">
+                  <td className="px-6 py-4 font-medium">{provider.name}</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2.5 py-1 rounded-md bg-zinc-100 border border-zinc-200 text-xs font-mono">
+                      {provider.provider_type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-zinc-500 truncate max-w-xs">{provider.base_url}</td>
+                  <td className="px-6 py-4">
+                    <HealthBadge status={provider.status === 'active' ? 'healthy' : 'disabled'} />
                   </td>
                 </tr>
-              ) : providers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
-                    No providers configured. Click "Add Provider" to start.
-                  </td>
-                </tr>
-              ) : (
-                providers.map((provider) => (
-                  <tr key={provider.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-zinc-900">{provider.name}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-md bg-zinc-100 border border-zinc-200 text-xs font-mono">
-                        {provider.provider_type}
-                      </span>
-                    </td>
-                    <td
-                      className="px-6 py-4 font-mono text-zinc-500 truncate max-w-xs"
-                      title={provider.base_url}
-                    >
-                      {provider.base_url}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${provider.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-300'}`}
-                        />
-                        <span className="capitalize">{provider.status}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-zinc-500 hover:text-black font-medium">Edit</button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {isModalOpen && (
+      <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Endpoints</div>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
+            <tr>
+              <th className="px-6 py-3 font-medium">Name</th>
+              <th className="px-6 py-3 font-medium">Provider</th>
+              <th className="px-6 py-3 font-medium">Upstream Model</th>
+              <th className="px-6 py-3 font-medium">Health</th>
+              <th className="px-6 py-3 font-medium">Priority</th>
+              <th className="px-6 py-3 font-medium">Weight</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200">
+            {endpoints.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">
+                  No endpoints yet. Create one, then bind it into a Model Pool.
+                </td>
+              </tr>
+            ) : (
+              endpoints.map((ep) => (
+                <tr key={ep.id} className="hover:bg-zinc-50/50">
+                  <td className="px-6 py-4 font-medium">{ep.name}</td>
+                  <td className="px-6 py-4">{ep.account_name}</td>
+                  <td className="px-6 py-4 font-mono text-xs">{ep.upstream_model_id}</td>
+                  <td className="px-6 py-4">
+                    <HealthBadge status={ep.enabled ? ep.health_status : 'disabled'} />
+                  </td>
+                  <td className="px-6 py-4 font-mono">{ep.priority}</td>
+                  <td className="px-6 py-4 font-mono">{ep.weight}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {isProviderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden border border-zinc-200">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">Add Provider</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-black">
+              <button onClick={() => setIsProviderModalOpen(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleCreateProvider} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Name</label>
                 <input
-                  type="text"
                   required
-                  className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  placeholder="e.g. My Azure OpenAI"
+                  className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
@@ -180,8 +263,7 @@ export default function Providers() {
                 <input
                   type="url"
                   required
-                  className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  placeholder="https://api.openai.com/v1"
+                  className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
                   value={formData.base_url}
                   onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
                 />
@@ -191,28 +273,88 @@ export default function Providers() {
                 <input
                   type="password"
                   required
-                  className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black font-mono"
-                  placeholder="sk-..."
+                  className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
                   value={formData.api_key}
                   onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
                 />
               </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-zinc-900 bg-transparent border border-zinc-300 rounded-md hover:bg-zinc-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-zinc-800 disabled:opacity-50"
-                >
-                  {submitting ? 'Saving...' : 'Save Provider'}
-                </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
+              >
+                {submitting ? 'Saving...' : 'Save Provider'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEndpointModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
+              <h3 className="text-lg font-bold">Add Endpoint</h3>
+              <button onClick={() => setIsEndpointModalOpen(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateEndpoint} className="p-6 space-y-4">
+              <Select
+                label="Provider Account"
+                options={providers.map((p) => ({ id: p.id, name: p.name }))}
+                selected={selectedAccount || { id: '', name: 'Select provider...' }}
+                onChange={(opt) => setSelectedAccount({ id: String(opt.id), name: opt.name })}
+              />
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Endpoint Name</label>
+                <input
+                  required
+                  className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  placeholder="e.g. gpt-4o-eastus"
+                  value={endpointForm.name}
+                  onChange={(e) => setEndpointForm({ ...endpointForm, name: e.target.value })}
+                />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Upstream Model ID</label>
+                <input
+                  required
+                  className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  placeholder="e.g. gpt-4o"
+                  value={endpointForm.upstream_model_id}
+                  onChange={(e) =>
+                    setEndpointForm({ ...endpointForm, upstream_model_id: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Priority</label>
+                  <input
+                    type="number"
+                    className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
+                    value={endpointForm.priority}
+                    onChange={(e) => setEndpointForm({ ...endpointForm, priority: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Weight</label>
+                  <input
+                    type="number"
+                    className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
+                    value={endpointForm.weight}
+                    onChange={(e) => setEndpointForm({ ...endpointForm, weight: e.target.value })}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={submitting || !selectedAccount?.id}
+                className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
+              >
+                {submitting ? 'Saving...' : 'Save Endpoint'}
+              </button>
             </form>
           </div>
         </div>

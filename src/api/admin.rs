@@ -12,7 +12,7 @@ use crate::api::models::{
     ApiResponse, CreateProviderReq, CreatePoolReq, CreateEndpointReq, CreateVirtualModelReq,
     CreateOrgReq, CreateProjectReq, CreateApiKeyReq, ApiKeyResponse,
     BindEndpointToPoolReq, GrantModelToProjectReq, UpdateProjectQuotaReq, UpdateApiKeyQuotaReq,
-    PoolEndpointView,
+    PoolEndpointView, EndpointView, VirtualModelView, ProjectGrantView, RevokeModelFromProjectReq,
 };
 pub use crate::api::stats_handler::get_stats;
 
@@ -31,6 +31,8 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/projects", get(list_projects).post(create_project))
         .route("/projects/:id", patch(update_project_quota))
         .route("/projects/grant", post(grant_model_to_project))
+        .route("/projects/revoke", post(revoke_model_from_project))
+        .route("/grants", get(list_grants))
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route("/api-keys/:id", patch(update_api_key_quota))
         // Statistics
@@ -144,18 +146,62 @@ async fn create_pool(
 }
 
 // Endpoints
+#[derive(Debug, FromRow)]
+struct EndpointListRow {
+    id: String,
+    account_id: String,
+    account_name: String,
+    name: String,
+    upstream_model_id: String,
+    enabled: bool,
+    health_status: String,
+    cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
+    priority: i32,
+    weight: i32,
+}
+
 async fn list_endpoints(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<ApiResponse<Vec<Endpoint>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let endpoints = sqlx::query_as::<_, Endpoint>("SELECT * FROM endpoints")
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            tracing::error!("DB error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
-        })?;
+) -> Result<Json<ApiResponse<Vec<EndpointView>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let rows = sqlx::query_as::<_, EndpointListRow>(
+        "SELECT e.id, e.account_id, pa.name AS account_name, e.name, e.upstream_model_id,
+                e.enabled, e.health_status, e.cooldown_until, e.priority, e.weight
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         ORDER BY pa.name ASC, e.name ASC"
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+    })?;
 
-    Ok(Json(ApiResponse::success(endpoints)))
+    let views = rows
+        .into_iter()
+        .map(|row| {
+            let (health_status, cooldown_until) =
+                if let Some(metric) = state.metrics.get(&row.id) {
+                    (metric.health_status.clone(), metric.cooldown_until)
+                } else {
+                    (row.health_status, row.cooldown_until)
+                };
+            EndpointView {
+                id: row.id,
+                account_id: row.account_id,
+                account_name: row.account_name,
+                name: row.name,
+                upstream_model_id: row.upstream_model_id,
+                enabled: row.enabled,
+                health_status,
+                cooldown_until: cooldown_until.map(|t| t.to_rfc3339()),
+                priority: row.priority,
+                weight: row.weight,
+            }
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::success(views)))
 }
 
 async fn create_endpoint(
@@ -198,18 +244,45 @@ async fn create_endpoint(
 }
 
 // Virtual Models
+#[derive(Debug, FromRow)]
+struct VirtualModelListRow {
+    id: String,
+    pool_id: String,
+    pool_name: String,
+    name: String,
+    enabled: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
 async fn list_virtual_models(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<ApiResponse<Vec<VirtualModel>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let models = sqlx::query_as::<_, VirtualModel>("SELECT * FROM virtual_models")
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            tracing::error!("DB error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
-        })?;
+) -> Result<Json<ApiResponse<Vec<VirtualModelView>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let rows = sqlx::query_as::<_, VirtualModelListRow>(
+        "SELECT vm.id, vm.pool_id, mp.name AS pool_name, vm.name, vm.enabled, vm.created_at
+         FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         ORDER BY vm.name ASC"
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+    })?;
 
-    Ok(Json(ApiResponse::success(models)))
+    let views = rows
+        .into_iter()
+        .map(|row| VirtualModelView {
+            id: row.id,
+            pool_id: row.pool_id,
+            pool_name: row.pool_name,
+            name: row.name,
+            enabled: row.enabled,
+            created_at: row.created_at.to_rfc3339(),
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::success(views)))
 }
 
 async fn create_virtual_model(
@@ -366,6 +439,61 @@ async fn grant_model_to_project(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
     Ok(Json(ApiResponse::success(())))
+}
+
+async fn revoke_model_from_project(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<RevokeModelFromProjectReq>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+    sqlx::query(
+        "DELETE FROM project_model_grants WHERE project_id = ? AND virtual_model_id = ?"
+    )
+    .bind(&payload.project_id)
+    .bind(&payload.virtual_model_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    Ok(Json(ApiResponse::success(())))
+}
+
+#[derive(Debug, FromRow)]
+struct GrantListRow {
+    project_id: String,
+    project_name: String,
+    virtual_model_id: String,
+    virtual_model_name: String,
+}
+
+async fn list_grants(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ApiResponse<Vec<ProjectGrantView>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let rows = sqlx::query_as::<_, GrantListRow>(
+        "SELECT pmg.project_id, p.name AS project_name,
+                pmg.virtual_model_id, vm.name AS virtual_model_name
+         FROM project_model_grants pmg
+         JOIN projects p ON p.id = pmg.project_id
+         JOIN virtual_models vm ON vm.id = pmg.virtual_model_id
+         ORDER BY p.name ASC, vm.name ASC"
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+    })?;
+
+    let views = rows
+        .into_iter()
+        .map(|row| ProjectGrantView {
+            project_id: row.project_id,
+            project_name: row.project_name,
+            virtual_model_id: row.virtual_model_id,
+            virtual_model_name: row.virtual_model_name,
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::success(views)))
 }
 
 async fn list_api_keys(

@@ -127,3 +127,41 @@ pub struct PoolEndpointView {
     pub active_requests: i32,
     pub ema_latency_ms: f64,
 }
+
+#[derive(Debug, Serialize)]
+pub struct EndpointView {
+    pub id: String,
+    pub account_id: String,
+    pub account_name: String,
+    pub name: String,
+    pub upstream_model_id: String,
+    pub enabled: bool,
+    pub health_status: String,
+    pub cooldown_until: Option<String>,
+    pub priority: i32,
+    pub weight: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VirtualModelView {
+    pub id: String,
+    pub pool_id: String,
+    pub pool_name: String,
+    pub name: String,
+    pub enabled: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProjectGrantView {
+    pub project_id: String,
+    pub project_name: String,
+    pub virtual_model_id: String,
+    pub virtual_model_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeModelFromProjectReq {
+    pub project_id: String,
+    pub virtual_model_id: String,
+}

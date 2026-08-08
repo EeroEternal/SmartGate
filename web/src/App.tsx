@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Database, ShieldCheck, Activity, Layers } from 'lucide-react'
+import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import Providers from './pages/Providers'
 import Pools from './pages/Pools'
 import PoolDetails from './pages/PoolDetails'
+import VirtualModels from './pages/VirtualModels'
 import AccessControl from './pages/access/AccessControl'
 import Statistics from './pages/stats/Statistics'
 
@@ -136,6 +137,10 @@ function Sidebar() {
           <Layers className="w-4 h-4" />
           Model Pools
         </Link>
+        <Link to="/virtual-models" className={navItemClass('/virtual-models')}>
+          <Box className="w-4 h-4" />
+          Virtual Models
+        </Link>
         <Link to="/access" className={navItemClass('/access')}>
           <ShieldCheck className="w-4 h-4" />
           Access Control
@@ -199,6 +204,7 @@ function App() {
               <Route path="/providers" element={<Providers />} />
               <Route path="/pools" element={<Pools />} />
               <Route path="/pools/:id" element={<PoolDetails />} />
+              <Route path="/virtual-models" element={<VirtualModels />} />
               <Route path="/access" element={<AccessControl />} />
               <Route path="/stats" element={<Statistics />} />
               <Route path="*" element={<div className="text-zinc-500">Under Construction</div>} />
