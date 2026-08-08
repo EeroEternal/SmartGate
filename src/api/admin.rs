@@ -1,16 +1,18 @@
 use axum::{
-    extract::{State, Json},
+    extract::{Path, State, Json},
     http::StatusCode,
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
+use sqlx::FromRow;
 use std::sync::Arc;
 use crate::config::AppState;
 use crate::models::{ProviderAccount, ModelPool, Endpoint, VirtualModel, Org, Project, ApiKey};
 use crate::api::models::{
     ApiResponse, CreateProviderReq, CreatePoolReq, CreateEndpointReq, CreateVirtualModelReq,
     CreateOrgReq, CreateProjectReq, CreateApiKeyReq, ApiKeyResponse,
-    BindEndpointToPoolReq, GrantModelToProjectReq
+    BindEndpointToPoolReq, GrantModelToProjectReq, UpdateProjectQuotaReq, UpdateApiKeyQuotaReq,
+    PoolEndpointView,
 };
 pub use crate::api::stats_handler::get_stats;
 
@@ -22,12 +24,15 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Orchestration
         .route("/pools", get(list_pools).post(create_pool))
         .route("/pools/bind", post(bind_endpoint_to_pool))
+        .route("/pools/:id/endpoints", get(list_pool_endpoints))
         .route("/virtual-models", get(list_virtual_models).post(create_virtual_model))
         // Access
         .route("/orgs", get(list_orgs).post(create_org))
         .route("/projects", get(list_projects).post(create_project))
+        .route("/projects/:id", patch(update_project_quota))
         .route("/projects/grant", post(grant_model_to_project))
         .route("/api-keys", get(list_api_keys).post(create_api_key))
+        .route("/api-keys/:id", patch(update_api_key_quota))
         // Statistics
         .route("/stats", get(get_stats))
         .route_layer(axum::middleware::from_fn_with_state(state, crate::auth::admin::admin_auth_middleware))
@@ -76,14 +81,13 @@ async fn create_provider(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    let provider = sqlx::query_as::<_, ProviderAccount>("SELECT * FROM provider_accounts WHERE id = ?")
-        .bind(&id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
-
-    // Sync to engine
-    let _ = crate::sync::sync_all_pools(&state.engine, &state.db).await;
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+    )
+    .await;
 
     Ok(Json(ApiResponse::success(provider)))
 }
@@ -128,8 +132,13 @@ async fn create_pool(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    // Sync to engine
-    let _ = crate::sync::sync_all_pools(&state.engine, &state.db).await;
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+    )
+    .await;
 
     Ok(Json(ApiResponse::success(pool)))
 }
@@ -177,8 +186,13 @@ async fn create_endpoint(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    // Sync to engine
-    let _ = crate::sync::sync_all_pools(&state.engine, &state.db).await;
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+    )
+    .await;
 
     Ok(Json(ApiResponse::success(endpoint)))
 }
@@ -223,8 +237,13 @@ async fn create_virtual_model(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    // Sync to engine
-    let _ = crate::sync::sync_all_pools(&state.engine, &state.db).await;
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+    )
+    .await;
 
     Ok(Json(ApiResponse::success(model)))
 }
@@ -249,8 +268,13 @@ async fn bind_endpoint_to_pool(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    // Sync to engine
-    let _ = crate::sync::sync_all_pools(&state.engine, &state.db).await;
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+    )
+    .await;
 
     Ok(Json(ApiResponse::success(())))
 }
@@ -307,11 +331,16 @@ async fn create_project(
 ) -> Result<Json<ApiResponse<Project>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
     
-    sqlx::query("INSERT INTO projects (id, org_id, name, description) VALUES (?, ?, ?, ?)")
+    sqlx::query(
+        "INSERT INTO projects (id, org_id, name, description, rpm_limit, concurrency_limit)
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
         .bind(&id)
         .bind(&payload.org_id)
         .bind(&payload.name)
         .bind(&payload.description)
+        .bind(payload.rpm_limit)
+        .bind(payload.concurrency_limit)
         .execute(&state.db)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
@@ -364,13 +393,16 @@ async fn create_api_key(
     let key_prefix = raw_key[..7].to_string(); // "pk_xxxx"
     
     sqlx::query(
-        "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.project_id)
     .bind(&payload.name)
     .bind(&key_hash)
     .bind(&key_prefix)
+    .bind(payload.rpm_limit)
+    .bind(payload.concurrency_limit)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -387,4 +419,144 @@ async fn create_api_key(
     };
 
     Ok(Json(ApiResponse::success(response)))
+}
+
+
+#[derive(Debug, FromRow)]
+struct PoolEndpointRow {
+    endpoint_id: String,
+    name: String,
+    upstream_model_id: String,
+    enabled: bool,
+    priority: i32,
+    weight: i32,
+    health_status: String,
+    cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
+    account_name: String,
+    provider_type: String,
+}
+
+async fn list_pool_endpoints(
+    State(state): State<Arc<AppState>>,
+    Path(pool_id): Path<String>,
+) -> Result<Json<ApiResponse<Vec<PoolEndpointView>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let rows = sqlx::query_as::<_, PoolEndpointRow>(
+        "SELECT e.id AS endpoint_id, e.name, e.upstream_model_id, e.enabled,
+                mpe.priority, mpe.weight, e.health_status, e.cooldown_until,
+                pa.name AS account_name, pa.provider_type
+         FROM model_pool_endpoints mpe
+         JOIN endpoints e ON e.id = mpe.endpoint_id
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE mpe.pool_id = ?
+         ORDER BY mpe.priority DESC, mpe.weight DESC, e.name ASC"
+    )
+    .bind(&pool_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+    })?;
+
+    let views = rows
+        .into_iter()
+        .map(|row| {
+            let (active_requests, ema_latency_ms, health_status, cooldown_until) =
+                if let Some(metric) = state.metrics.get(&row.endpoint_id) {
+                    (
+                        metric.active_requests,
+                        metric.ema_success_latency_ms.max(metric.ema_latency_ms),
+                        metric.health_status.clone(),
+                        metric.cooldown_until,
+                    )
+                } else {
+                    (0, 0.0, row.health_status.clone(), row.cooldown_until)
+                };
+
+            PoolEndpointView {
+                endpoint_id: row.endpoint_id,
+                name: row.name,
+                upstream_model_id: row.upstream_model_id,
+                enabled: row.enabled,
+                priority: row.priority,
+                weight: row.weight,
+                health_status,
+                cooldown_until: cooldown_until.map(|t| t.to_rfc3339()),
+                account_name: row.account_name,
+                provider_type: row.provider_type,
+                active_requests,
+                ema_latency_ms,
+            }
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::success(views)))
+}
+
+async fn update_project_quota(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<String>,
+    Json(payload): Json<UpdateProjectQuotaReq>,
+) -> Result<Json<ApiResponse<Project>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)")
+        .bind(&project_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("Project not found"))));
+    }
+
+    sqlx::query(
+        "UPDATE projects SET rpm_limit = ?, concurrency_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
+    .bind(payload.rpm_limit)
+    .bind(payload.concurrency_limit)
+    .bind(&project_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = ?")
+        .bind(&project_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    Ok(Json(ApiResponse::success(project)))
+}
+
+async fn update_api_key_quota(
+    State(state): State<Arc<AppState>>,
+    Path(key_id): Path<String>,
+    Json(payload): Json<UpdateApiKeyQuotaReq>,
+) -> Result<Json<ApiResponse<ApiKey>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM api_keys WHERE id = ?)")
+        .bind(&key_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("API key not found"))));
+    }
+
+    sqlx::query(
+        "UPDATE api_keys SET rpm_limit = ?, concurrency_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
+    .bind(payload.rpm_limit)
+    .bind(payload.concurrency_limit)
+    .bind(&key_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    let key = sqlx::query_as::<_, ApiKey>("SELECT * FROM api_keys WHERE id = ?")
+        .bind(&key_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    Ok(Json(ApiResponse::success(key)))
 }

@@ -1,6 +1,7 @@
 use axum::{Router, routing::{get, post}};
 use crate::config::{Config, AppState};
 use crate::db::init_db;
+use crate::quota::QuotaLimiter;
 use crate::routing::ParaGatewayFeedbackProvider;
 use crate::usage::ParaGatewayHooks;
 use dashmap::DashMap;
@@ -13,15 +14,19 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     
     let metrics = Arc::new(DashMap::new());
     let pools = Arc::new(DashMap::new());
+    let pool_members = Arc::new(DashMap::new());
+    let quotas = Arc::new(QuotaLimiter::new());
     
     let hooks = Arc::new(ParaGatewayHooks {
         db: db.clone(),
         metrics: metrics.clone(),
+        quotas: quotas.clone(),
     });
     
     let feedback_provider = Arc::new(ParaGatewayFeedbackProvider {
         metrics: metrics.clone(),
         pools: pools.clone(),
+        pool_members: pool_members.clone(),
     });
     
     let engine = Arc::new(
@@ -33,14 +38,15 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("Failed to build UniGateway engine: {}", e))?
     );
     
-    // Perform initial configuration sync
-    crate::sync::sync_all_pools(&engine, &db).await?;
+    crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members).await?;
     
     let app_state = Arc::new(AppState {
         config: config.clone(),
         db,
         metrics,
         pools,
+        pool_members,
+        quotas,
         engine,
     });
     
@@ -48,7 +54,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         .route("/", get(|| async { "ParaGateway API is running. Please use the Admin UI at http://localhost:18764" }))
         .route("/health", get(|| async { "OK" }))
         .nest("/api/admin", crate::api::admin::admin_routes(app_state.clone()))
-        // OpenAI compatible chat endpoint
         .route("/v1/chat/completions", post(crate::api::proxy::chat_completions))
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);

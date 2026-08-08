@@ -17,6 +17,8 @@ pub struct Project {
     pub org_id: String,
     pub name: String,
     pub description: Option<String>,
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -30,6 +32,8 @@ pub struct ApiKey {
     pub key_prefix: String,
     pub enabled: bool,
     pub metadata: Option<String>,
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -57,6 +61,8 @@ pub struct Endpoint {
     pub enabled: bool,
     pub priority: i32,
     pub weight: i32,
+    pub health_status: String,
+    pub cooldown_until: Option<DateTime<Utc>>,
     pub metadata: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -102,13 +108,44 @@ pub struct UsageLog {
     pub metadata: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+/// Runtime metrics used for latency / least-connections scoring and health exclusion.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EndpointMetric {
     pub endpoint_id: String,
     pub active_requests: i32,
     pub ema_latency_ms: f64,
+    pub ema_success_latency_ms: f64,
     pub total_requests: i32,
     pub total_errors: i32,
+    pub consecutive_failures: i32,
+    pub health_status: String,
+    pub cooldown_until: Option<DateTime<Utc>>,
     pub last_error_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl EndpointMetric {
+    pub fn new(endpoint_id: String) -> Self {
+        Self {
+            endpoint_id,
+            active_requests: 0,
+            ema_latency_ms: 0.0,
+            ema_success_latency_ms: 0.0,
+            total_requests: 0,
+            total_errors: 0,
+            consecutive_failures: 0,
+            health_status: "healthy".to_string(),
+            cooldown_until: None,
+            last_error_at: None,
+            updated_at: Utc::now(),
+        }
+    }
+}
+
+/// Pool membership used by routing feedback (priority/weight per pool).
+#[derive(Debug, Clone)]
+pub struct PoolEndpointMember {
+    pub endpoint_id: String,
+    pub priority: i32,
+    pub weight: i32,
 }

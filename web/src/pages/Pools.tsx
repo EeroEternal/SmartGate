@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, X } from 'lucide-react'
+import Select from '../components/Select'
+import { adminFetch } from '../lib/api'
 
 interface ModelPool {
   id: string
@@ -9,14 +12,19 @@ interface ModelPool {
   created_at: string
 }
 
+const STRATEGY_OPTIONS = [
+  { id: 'round_robin', name: 'Round Robin' },
+  { id: 'priority', name: 'Priority' },
+  { id: 'least_connections', name: 'Least Connections' },
+  { id: 'latency_based', name: 'Latency Based' },
+]
+
 export default function Pools() {
   const [pools, setPools] = useState<ModelPool[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    strategy: 'round_robin',
-  })
+  const [name, setName] = useState('')
+  const [strategy, setStrategy] = useState(STRATEGY_OPTIONS[0])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -25,11 +33,8 @@ export default function Pools() {
 
   const fetchPools = async () => {
     try {
-      const res = await fetch('/api/admin/pools')
-      const data = await res.json()
-      if (data.success) {
-        setPools(data.data)
-      }
+      const data = await adminFetch('/api/admin/pools')
+      if (data.success) setPools(data.data)
     } catch (error) {
       console.error('Failed to fetch pools:', error)
     } finally {
@@ -41,22 +46,21 @@ export default function Pools() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const res = await fetch('/api/admin/pools', {
+      const data = await adminFetch('/api/admin/pools', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ name, strategy: strategy.id }),
       })
-      const data = await res.json()
       if (data.success) {
         setIsModalOpen(false)
-        setFormData({ name: '', strategy: 'round_robin' })
+        setName('')
+        setStrategy(STRATEGY_OPTIONS[0])
         fetchPools()
       } else {
         alert(data.message || 'Failed to create pool')
       }
     } catch (error) {
       console.error('Submit error:', error)
-      alert('Network error')
+      alert(error instanceof Error ? error.message : 'Network error')
     } finally {
       setSubmitting(false)
     }
@@ -69,7 +73,7 @@ export default function Pools() {
           <h2 className="text-2xl font-bold text-zinc-900">Model Pools</h2>
           <p className="text-sm text-zinc-500 mt-1">Group endpoints and define routing strategies.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
         >
@@ -113,12 +117,19 @@ export default function Pools() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${pool.enabled ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                        <span
+                          className={`w-2 h-2 rounded-full ${pool.enabled ? 'bg-emerald-500' : 'bg-zinc-300'}`}
+                        />
                         <span className="capitalize">{pool.enabled ? 'Active' : 'Disabled'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link to={`/pools/${pool.id}`} className="text-zinc-500 hover:text-black font-medium">Manage Endpoints</Link>
+                      <Link
+                        to={`/pools/${pool.id}`}
+                        className="text-zinc-500 hover:text-black font-medium"
+                      >
+                        Manage Endpoints
+                      </Link>
                     </td>
                   </tr>
                 ))
@@ -128,10 +139,9 @@ export default function Pools() {
         </div>
       </div>
 
-      {/* Create Pool Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">Create Model Pool</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-black">
@@ -141,42 +151,34 @@ export default function Pools() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Pool Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
                   placeholder="e.g. GPT-4 Enterprise"
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Routing Strategy</label>
-                <select 
-                  className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  value={formData.strategy}
-                  onChange={e => setFormData({...formData, strategy: e.target.value})}
-                >
-                  <option value="round_robin">Round Robin (Default)</option>
-                  <option value="score_ordered">Score Ordered (Strict Priority)</option>
-                  <option value="least_connections">Least Connections</option>
-                  <option value="latency_based">Latency Based (EMA)</option>
-                </select>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  Select how traffic will be distributed among the endpoints in this pool.
-                </p>
-              </div>
-              
+              <Select
+                label="Routing Strategy"
+                options={STRATEGY_OPTIONS}
+                selected={strategy}
+                onChange={(opt) => setStrategy({ id: String(opt.id), name: opt.name })}
+              />
+              <p className="text-xs text-zinc-500 -mt-2">
+                Priority / Latency / Least Connections use live feedback. Round Robin rotates evenly.
+              </p>
               <div className="pt-4 flex justify-end gap-3">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-zinc-900 bg-transparent border border-zinc-300 rounded-md hover:bg-zinc-50"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={submitting}
                   className="px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-zinc-800 disabled:opacity-50"
                 >

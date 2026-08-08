@@ -65,12 +65,16 @@ pub struct CreateProjectReq {
     pub org_id: String,
     pub name: String,
     pub description: Option<String>,
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateApiKeyReq {
     pub project_id: String,
     pub name: String,
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -94,4 +98,32 @@ pub struct BindEndpointToPoolReq {
 pub struct GrantModelToProjectReq {
     pub project_id: String,
     pub virtual_model_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProjectQuotaReq {
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateApiKeyQuotaReq {
+    pub rpm_limit: Option<i32>,
+    pub concurrency_limit: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PoolEndpointView {
+    pub endpoint_id: String,
+    pub name: String,
+    pub upstream_model_id: String,
+    pub enabled: bool,
+    pub priority: i32,
+    pub weight: i32,
+    pub health_status: String,
+    pub cooldown_until: Option<String>,
+    pub account_name: String,
+    pub provider_type: String,
+    pub active_requests: i32,
+    pub ema_latency_ms: f64,
 }

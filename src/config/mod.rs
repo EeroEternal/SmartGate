@@ -3,7 +3,8 @@ use std::net::SocketAddr;
 use sqlx::SqlitePool;
 use dashmap::DashMap;
 use std::sync::Arc;
-use crate::models::{EndpointMetric, ModelPool};
+use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
+use crate::quota::QuotaLimiter;
 use unigateway_sdk::core::UniGatewayEngine;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -19,6 +20,8 @@ pub struct AppState {
     pub db: SqlitePool,
     pub metrics: Arc<DashMap<String, EndpointMetric>>,
     pub pools: Arc<DashMap<String, ModelPool>>,
+    pub pool_members: Arc<DashMap<String, Vec<PoolEndpointMember>>>,
+    pub quotas: Arc<QuotaLimiter>,
     pub engine: Arc<UniGatewayEngine>,
 }
 
