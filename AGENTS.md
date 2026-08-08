@@ -2,18 +2,21 @@
 
 ## 项目规范
 
-### ParaGateway 与 UniGateway 边界
+### SmartGate 与 UniGateway 边界
 
-- **ParaGateway 是企业 AI 资源控制平面**，负责产品层配置、组织/项目/API Key、Provider Account、Endpoint、Virtual Model、Model Pool、数据库同步、路由策略、鉴权、配额、Token 统计、健康检查和 UI 管理逻辑。
-- **UniGateway 是协议与执行引擎**，负责协议层语义转换、provider driver、上游请求渲染、下游响应归一化、流式协议处理、SSE chunk 解析/重写和具体 provider 行为。
-- **业务对象不得下沉到 UniGateway**：Org、Project、API Key、Provider Account、Model Pool、Virtual Model、Project Grant 等属于 ParaGateway；UniGateway 不应依赖或理解这些产品层对象。
-- **协议细节不得上浮到 ParaGateway**：OpenAI/Anthropic 协议字段转换、provider-specific 请求体/请求头渲染、reasoning/thinking 字段解析、工具调用差异、流式响应差异等应优先在 UniGateway 中实现。
-- ParaGateway 可以维护 Endpoint 候选集、健康状态、优先级、权重、运行时指标和路由反馈分数，并将中立 metadata 或 `unigateway.*` hints 传给 UniGateway；但不得在 API handler 中把这些 metadata 翻译成特定 provider 的 body 参数。
-- ParaGateway 的路由职责是 **策略计算**：根据 Virtual Model 解析 Model Pool，过滤可用 Endpoint，计算 Priority/Latency-Based/Least-Connections 等分数，并生成 UniGateway 可执行的候选 Endpoint 顺序。
-- UniGateway 的路由职责是 **执行机制**：根据 ParaGateway 提供的候选 Endpoint、反馈分数和中立 metadata 完成协议渲染、请求执行、fallback、响应归一化和报告输出。
-- 如果 UniGateway 当前 fallback、tie-breaking、ordered endpoints 或 driver 行为不足，应优先在 UniGateway 中增强机制，而不是在 ParaGateway API handler 中硬编码 provider 或协议逻辑。
-- API Key 应绑定 Project，Project 授权 Virtual Model，Virtual Model 映射 Model Pool，Model Pool 聚合 Endpoint；避免设计成 API Key 直接绑定 Endpoint 或直接承载 provider-specific 行为。
-- 修复前应先判断问题属于产品配置/路由数据，还是协议适配/driver 渲染；边界不清时先说明归属判断，不要把 UniGateway 责任下沉到 ParaGateway。
+产品范围见 `docs/scope.md`；路线图见 `docs/roadmap.md`（`docs/plan.md` 为别名）。历史名 ParaGateway 与 SmartGate 为同一产品线。
+
+- **SmartGate 是控制面 / 数据面分离的全功能 AI 网关**。控制面负责产品配置、组织/项目/API Key、Provider Account、Endpoint、Virtual Model、Model Pool、路由策略打分、鉴权、配额/预算、Token 与花费统计、健康策略和 Admin UI。
+- **UniGateway 是数据面协议与执行引擎**，负责协议层语义转换、provider driver、上游请求渲染、下游响应归一化、流式协议处理、SSE chunk 解析/重写和具体 provider 行为。
+- **业务对象不得下沉到 UniGateway**：Org、Project、API Key、Provider Account、Model Pool、Virtual Model、Project Grant 等属于 SmartGate 控制面；UniGateway 不应依赖或理解这些产品层对象。
+- **协议细节不得上浮到 SmartGate 控制面**：OpenAI/Anthropic 协议字段转换、provider-specific 请求体/请求头渲染、reasoning/thinking 字段解析、工具调用差异、流式响应差异等应优先在 UniGateway 中实现。
+- SmartGate 可以维护 Endpoint 候选集、健康状态、优先级、权重、运行时指标和路由反馈分数，并将中立 metadata 或 `unigateway.*` hints 传给 UniGateway；但不得在 API handler 中把这些 metadata 翻译成特定 provider 的 body 参数。
+- SmartGate 的路由职责是 **策略计算**（Priority / LoadAware / CostAware / CapabilityAware 等），生成 UniGateway 可执行的候选顺序与 feedback。
+- UniGateway 的路由职责是 **执行机制**：按候选 endpoint、feedback 与中立 metadata 完成协议渲染、请求执行、fallback、响应归一化与报告。
+- 若 UniGateway 的 fallback、ordered endpoints 或 driver 不足，优先增强 UniGateway 机制，而不是在 SmartGate handler 里硬编码 provider/协议逻辑。
+- API Key 绑定 Project；Project 授权 Virtual Model；Virtual Model → Model Pool → Endpoints。不要设计成 API Key 直接绑 Endpoint 或承载 provider-specific 行为。
+- **不做 meta-harness**（任务级 harness 选择、共驾 session、OS sandbox）；那是 Omnigent 等客户端层。SmartGate 做请求级模型路由与公司级花费治理。
+- 修复前先判断问题属于控制面（配置/策略/预算）还是数据面（协议/driver）；边界不清时先说明归属。
 
 ### 文件组织
 

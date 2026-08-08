@@ -24,6 +24,11 @@ interface Endpoint {
   cooldown_until?: string | null
   priority: number
   weight: number
+  input_price_per_1m?: number
+  output_price_per_1m?: number
+  capability_score?: number
+  supports_tools?: boolean | null
+  context_length?: number | null
 }
 
 const PROVIDER_TYPES = [
@@ -47,6 +52,11 @@ export default function Providers() {
     upstream_model_id: '',
     priority: '1',
     weight: '1',
+    input_price_per_1m: '',
+    output_price_per_1m: '',
+    capability_score: '0.5',
+    supports_tools: 'unknown',
+    context_length: '',
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -111,11 +121,34 @@ export default function Providers() {
           upstream_model_id: endpointForm.upstream_model_id,
           priority: parseInt(endpointForm.priority, 10) || 1,
           weight: parseInt(endpointForm.weight, 10) || 1,
+          input_price_per_1m:
+            endpointForm.input_price_per_1m === '' ? 0 : parseFloat(endpointForm.input_price_per_1m),
+          output_price_per_1m:
+            endpointForm.output_price_per_1m === '' ? 0 : parseFloat(endpointForm.output_price_per_1m),
+          capability_score: parseFloat(endpointForm.capability_score) || 0.5,
+          supports_tools:
+            endpointForm.supports_tools === 'unknown'
+              ? null
+              : endpointForm.supports_tools === 'true',
+          context_length:
+            endpointForm.context_length === ''
+              ? null
+              : parseInt(endpointForm.context_length, 10),
         }),
       })
       if (data.success) {
         setIsEndpointModalOpen(false)
-        setEndpointForm({ name: '', upstream_model_id: '', priority: '1', weight: '1' })
+        setEndpointForm({
+          name: '',
+          upstream_model_id: '',
+          priority: '1',
+          weight: '1',
+          input_price_per_1m: '',
+          output_price_per_1m: '',
+          capability_score: '0.5',
+          supports_tools: 'unknown',
+          context_length: '',
+        })
         await refresh()
       }
     } catch (error) {
@@ -204,6 +237,8 @@ export default function Providers() {
               <th className="px-6 py-3 font-medium">Provider</th>
               <th className="px-6 py-3 font-medium">Upstream Model</th>
               <th className="px-6 py-3 font-medium">Health</th>
+              <th className="px-6 py-3 font-medium">$/1M in·out</th>
+              <th className="px-6 py-3 font-medium">Capability</th>
               <th className="px-6 py-3 font-medium">Priority</th>
               <th className="px-6 py-3 font-medium">Weight</th>
             </tr>
@@ -211,7 +246,7 @@ export default function Providers() {
           <tbody className="divide-y divide-zinc-200">
             {endpoints.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
                   No endpoints yet. Create one, then bind it into a Model Pool.
                 </td>
               </tr>
@@ -223,6 +258,12 @@ export default function Providers() {
                   <td className="px-6 py-4 font-mono text-xs">{ep.upstream_model_id}</td>
                   <td className="px-6 py-4">
                     <HealthBadge status={ep.enabled ? ep.health_status : 'disabled'} />
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs">
+                    {(ep.input_price_per_1m ?? 0).toFixed(2)} / {(ep.output_price_per_1m ?? 0).toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs">
+                    {(ep.capability_score ?? 0.5).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 font-mono">{ep.priority}</td>
                   <td className="px-6 py-4 font-mono">{ep.weight}</td>
@@ -348,6 +389,74 @@ export default function Providers() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Input $/1M</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
+                    placeholder="e.g. 0.15"
+                    value={endpointForm.input_price_per_1m}
+                    onChange={(e) =>
+                      setEndpointForm({ ...endpointForm, input_price_per_1m: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Output $/1M</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
+                    placeholder="e.g. 0.60"
+                    value={endpointForm.output_price_per_1m}
+                    onChange={(e) =>
+                      setEndpointForm({ ...endpointForm, output_price_per_1m: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Capability (0–1)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
+                    value={endpointForm.capability_score}
+                    onChange={(e) =>
+                      setEndpointForm({ ...endpointForm, capability_score: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Supports tools</label>
+                  <Select
+                    label=""
+                    options={[
+                      { id: 'unknown', name: 'Undeclared' },
+                      { id: 'true', name: 'Yes' },
+                      { id: 'false', name: 'No' },
+                    ]}
+                    selected={
+                      endpointForm.supports_tools === 'true'
+                        ? { id: 'true', name: 'Yes' }
+                        : endpointForm.supports_tools === 'false'
+                          ? { id: 'false', name: 'No' }
+                          : { id: 'unknown', name: 'Undeclared' }
+                    }
+                    onChange={(opt) =>
+                      setEndpointForm({ ...endpointForm, supports_tools: String(opt.id) })
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500">
+                Prices power CostAware routing. Capability scores power smart routing.
+              </p>
               <button
                 type="submit"
                 disabled={submitting || !selectedAccount?.id}

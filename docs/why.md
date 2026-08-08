@@ -1,8 +1,12 @@
-# Why ParaGateway
+# Why ParaGateway (legacy)
+
+> **Product rename:** This document predates the **SmartGate** brand.  
+> Canonical scope: [scope.md](./scope.md). Engineering plan: [plan.md](./plan.md).  
+> ParaGateway remains a historical name for the same codebase lineage.
 
 ## 背景
 
-ParaGateway 的目标不是重新实现一个协议网关，而是在 UniGateway 之上构建企业 AI 资源控制平面。它可以吸收 XRouter 在企业路由、模型池、访问控制和用量统计上的经验，但不应该复制 UniGateway 已经承担的协议转换、provider driver、请求执行和响应归一化能力。
+SmartGate（原 ParaGateway）的目标不是重新实现一个协议网关，而是在 UniGateway 之上构建 **控制面**（产品、策略、治理），数据面由 UniGateway 承担。它可以吸收 XRouter 在企业路由、模型池、访问控制和用量统计上的经验，但不应该复制 UniGateway 已经承担的协议转换、provider driver、请求执行和响应归一化能力。
 
 因此，ParaGateway 的设计方向是：
 

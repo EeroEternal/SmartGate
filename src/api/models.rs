@@ -37,6 +37,9 @@ pub struct CreateProviderReq {
 pub struct CreatePoolReq {
     pub name: String,
     pub strategy: String,
+    pub tool_trim_enabled: Option<bool>,
+    pub tool_trim_dry_run: Option<bool>,
+    pub max_tool_chars: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +49,14 @@ pub struct CreateEndpointReq {
     pub upstream_model_id: String,
     pub priority: Option<i32>,
     pub weight: Option<i32>,
+    /// USD per 1M input tokens (optional; enables CostAware).
+    pub input_price_per_1m: Option<f64>,
+    /// USD per 1M output tokens (optional; enables CostAware).
+    pub output_price_per_1m: Option<f64>,
+    /// 0–1 capability prior for CapabilityAware.
+    pub capability_score: Option<f64>,
+    pub supports_tools: Option<bool>,
+    pub context_length: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +78,7 @@ pub struct CreateProjectReq {
     pub description: Option<String>,
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +87,7 @@ pub struct CreateApiKeyReq {
     pub name: String,
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,12 +117,14 @@ pub struct GrantModelToProjectReq {
 pub struct UpdateProjectQuotaReq {
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateApiKeyQuotaReq {
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -140,6 +155,11 @@ pub struct EndpointView {
     pub cooldown_until: Option<String>,
     pub priority: i32,
     pub weight: i32,
+    pub input_price_per_1m: f64,
+    pub output_price_per_1m: f64,
+    pub capability_score: f64,
+    pub supports_tools: Option<bool>,
+    pub context_length: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]

@@ -4,6 +4,7 @@ use sqlx::SqlitePool;
 use dashmap::DashMap;
 use std::sync::Arc;
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
+use crate::pricing::EndpointProfile;
 use crate::quota::QuotaLimiter;
 use unigateway_sdk::core::UniGatewayEngine;
 
@@ -21,6 +22,7 @@ pub struct AppState {
     pub metrics: Arc<DashMap<String, EndpointMetric>>,
     pub pools: Arc<DashMap<String, ModelPool>>,
     pub pool_members: Arc<DashMap<String, Vec<PoolEndpointMember>>>,
+    pub profiles: Arc<DashMap<String, EndpointProfile>>,
     pub quotas: Arc<QuotaLimiter>,
     pub engine: Arc<UniGatewayEngine>,
 }
@@ -34,7 +36,7 @@ impl Config {
             .parse()?;
             
         let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite:paragateway.db".to_string());
+            .unwrap_or_else(|_| "sqlite:smartgate.db".to_string());
             
         let admin_token = std::env::var("ADMIN_TOKEN")
             .expect("ADMIN_TOKEN must be set");

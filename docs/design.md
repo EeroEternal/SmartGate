@@ -1,11 +1,13 @@
-# ParaGateway Design Document
+# SmartGate Design Document
+
+> Formerly titled ParaGateway. Product scope: [scope.md](./scope.md).
 
 ## 1. Introduction
-ParaGateway is an enterprise-grade LLM gateway control plane built on top of **UniGateway**. It uses UniGateway for protocol translation, provider drivers, request execution, response normalization, and streaming behavior, while ParaGateway owns the enterprise product model, access control, routing policy, usage statistics, and Admin UI.
+**SmartGate** is a full-featured AI gateway with control/data plane separation, built on **UniGateway** as the data plane. UniGateway handles protocol translation, provider drivers, request execution, response normalization, and streaming; SmartGate owns the product model, access control, routing policy, usage/spend statistics, and Admin UI.
 
-ParaGateway absorbs the practical enterprise routing ideas from **XRouter**, but it should not duplicate UniGateway's protocol layer. The product shape is an AI resource controller: administrators manage model capabilities, traffic policies, project access, and operational visibility; UniGateway remains the underlying protocol and dispatch engine.
+SmartGate absorbs practical enterprise routing ideas from **XRouter** without duplicating the protocol layer. The product shape is an efficiency-oriented AI gateway: model menus, traffic policies, project access, and operational visibility.
 
-Unlike ParaRouter, which is consumer-focused with billing and user management, ParaGateway focuses on high-performance routing, enterprise access control, detailed usage statistics, and seamless multi-provider access without embedding billing as a core dependency.
+Unlike consumer platforms centered on end-user billing, SmartGate focuses on multi-provider access, routing, spend visibility, and governance without embedding payments as a core dependency.
 
 ## 2. Core Objectives
 - **UniGateway Foundation**: Use `unigateway-sdk` for protocol handling, provider drivers, request execution, streaming, and normalized reports.

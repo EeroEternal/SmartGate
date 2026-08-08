@@ -121,7 +121,7 @@ function Sidebar() {
           <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
             <div className="w-4 h-4 border-2 border-white rounded-sm" />
           </div>
-          ParaGateway
+          SmartGate
         </h1>
       </div>
       <nav className="flex-1 p-4 space-y-1">

@@ -1367,34 +1367,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paragateway"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "chrono",
- "clap",
- "dashmap",
- "dotenvy",
- "futures-util",
- "hex",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.4.13",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
- "unigateway-sdk",
- "uuid",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2011,6 +1983,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "smartgate"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "clap",
+ "dashmap",
+ "dotenvy",
+ "futures-util",
+ "hex",
+ "once_cell",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "unigateway-sdk",
+ "uuid",
 ]
 
 [[package]]

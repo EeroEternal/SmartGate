@@ -19,6 +19,7 @@ pub struct Project {
     pub description: Option<String>,
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -34,6 +35,7 @@ pub struct ApiKey {
     pub metadata: Option<String>,
     pub rpm_limit: Option<i32>,
     pub concurrency_limit: Option<i32>,
+    pub daily_spend_limit: Option<f64>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -63,6 +65,13 @@ pub struct Endpoint {
     pub weight: i32,
     pub health_status: String,
     pub cooldown_until: Option<DateTime<Utc>>,
+    /// USD per 1M input tokens (0 = unpriced for CostAware).
+    pub input_price_per_1m: f64,
+    /// USD per 1M output tokens (0 = unpriced for CostAware).
+    pub output_price_per_1m: f64,
+    pub capability_score: f64,
+    pub supports_tools: Option<i32>,
+    pub context_length: Option<i32>,
     pub metadata: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -74,6 +83,9 @@ pub struct ModelPool {
     pub name: String,
     pub strategy: String,
     pub enabled: bool,
+    pub tool_trim_enabled: i32,
+    pub tool_trim_dry_run: i32,
+    pub max_tool_chars: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

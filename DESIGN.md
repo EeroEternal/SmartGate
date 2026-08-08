@@ -1,8 +1,8 @@
-# ParaGateway Design System
+# SmartGate Design System
 
 ## Overview
 
-This document outlines the design principles and UI components for ParaGateway, aiming for a consistent, "tech-geek," and clean aesthetic suitable for enterprise environments.
+This document outlines the design principles and UI components for SmartGate, aiming for a consistent, "tech-geek," and clean aesthetic suitable for engineering and enterprise teams.
 
 ## Core Principles
 

@@ -1,9 +1,9 @@
 [package]
-name = "paragateway"
-version = "0.1.2"
+name = "smartgate"
+version = "0.2.0"
 edition = "2021"
-authors = ["ParaGateway Team"]
-description = "Enterprise-grade LLM gateway control plane built on UniGateway"
+authors = ["SmartGate Contributors"]
+description = "Open-source AI gateway with control/data plane separation — cut spend with smart routing"
 
 [dependencies]
 # Core Engine
@@ -33,6 +33,7 @@ dotenvy = "0.15"
 async-trait = "0.1"
 futures-util = "0.3"
 dashmap = "6.0"
+once_cell = "1.19"
 sha2 = "0.10"
 hex = "0.4"
 

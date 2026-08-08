@@ -1,4 +1,5 @@
 use crate::models::{ModelPool as DbModelPool, PoolEndpointMember};
+use crate::pricing::{EndpointProfile, UnitPrice};
 use dashmap::DashMap;
 use sqlx::FromRow;
 use sqlx::SqlitePool;
@@ -20,6 +21,11 @@ struct SyncEndpointRow {
     base_url: String,
     api_key: String,
     account_name: String,
+    input_price_per_1m: f64,
+    output_price_per_1m: f64,
+    capability_score: f64,
+    supports_tools: Option<i32>,
+    context_length: Option<i32>,
 }
 
 /// Push DB pool config into UniGateway and refresh in-memory routing caches.
@@ -28,6 +34,7 @@ pub async fn sync_all_pools(
     db: &SqlitePool,
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
+    profiles: &DashMap<String, EndpointProfile>,
 ) -> anyhow::Result<()> {
     let db_pools = sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = 1")
         .fetch_all(db)
@@ -35,12 +42,15 @@ pub async fn sync_all_pools(
 
     pools.clear();
     pool_members.clear();
+    profiles.clear();
 
     for pool in db_pools {
         let rows = sqlx::query_as::<_, SyncEndpointRow>(
             "SELECT e.id, e.upstream_model_id, e.enabled,
                     mpe.priority AS pool_priority, mpe.weight AS pool_weight,
-                    pa.provider_type, pa.base_url, pa.api_key, pa.name AS account_name
+                    pa.provider_type, pa.base_url, pa.api_key, pa.name AS account_name,
+                    e.input_price_per_1m, e.output_price_per_1m,
+                    e.capability_score, e.supports_tools, e.context_length
              FROM endpoints e
              JOIN model_pool_endpoints mpe ON e.id = mpe.endpoint_id
              JOIN provider_accounts pa ON e.account_id = pa.id
@@ -53,10 +63,24 @@ pub async fn sync_all_pools(
 
         let members: Vec<PoolEndpointMember> = rows
             .iter()
-            .map(|r| PoolEndpointMember {
-                endpoint_id: r.id.clone(),
-                priority: r.pool_priority,
-                weight: r.pool_weight,
+            .map(|r| {
+                profiles.insert(
+                    r.id.clone(),
+                    EndpointProfile {
+                        price: UnitPrice {
+                            input_per_1m: r.input_price_per_1m,
+                            output_per_1m: r.output_price_per_1m,
+                        },
+                        capability_score: r.capability_score.clamp(0.0, 1.0),
+                        supports_tools: r.supports_tools.map(|v| v != 0),
+                        context_length: r.context_length,
+                    },
+                );
+                PoolEndpointMember {
+                    endpoint_id: r.id.clone(),
+                    priority: r.pool_priority,
+                    weight: r.pool_weight,
+                }
             })
             .collect();
 
@@ -110,16 +134,18 @@ pub async fn sync_all_pools_from_state(
     db: &SqlitePool,
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
+    profiles: &DashMap<String, EndpointProfile>,
 ) -> anyhow::Result<()> {
-    sync_all_pools(engine.as_ref(), db, pools, pool_members).await
+    sync_all_pools(engine.as_ref(), db, pools, pool_members, profiles).await
 }
 
 fn map_strategy(strategy: &str) -> LoadBalancingStrategy {
-    match strategy {
-        // ScoreOrdered keeps feedback score order (priority / latency / least-conn).
-        "priority" | "latency_based" | "least_connections" | "score_ordered" => {
-            LoadBalancingStrategy::ScoreOrdered
-        }
+    use crate::routing::{canonicalize_strategy, uses_score_order};
+    let s = canonicalize_strategy(strategy);
+    if uses_score_order(s) {
+        return LoadBalancingStrategy::ScoreOrdered;
+    }
+    match s {
         "fallback" => LoadBalancingStrategy::Fallback,
         "random" => LoadBalancingStrategy::Random,
         _ => LoadBalancingStrategy::RoundRobin,

@@ -88,6 +88,7 @@ async fn create_provider(
         &state.db,
         &state.pools,
         &state.pool_members,
+        &state.profiles,
     )
     .await;
 
@@ -116,11 +117,15 @@ async fn create_pool(
     let id = uuid::Uuid::new_v4().to_string();
     
     sqlx::query(
-        "INSERT INTO model_pools (id, name, strategy) VALUES (?, ?, ?)"
+        "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars)
+         VALUES (?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.name)
     .bind(&payload.strategy)
+    .bind(if payload.tool_trim_enabled.unwrap_or(false) { 1 } else { 0 })
+    .bind(if payload.tool_trim_dry_run.unwrap_or(true) { 1 } else { 0 })
+    .bind(payload.max_tool_chars.unwrap_or(8000))
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -139,6 +144,7 @@ async fn create_pool(
         &state.db,
         &state.pools,
         &state.pool_members,
+        &state.profiles,
     )
     .await;
 
@@ -158,6 +164,11 @@ struct EndpointListRow {
     cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
     priority: i32,
     weight: i32,
+    input_price_per_1m: f64,
+    output_price_per_1m: f64,
+    capability_score: f64,
+    supports_tools: Option<i32>,
+    context_length: Option<i32>,
 }
 
 async fn list_endpoints(
@@ -165,7 +176,9 @@ async fn list_endpoints(
 ) -> Result<Json<ApiResponse<Vec<EndpointView>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let rows = sqlx::query_as::<_, EndpointListRow>(
         "SELECT e.id, e.account_id, pa.name AS account_name, e.name, e.upstream_model_id,
-                e.enabled, e.health_status, e.cooldown_until, e.priority, e.weight
+                e.enabled, e.health_status, e.cooldown_until, e.priority, e.weight,
+                e.input_price_per_1m, e.output_price_per_1m,
+                e.capability_score, e.supports_tools, e.context_length
          FROM endpoints e
          JOIN provider_accounts pa ON pa.id = e.account_id
          ORDER BY pa.name ASC, e.name ASC"
@@ -197,6 +210,11 @@ async fn list_endpoints(
                 cooldown_until: cooldown_until.map(|t| t.to_rfc3339()),
                 priority: row.priority,
                 weight: row.weight,
+                input_price_per_1m: row.input_price_per_1m,
+                output_price_per_1m: row.output_price_per_1m,
+                capability_score: row.capability_score,
+                supports_tools: row.supports_tools.map(|v| v != 0),
+                context_length: row.context_length,
             }
         })
         .collect();
@@ -210,8 +228,13 @@ async fn create_endpoint(
 ) -> Result<Json<ApiResponse<Endpoint>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
     
+    let supports_tools = payload.supports_tools.map(|b| if b { 1 } else { 0 });
     sqlx::query(
-        "INSERT INTO endpoints (id, account_id, name, upstream_model_id, priority, weight) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO endpoints (
+            id, account_id, name, upstream_model_id, priority, weight,
+            input_price_per_1m, output_price_per_1m,
+            capability_score, supports_tools, context_length
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.account_id)
@@ -219,6 +242,11 @@ async fn create_endpoint(
     .bind(&payload.upstream_model_id)
     .bind(payload.priority.unwrap_or(1))
     .bind(payload.weight.unwrap_or(1))
+    .bind(payload.input_price_per_1m.unwrap_or(0.0))
+    .bind(payload.output_price_per_1m.unwrap_or(0.0))
+    .bind(payload.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
+    .bind(supports_tools)
+    .bind(payload.context_length)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -237,6 +265,7 @@ async fn create_endpoint(
         &state.db,
         &state.pools,
         &state.pool_members,
+        &state.profiles,
     )
     .await;
 
@@ -315,6 +344,7 @@ async fn create_virtual_model(
         &state.db,
         &state.pools,
         &state.pool_members,
+        &state.profiles,
     )
     .await;
 
@@ -346,6 +376,7 @@ async fn bind_endpoint_to_pool(
         &state.db,
         &state.pools,
         &state.pool_members,
+        &state.profiles,
     )
     .await;
 
@@ -405,8 +436,8 @@ async fn create_project(
     let id = uuid::Uuid::new_v4().to_string();
     
     sqlx::query(
-        "INSERT INTO projects (id, org_id, name, description, rpm_limit, concurrency_limit)
-         VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO projects (id, org_id, name, description, rpm_limit, concurrency_limit, daily_spend_limit)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
         .bind(&id)
         .bind(&payload.org_id)
@@ -414,6 +445,7 @@ async fn create_project(
         .bind(&payload.description)
         .bind(payload.rpm_limit)
         .bind(payload.concurrency_limit)
+        .bind(payload.daily_spend_limit)
         .execute(&state.db)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
@@ -521,8 +553,8 @@ async fn create_api_key(
     let key_prefix = raw_key[..7].to_string(); // "pk_xxxx"
     
     sqlx::query(
-        "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit)
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.project_id)
@@ -531,6 +563,7 @@ async fn create_api_key(
     .bind(&key_prefix)
     .bind(payload.rpm_limit)
     .bind(payload.concurrency_limit)
+    .bind(payload.daily_spend_limit)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -637,10 +670,11 @@ async fn update_project_quota(
     }
 
     sqlx::query(
-        "UPDATE projects SET rpm_limit = ?, concurrency_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE projects SET rpm_limit = ?, concurrency_limit = ?, daily_spend_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     )
     .bind(payload.rpm_limit)
     .bind(payload.concurrency_limit)
+    .bind(payload.daily_spend_limit)
     .bind(&project_id)
     .execute(&state.db)
     .await
@@ -671,10 +705,11 @@ async fn update_api_key_quota(
     }
 
     sqlx::query(
-        "UPDATE api_keys SET rpm_limit = ?, concurrency_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE api_keys SET rpm_limit = ?, concurrency_limit = ?, daily_spend_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     )
     .bind(payload.rpm_limit)
     .bind(payload.concurrency_limit)
+    .bind(payload.daily_spend_limit)
     .bind(&key_id)
     .execute(&state.db)
     .await

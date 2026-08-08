@@ -9,8 +9,10 @@ use crate::api::models::ApiResponse;
 pub async fn get_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let row: (Option<i32>, Option<f64>, i32) = sqlx::query_as(
-        "SELECT SUM(total_tokens), AVG(latency_ms), COUNT(*) FROM usage_logs"
+    let row: (Option<i32>, Option<f64>, i32, Option<f64>, Option<i32>, Option<i32>) = sqlx::query_as(
+        "SELECT SUM(total_tokens), AVG(latency_ms), COUNT(*),
+                SUM(estimated_cost), SUM(tool_message_chars), SUM(trimmed_chars)
+         FROM usage_logs"
     )
     .fetch_one(&state.db)
     .await
@@ -53,10 +55,26 @@ pub async fn get_stats(
         unavailable = live_unavailable;
     }
 
+    let spend_by_key: Vec<(Option<String>, Option<f64>, i32)> = sqlx::query_as(
+        "SELECT key_id, SUM(estimated_cost), COUNT(*) FROM usage_logs
+         GROUP BY key_id ORDER BY SUM(estimated_cost) DESC LIMIT 10"
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
     Ok(Json(ApiResponse::success(serde_json::json!({
         "total_tokens": row.0.unwrap_or(0),
         "avg_latency": row.1.unwrap_or(0.0),
         "request_count": row.2,
+        "total_estimated_spend": row.3.unwrap_or(0.0),
+        "tool_message_chars": row.4.unwrap_or(0),
+        "trimmed_chars": row.5.unwrap_or(0),
+        "spend_by_key": spend_by_key.into_iter().map(|(k, cost, n)| serde_json::json!({
+            "key_id": k,
+            "estimated_spend": cost.unwrap_or(0.0),
+            "requests": n,
+        })).collect::<Vec<_>>(),
         "endpoint_health": {
             "healthy": healthy,
             "degraded": degraded,

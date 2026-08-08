@@ -17,6 +17,9 @@ const STRATEGY_OPTIONS = [
   { id: 'priority', name: 'Priority' },
   { id: 'least_connections', name: 'Least Connections' },
   { id: 'latency_based', name: 'Latency Based' },
+  { id: 'load_aware', name: 'Load Aware' },
+  { id: 'cost_aware', name: 'Cost Aware (save spend)' },
+  { id: 'capability_aware', name: 'Capability Aware (smart)' },
 ]
 
 export default function Pools() {

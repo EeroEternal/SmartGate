@@ -1,7 +1,7 @@
 {
-  "name": "paragateway-web",
+  "name": "smartgate-web",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 18764 --host 127.0.0.1",
