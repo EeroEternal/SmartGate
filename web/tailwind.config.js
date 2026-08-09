@@ -7,12 +7,20 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['Menlo', 'Consolas', 'Courier New', 'monospace'],
       },
       colors: {
-        background: 'white',
-        foreground: 'black',
+        primary: '#635BFF',
+        'primary-hover': '#5148D6',
+        background: '#F2F1ED',
+        foreground: '#26251E',
+        surface: {
+          100: '#F7F7F4',
+          200: '#F2F1ED',
+          300: '#EBEAE5',
+          400: '#E6E5E0',
+        },
       }
     },
   },

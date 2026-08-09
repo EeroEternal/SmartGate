@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
-import { KeysPage, NewServicePage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
+import { KeysPage, NewServicePage, SaasLayout, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import Providers from './pages/Providers'
@@ -227,11 +227,11 @@ function App() {
         <Route path="/login" element={<AuthPage mode="login" />} />
         <Route path="/register" element={<AuthPage mode="register" />} />
         <Route path="/app" element={<SaasDashboard />} />
-        <Route path="/app/services" element={<ServicesPage />} />
-        <Route path="/app/services/new" element={<NewServicePage />} />
-        <Route path="/app/keys" element={<KeysPage />} />
-        <Route path="/app/usage" element={<UsagePage />} />
-        <Route path="/app/savings" element={<UsagePage savings />} />
+        <Route path="/app/services" element={<SaasLayout><ServicesPage /></SaasLayout>} />
+        <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
+        <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
+        <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
+        <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
         <Route path="/admin/*" element={<AdminConsole />} />
         <Route path="/providers" element={<AdminConsole />} />
         <Route path="/pools/*" element={<AdminConsole />} />

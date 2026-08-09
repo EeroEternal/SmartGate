@@ -27,7 +27,7 @@ export default function Select({ label, options, selected, onChange, className }
       <Listbox value={selected} onChange={onChange}>
         {label && <Listbox.Label className="block text-sm font-medium text-zinc-700 mb-1">{label}</Listbox.Label>}
         <div className="relative mt-1">
-          <ListboxButton className="relative w-full cursor-default rounded-md bg-white py-2 pl-3 pr-10 text-left border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-black focus:border-black sm:text-sm transition-colors">
+          <ListboxButton className="relative w-full cursor-default rounded-md bg-white py-2 pl-3 pr-10 text-left border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-[#635BFF] focus:border-[#635BFF] sm:text-sm transition-colors">
             <span className="block truncate text-zinc-900">{selected.name}</span>
             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
               <ChevronUpDownIcon className="h-5 w-5 text-zinc-400" aria-hidden="true" />

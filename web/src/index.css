@@ -2,8 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary: #635bff;
+  --color-primary-hover: #5148d6;
+  --color-ink: #26251e;
+  --color-muted: rgba(38, 37, 30, 0.55);
+  --color-surface-100: #f7f7f4;
+  --color-surface-200: #f2f1ed;
+  --color-surface-300: #ebeae5;
+  --color-surface-400: #e6e5e0;
+  --color-border: rgba(38, 37, 30, 0.1);
+  --color-border-strong: rgba(38, 37, 30, 0.2);
+  --color-success: #1f8a65;
+  --color-error: #cf2d56;
+}
+
 @layer base {
   body {
-    @apply antialiased text-zinc-900;
+    @apply antialiased;
+    background: var(--color-surface-200);
+    color: var(--color-ink);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(99, 91, 255, 0.2);
   }
 }
+
+/* Cursor-inspired warm surfaces and the SmartGate primary color. */
+.bg-white { background-color: var(--color-surface-100) !important; }
+.bg-zinc-50 { background-color: var(--color-surface-200) !important; }
+.bg-zinc-100 { background-color: var(--color-surface-300) !important; }
+.bg-zinc-950 { background-color: var(--color-primary) !important; }
+.text-zinc-950 { color: var(--color-ink) !important; }
+.text-zinc-900 { color: var(--color-ink) !important; }
+.text-zinc-600 { color: var(--color-muted) !important; }
+.text-zinc-500 { color: rgba(38, 37, 30, 0.55) !important; }
+.border-zinc-100,
+.border-zinc-200,
+.border-zinc-300 { border-color: var(--color-border) !important; }
+.hover\:bg-zinc-700:hover { background-color: var(--color-primary-hover) !important; }
+.hover\:text-zinc-950:hover { color: var(--color-primary) !important; }
+.focus\:border-zinc-950:focus { border-color: var(--color-primary) !important; }
+.text-emerald-600,
+.text-emerald-400 { color: var(--color-success) !important; }
+
+.sg-dark-surface {
+  background-color: var(--color-ink) !important;
+}
+
+.sg-primary-text { color: var(--color-primary) !important; }
+.sg-primary-border { border-color: var(--color-primary) !important; }

@@ -9,7 +9,7 @@ const features = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-zinc-950">
+    <div className="min-h-screen bg-zinc-50 text-zinc-950">
       <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 font-semibold tracking-tight">
           <span className="w-9 h-9 rounded-xl bg-zinc-950 text-white flex items-center justify-center"><span className="w-4 h-4 border-2 border-white rounded-sm" /></span>
@@ -32,7 +32,7 @@ export default function LandingPage() {
             </div>
             <p className="mt-5 text-xs text-zinc-500">Personal-first. No enterprise setup required.</p>
           </div>
-          <div className="rounded-3xl bg-zinc-950 p-5 shadow-2xl shadow-zinc-300/50 rotate-1">
+          <div className="rounded-3xl sg-dark-surface p-5 shadow-2xl shadow-zinc-300/50 rotate-1">
             <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 text-white">
               <div className="flex items-center justify-between text-xs text-zinc-400"><span>Overview</span><span className="text-emerald-400">● All systems ready</span></div>
               <div className="mt-8 text-4xl font-mono">$2.84</div><div className="mt-1 text-sm text-zinc-500">estimated spend · this month</div>
