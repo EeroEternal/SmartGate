@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import { adminFetch } from '../lib/api'
+import { useDialog } from '../components/Dialog'
 
 interface ModelPool {
   id: string
@@ -29,6 +30,7 @@ export default function Pools() {
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState(STRATEGY_OPTIONS[0])
   const [submitting, setSubmitting] = useState(false)
+  const { dialog, showAlert } = useDialog()
 
   useEffect(() => {
     fetchPools()
@@ -59,11 +61,11 @@ export default function Pools() {
         setStrategy(STRATEGY_OPTIONS[0])
         fetchPools()
       } else {
-        alert(data.message || 'Failed to create pool')
+        await showAlert(data.message || 'Failed to create pool')
       }
     } catch (error) {
       console.error('Submit error:', error)
-      alert(error instanceof Error ? error.message : 'Network error')
+      await showAlert(error instanceof Error ? error.message : 'Network error')
     } finally {
       setSubmitting(false)
     }
@@ -71,6 +73,7 @@ export default function Pools() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {dialog}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Model Pools</h2>

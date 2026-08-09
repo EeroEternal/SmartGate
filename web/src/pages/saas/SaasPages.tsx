@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import BrandMark from '../../components/BrandMark'
+import { useDialog } from '../../components/Dialog'
 
 type Service = { id: string; name: string; model: string; provider_type: string; provider_types?: string[]; endpoint_count?: number; strategy: string; health_status: string }
 type Key = { id: string; name: string; prefix: string; enabled: boolean; daily_spend_limit?: number; created_at: string; last_used_at?: string; model_services?: { id: string; name: string }[] }
@@ -71,15 +72,16 @@ export function SaasLayout({ children }: { children: ReactNode }) {
 export function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
   const [error, setError] = useState('')
+  const { dialog, showConfirm } = useDialog()
   const load = () => {
     saasFetch<Service[]>('/api/saas/model-services')
       .then((r) => setServices(r.data || []))
       .catch((e: unknown) => setError(errorText(e)))
   }
   useEffect(() => { load() }, [])
-  async function remove(id: string) { if (!window.confirm('Remove this model service?')) return; await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' }); load() }
+  async function remove(id: string) { if (!await showConfirm('Remove this model service?', 'Remove model service?')) return; await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' }); load() }
   return <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="w-4 h-4" /> Add service</Link>}>
-    {error && <ErrorMessage text={error} />}{!services.length ? <Empty text="No model services yet." href="/app/services/new" /> : <div className="space-y-3">{services.map((service) => { const routing = routingInfo(service.strategy); const count = service.endpoint_count || 0; return <div key={service.id} className="bg-white border border-zinc-200 rounded-xl p-5 flex items-center justify-between gap-4"><div className="min-w-0"><div className="font-medium">{service.name}</div><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500"><span>{count} provider{count === 1 ? '' : 's'} connected</span><span className="text-zinc-300">·</span><span>{routing.label}</span></div></div><div className="flex items-center gap-4"><span className={`text-xs ${service.health_status === 'draft' ? 'text-amber-600' : 'text-emerald-600'}`}>{serviceStatusLabel(service.health_status || 'ready')}</span><Link to={`/app/services/${service.id}`} className="text-sm font-medium text-primary hover:text-primary-hover">{service.health_status === 'draft' ? 'Set up' : 'Manage'}</Link><button onClick={() => remove(service.id)} className="text-zinc-400 hover:text-rose-600" title="Remove"><Trash2 className="w-4 h-4" /></button></div></div>})}</div>}
+    {dialog}{error && <ErrorMessage text={error} />}{!services.length ? <Empty text="No model services yet." href="/app/services/new" /> : <div className="space-y-3">{services.map((service) => { const routing = routingInfo(service.strategy); const count = service.endpoint_count || 0; return <div key={service.id} className="bg-white border border-zinc-200 rounded-xl p-5 flex items-center justify-between gap-4"><div className="min-w-0"><div className="font-medium">{service.name}</div><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500"><span>{count} provider{count === 1 ? '' : 's'} connected</span><span className="text-zinc-300">·</span><span>{routing.label}</span></div></div><div className="flex items-center gap-4"><span className={`text-xs ${service.health_status === 'draft' ? 'text-amber-600' : 'text-emerald-600'}`}>{serviceStatusLabel(service.health_status || 'ready')}</span><Link to={`/app/services/${service.id}`} className="text-sm font-medium text-primary hover:text-primary-hover">{service.health_status === 'draft' ? 'Set up' : 'Manage'}</Link><button onClick={() => remove(service.id)} className="text-zinc-400 hover:text-rose-600" title="Remove"><Trash2 className="w-4 h-4" /></button></div></div>})}</div>}
   </Page>
 }
 
@@ -243,6 +245,7 @@ export function ServiceDetailsPage() {
   const [testResults, setTestResults] = useState<Record<string, 'passed' | 'failed'>>({})
   const [testToast, setTestToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [callApi, setCallApi] = useState<CallApi>('openai-chat')
+  const { dialog, showConfirm } = useDialog()
   const load = () => {
     if (!id) return
     saasFetch<ServiceDetails>(`/api/saas/model-services/${id}`).then((result) => { setService(result.data || null) }).catch((e: unknown) => setError(errorText(e)))
@@ -254,7 +257,7 @@ export function ServiceDetailsPage() {
     }).catch(() => {})
   }, [id])
   async function removeEndpoint(endpointId: string) {
-    if (!id || !window.confirm('Remove this model from the service?')) return
+    if (!id || !await showConfirm('Remove this model from the service?', 'Remove provider?')) return
     try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function copyServiceName() {
@@ -282,6 +285,7 @@ export function ServiceDetailsPage() {
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
   const routing = service ? routingInfo(service.strategy) : null
   return <Page>
+    {dialog}
     {error && <ErrorMessage text={error} />}
     {testToast && <div className={`fixed right-6 top-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${testToast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`} role="status"><span className={`h-2.5 w-2.5 rounded-full ${testToast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />{testToast.message}</div>}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
@@ -519,6 +523,7 @@ function LegacyNewServicePage() {
 export function KeysPage() {
   const [keys, setKeys] = useState<Key[]>([])
   const [services, setServices] = useState<Service[]>([])
+  const { dialog, showConfirm } = useDialog()
   const [raw, setRaw] = useState('')
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -542,15 +547,15 @@ export function KeysPage() {
     load()
   }
   async function revoke(id: string) {
-    if (!window.confirm('Revoke this API key? Existing requests will not be interrupted.')) return
+    if (!await showConfirm('Existing requests will not be interrupted.', 'Revoke this API key?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}/revoke`, { method: 'POST' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function remove(id: string) {
-    if (!window.confirm('Delete this API key permanently? This cannot be undone.')) return
+    if (!await showConfirm('This cannot be undone.', 'Delete this API key permanently?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
   return <Page action={<button type="button" onClick={() => { setError(''); setModalOpen(true) }} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Create key</button>}>
-    {raw && <div className="rounded-xl border border-amber-200 bg-amber-50 p-5"><div className="text-sm font-medium text-amber-900">Copy this key now. It will not be shown again.</div><div className="mt-3 flex gap-2"><code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">{raw}</code><button type="button" onClick={() => navigator.clipboard.writeText(raw)} className="rounded-lg border border-amber-300 p-2"><Copy className="h-4 w-4" /></button></div></div>}
+    {dialog}{raw && <div className="rounded-xl border border-amber-200 bg-amber-50 p-5"><div className="text-sm font-medium text-amber-900">Copy this key now. It will not be shown again.</div><div className="mt-3 flex gap-2"><code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">{raw}</code><button type="button" onClick={() => navigator.clipboard.writeText(raw)} className="rounded-lg border border-amber-300 p-2"><Copy className="h-4 w-4" /></button></div></div>}
     {error && <ErrorMessage text={error} />}
     {!keys.length ? <Empty text="No API keys yet." href="/app/services" /> : <div className="mt-6 space-y-3">{keys.map((key) => <div key={key.id} className="flex justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-5"><div className="min-w-0"><div className="font-medium">{key.name}</div><div className="mt-1 font-mono text-sm text-zinc-500">{key.prefix}••••••••</div><div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-zinc-400"><span>Created {key.created_at}</span>{key.last_used_at && <span>· Last used {key.last_used_at}</span>}</div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${key.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{key.enabled ? 'Active' : 'Revoked'}</span>{key.model_services?.length ? key.model_services.map((service) => <span key={service.id} className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600">{service.name}</span>) : <span className="text-zinc-400">All project services (legacy key)</span>}</div></div><div className="flex shrink-0 items-start gap-3">{key.enabled && <button type="button" onClick={() => revoke(key.id)} className="self-start text-xs text-rose-600 hover:text-rose-700">Revoke</button>}<button type="button" onClick={() => remove(key.id)} className="self-start text-xs text-zinc-500 hover:text-rose-600">Delete</button></div></div>)}</div>}
     {modalOpen && <CreateKeyModal services={services} existingNames={keys.map((key) => key.name)} onClose={() => setModalOpen(false)} onCreate={create} />}

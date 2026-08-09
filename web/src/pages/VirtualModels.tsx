@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
+import { useDialog } from '../components/Dialog'
 
 interface VirtualModel {
   id: string
@@ -27,6 +28,7 @@ export default function VirtualModels() {
   const [name, setName] = useState('')
   const [selectedPool, setSelectedPool] = useState<{ id: string; name: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const { dialog, showAlert } = useDialog()
 
   useEffect(() => {
     refresh()
@@ -70,7 +72,7 @@ export default function VirtualModels() {
         await refresh()
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to create virtual model')
+      await showAlert(error instanceof Error ? error.message : 'Failed to create virtual model')
     } finally {
       setSubmitting(false)
     }
@@ -78,6 +80,7 @@ export default function VirtualModels() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {dialog}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Virtual Models</h2>

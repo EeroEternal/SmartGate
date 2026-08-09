@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
+import { useDialog } from '../components/Dialog'
 
 interface Provider {
   id: string
@@ -59,6 +60,7 @@ export default function Providers() {
     context_length: '',
   })
   const [submitting, setSubmitting] = useState(false)
+  const { dialog, showAlert } = useDialog()
 
   useEffect(() => {
     refresh()
@@ -102,7 +104,7 @@ export default function Providers() {
         await refresh()
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Network error')
+      await showAlert(error instanceof Error ? error.message : 'Network error')
     } finally {
       setSubmitting(false)
     }
@@ -152,7 +154,7 @@ export default function Providers() {
         await refresh()
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Network error')
+      await showAlert(error instanceof Error ? error.message : 'Network error')
     } finally {
       setSubmitting(false)
     }
@@ -160,6 +162,7 @@ export default function Providers() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {dialog}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Providers</h2>

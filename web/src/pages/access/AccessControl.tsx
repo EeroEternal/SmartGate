@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, X, Key, FolderPlus, Link2, Pencil } from 'lucide-react'
 import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
+import { useDialog } from '../../components/Dialog'
 
 interface Project {
   id: string
@@ -67,6 +68,7 @@ export default function AccessControl() {
   const [projectForm, setProjectForm] = useState({ name: '', description: '', rpm_limit: '', concurrency_limit: '' })
   const [quotaForm, setQuotaForm] = useState({ rpm_limit: '', concurrency_limit: '' })
   const [submitting, setSubmitting] = useState(false)
+  const { dialog, showAlert, showConfirm } = useDialog()
 
   useEffect(() => {
     fetchData()
@@ -129,7 +131,7 @@ export default function AccessControl() {
       setProjectForm({ name: '', description: '', rpm_limit: '', concurrency_limit: '' })
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create project')
+      await showAlert(err instanceof Error ? err.message : 'Failed to create project')
     } finally {
       setSubmitting(false)
     }
@@ -155,7 +157,7 @@ export default function AccessControl() {
       setKeyForm({ name: '', rpm_limit: '', concurrency_limit: '' })
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create API key')
+      await showAlert(err instanceof Error ? err.message : 'Failed to create API key')
     } finally {
       setSubmitting(false)
     }
@@ -176,14 +178,14 @@ export default function AccessControl() {
       setIsGrantModalOpen(false)
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to grant model')
+      await showAlert(err instanceof Error ? err.message : 'Failed to grant model')
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleRevoke = async (grant: Grant) => {
-    if (!confirm(`Revoke ${grant.virtual_model_name} from ${grant.project_name}?`)) return
+    if (!await showConfirm(`Revoke ${grant.virtual_model_name} from ${grant.project_name}?`, 'Revoke model access?')) return
     try {
       await adminFetch('/api/admin/projects/revoke', {
         method: 'POST',
@@ -194,7 +196,7 @@ export default function AccessControl() {
       })
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to revoke grant')
+      await showAlert(err instanceof Error ? err.message : 'Failed to revoke grant')
     }
   }
 
@@ -230,7 +232,7 @@ export default function AccessControl() {
       setQuotaTarget(null)
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update quota')
+      await showAlert(err instanceof Error ? err.message : 'Failed to update quota')
     } finally {
       setSubmitting(false)
     }
@@ -241,6 +243,7 @@ export default function AccessControl() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {dialog}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Access Control</h2>
