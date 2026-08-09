@@ -58,11 +58,11 @@ export function SaasLayout({ children }: { children: ReactNode }) {
         </div>}
       </div>
     </header>
-    <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 grid lg:grid-cols-[220px_1fr] gap-10">
-      <aside className="space-y-1">
+    <div className="mx-auto grid max-w-6xl min-w-0 gap-10 px-6 py-8 md:px-10 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="min-w-0 space-y-1">
         {links.map(([label, href]) => <Link key={href} to={href} className={`block rounded-lg px-3 py-2.5 text-sm ${isActive(href) ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-600 hover:bg-white hover:text-zinc-950'}`}>{label}</Link>)}
       </aside>
-      <main>{children}</main>
+      <main className="min-w-0">{children}</main>
     </div>
   </div>
 }
