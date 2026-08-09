@@ -65,5 +65,9 @@
   background-color: var(--color-ink) !important;
 }
 
+.sg-dark-muted {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+
 .sg-primary-text { color: var(--color-primary) !important; }
 .sg-primary-border { border-color: var(--color-primary) !important; }
