@@ -10,6 +10,7 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{FromRow, PgPool};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -50,13 +51,29 @@ struct LoginRequest {
     password: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ModelServiceRequest {
-    name: String,
+#[derive(Debug, Deserialize, Clone)]
+struct ModelEndpointRequest {
     provider_type: String,
     base_url: String,
     api_key: String,
     upstream_model_id: String,
+    input_price_per_1m: Option<f64>,
+    output_price_per_1m: Option<f64>,
+    capability_score: Option<f64>,
+    supports_tools: Option<bool>,
+    context_length: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelServiceRequest {
+    name: String,
+    #[serde(default)]
+    endpoints: Vec<ModelEndpointRequest>,
+    // Keep the legacy fields readable for existing API clients. New clients should use endpoints.
+    provider_type: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    upstream_model_id: Option<String>,
     strategy: Option<String>,
     input_price_per_1m: Option<f64>,
     output_price_per_1m: Option<f64>,
@@ -270,35 +287,64 @@ async fn me(ctx: SaasContext) -> Json<ApiResponse<Value>> {
 }
 
 async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Value>> {
-    let providers = eero_llm_providers::list_offerings()
+    let mut offerings = Vec::new();
+    let mut grouped: BTreeMap<String, (String, Vec<Value>)> = BTreeMap::new();
+
+    for offering in eero_llm_providers::list_offerings()
         .into_iter()
         .filter(|offering| offering.model.deprecated_at.is_none())
-        .map(|offering| {
-            let provider_name = eero_llm_providers::get_providers_data()
-                .get(offering.provider_id)
-                .map(|provider| provider.label)
-                .unwrap_or(offering.provider_id);
+    {
+        let provider_id = offering.provider_id.to_string();
+        let provider_name = eero_llm_providers::get_providers_data()
+            .get(offering.provider_id)
+            .map(|provider| provider.label)
+            .unwrap_or(offering.provider_id)
+            .to_string();
+        let model = json!({
+            "provider_id": offering.provider_id,
+            "provider_name": provider_name,
+            "endpoint_id": offering.endpoint_id,
+            "endpoint_key": offering.endpoint_key,
+            "region": offering.region,
+            "base_url": offering.base_url,
+            "price_currency": offering.price_currency,
+            "model": offering.model.id,
+            "model_name": offering.model.name,
+            "description": offering.model.description,
+            "input_price_per_1m": offering.model.input_price,
+            "output_price_per_1m": offering.model.output_price,
+            "supports_tools": offering.model.supports_tools,
+            "supports_vision": offering.model.supports_vision,
+            "supports_reasoning": offering.model.supports_reasoning,
+            "context_length": offering.model.context_length,
+        });
+        offerings.push(model.clone());
+        grouped
+            .entry(provider_id)
+            .or_insert_with(|| (provider_name, Vec::new()))
+            .1
+            .push(model);
+    }
+
+    let providers = grouped
+        .into_iter()
+        .map(|(id, (name, models))| {
             json!({
-                "provider_id": offering.provider_id,
-                "provider_name": provider_name,
-                "endpoint_id": offering.endpoint_id,
-                "endpoint_key": offering.endpoint_key,
-                "region": offering.region,
-                "base_url": offering.base_url,
-                "price_currency": offering.price_currency,
-                "model": offering.model.id,
-                "model_name": offering.model.name,
-                "description": offering.model.description,
-                "input_price_per_1m": offering.model.input_price,
-                "output_price_per_1m": offering.model.output_price,
-                "supports_tools": offering.model.supports_tools,
-                "supports_vision": offering.model.supports_vision,
-                "supports_reasoning": offering.model.supports_reasoning,
-                "context_length": offering.model.context_length,
+                "id": id,
+                "name": name,
+                "model_count": models.len(),
+                "models": models,
             })
         })
         .collect::<Vec<_>>();
-    Json(ApiResponse::success(json!({ "offerings": providers })))
+
+    Json(ApiResponse::success(json!({
+        "providers": providers,
+        // Keep the flat form for existing clients while the UI uses the grouped form.
+        "offerings": offerings,
+        "registry_version": eero_llm_providers::registry_version(),
+        "registry_updated_at": eero_llm_providers::registry_updated_at(),
+    })))
 }
 
 async fn create_model_service(
@@ -306,42 +352,94 @@ async fn create_model_service(
     ctx: SaasContext,
     Json(input): Json<ModelServiceRequest>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    if input.name.trim().is_empty()
-        || input.provider_type.trim().is_empty()
-        || input.base_url.trim().is_empty()
-        || input.api_key.trim().is_empty()
-        || input.upstream_model_id.trim().is_empty()
-    {
+    if input.name.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Service name is required")),
+        ));
+    }
+
+    let has_explicit_endpoints = !input.endpoints.is_empty();
+    let endpoints = if !has_explicit_endpoints {
+        match (
+            input.provider_type,
+            input.base_url,
+            input.api_key,
+            input.upstream_model_id,
+        ) {
+            (Some(provider_type), Some(base_url), Some(api_key), Some(upstream_model_id)) => {
+                vec![ModelEndpointRequest {
+                    provider_type,
+                    base_url,
+                    api_key,
+                    upstream_model_id,
+                    input_price_per_1m: input.input_price_per_1m,
+                    output_price_per_1m: input.output_price_per_1m,
+                    capability_score: input.capability_score,
+                    supports_tools: input.supports_tools,
+                    context_length: input.context_length,
+                }]
+            }
+            _ => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "At least one complete upstream endpoint is required",
+                    )),
+                ));
+            }
+        }
+    } else {
+        input.endpoints
+    };
+
+    if has_explicit_endpoints && endpoints.len() < 3 {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error(
-                "Service name, provider, URL, API key, and model are required",
+                "A mixed model service needs 3-4 upstream endpoints",
             )),
         ));
     }
-    if !input.base_url.starts_with("https://") && !input.base_url.starts_with("http://127.0.0.1") {
+    if endpoints.len() > 4 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Provider URL must use HTTPS")),
+            Json(ApiResponse::error(
+                "A mixed model service can contain 3-4 upstream endpoints",
+            )),
         ));
     }
+    for endpoint in &endpoints {
+        if endpoint.provider_type.trim().is_empty()
+            || endpoint.base_url.trim().is_empty()
+            || endpoint.api_key.trim().is_empty()
+            || endpoint.upstream_model_id.trim().is_empty()
+        {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error(
+                    "Every upstream endpoint needs a provider, URL, API key, and model",
+                )),
+            ));
+        }
+        if !endpoint.base_url.starts_with("https://")
+            && !endpoint.base_url.starts_with("http://127.0.0.1")
+        {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Provider URL must use HTTPS")),
+            ));
+        }
+    }
+
     let service_id = Uuid::new_v4().to_string();
-    let provider_id = Uuid::new_v4().to_string();
-    let endpoint_id = Uuid::new_v4().to_string();
     let pool_id = Uuid::new_v4().to_string();
     let model_id = Uuid::new_v4().to_string();
+    let public_model = format!("{}-{}", ctx.user.id, input.name);
     let strategy = input.strategy.unwrap_or_else(|| "cost_aware".to_string());
     let mut tx = state.db.begin().await.map_err(db_error)?;
-    sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6)")
-        .bind(&provider_id).bind(&ctx.org_id).bind(format!("saas-{service_id}"))
-        .bind(&input.provider_type).bind(&input.base_url).bind(&input.api_key)
-        .execute(&mut *tx).await.map_err(db_error)?;
-    sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-        .bind(&endpoint_id).bind(&provider_id).bind(&input.name).bind(&input.upstream_model_id)
-        .bind(input.input_price_per_1m.unwrap_or(0.0)).bind(input.output_price_per_1m.unwrap_or(0.0))
-        .bind(input.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
-        .bind(input.supports_tools.map(|value| if value { 1 } else { 0 })).bind(input.context_length)
-        .execute(&mut *tx).await.map_err(db_error)?;
+    let mut provider_types = Vec::with_capacity(endpoints.len());
+
     sqlx::query("INSERT INTO model_pools (id, org_id, name, strategy) VALUES ($1, $2, $3, $4)")
         .bind(&pool_id)
         .bind(&ctx.org_id)
@@ -350,12 +448,46 @@ async fn create_model_service(
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-    sqlx::query("INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES ($1, $2, 1, 1)")
-        .bind(&pool_id).bind(&endpoint_id).execute(&mut *tx).await.map_err(db_error)?;
+
+    for (index, endpoint) in endpoints.iter().enumerate() {
+        let provider_id = Uuid::new_v4().to_string();
+        let endpoint_id = Uuid::new_v4().to_string();
+        provider_types.push(endpoint.provider_type.clone());
+        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6)")
+            .bind(&provider_id)
+            .bind(&ctx.org_id)
+            .bind(format!("saas-{service_id}-{}", index + 1))
+            .bind(&endpoint.provider_type)
+            .bind(&endpoint.base_url)
+            .bind(&endpoint.api_key)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+            .bind(&endpoint_id)
+            .bind(&provider_id)
+            .bind(format!("{}-{}", input.name, index + 1))
+            .bind(&endpoint.upstream_model_id)
+            .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
+            .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
+            .bind(endpoint.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
+            .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
+            .bind(endpoint.context_length)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        sqlx::query("INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES ($1, $2, 1, 1)")
+            .bind(&pool_id)
+            .bind(&endpoint_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+    }
+
     sqlx::query("INSERT INTO virtual_models (id, pool_id, name) VALUES ($1, $2, $3)")
         .bind(&model_id)
         .bind(&pool_id)
-        .bind(format!("{}-{}", ctx.user.id, input.name))
+        .bind(&public_model)
         .execute(&mut *tx)
         .await
         .map_err(|_| conflict_error("Model name is already in use"))?;
@@ -368,9 +500,14 @@ async fn create_model_service(
     tx.commit().await.map_err(db_error)?;
     sync(&state).await;
     Ok(Json(ApiResponse::success(json!({
-        "id": service_id, "name": input.name, "model": format!("{}-{}", ctx.user.id, input.name),
-        "provider_type": input.provider_type, "upstream_model_id": input.upstream_model_id,
-        "strategy": strategy, "status": "active"
+        "id": service_id,
+        "name": input.name,
+        "model": public_model,
+        "provider_type": if provider_types.len() > 1 { "mixed".to_string() } else { provider_types[0].clone() },
+        "provider_types": provider_types,
+        "endpoint_count": endpoints.len(),
+        "strategy": strategy,
+        "status": "active"
     }))))
 }
 
@@ -379,7 +516,7 @@ async fn list_model_services(
     ctx: SaasContext,
 ) -> Result<Json<ApiResponse<Vec<Value>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let rows: Vec<(String, String, String, String, String, String, String)> = sqlx::query_as(
-        "SELECT vm.id, vm.name, pa.provider_type, e.upstream_model_id, mp.strategy,
+        "SELECT vm.id, vm.name, mp.strategy, pa.provider_type, e.upstream_model_id,
                 e.health_status, e.name
          FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
@@ -388,15 +525,67 @@ async fn list_model_services(
          JOIN provider_accounts pa ON pa.id = e.account_id
          WHERE mp.org_id = $1 AND EXISTS (
              SELECT 1 FROM project_model_grants g WHERE g.virtual_model_id = vm.id AND g.project_id = $2
-         ) ORDER BY vm.created_at DESC",
+         ) ORDER BY vm.created_at DESC, e.created_at ASC",
     )
-    .bind(&ctx.org_id).bind(&ctx.project_id).fetch_all(&state.db).await.map_err(db_error)?;
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(db_error)?;
+
+    let mut services: Vec<(
+        String,
+        String,
+        String,
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+    )> = Vec::new();
+    let mut indexes = HashMap::new();
+    for row in rows {
+        let index = if let Some(index) = indexes.get(&row.0) {
+            *index
+        } else {
+            let index = services.len();
+            indexes.insert(row.0.clone(), index);
+            services.push((
+                row.0.clone(),
+                row.1.clone(),
+                row.2.clone(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ));
+            index
+        };
+        let service = &mut services[index];
+        if !service.3.contains(&row.3) {
+            service.3.push(row.3);
+        }
+        service.4.push(row.4);
+        service.5.push(row.5);
+    }
+
     Ok(Json(ApiResponse::success(
-        rows.into_iter()
-            .map(|row| {
+        services
+            .into_iter()
+            .map(|service| {
+                let health_status = if service.5.iter().all(|status| status == "healthy") {
+                    "healthy"
+                } else if service.5.iter().any(|status| status == "unavailable") {
+                    "unavailable"
+                } else {
+                    "degraded"
+                };
                 json!({
-                    "id": row.0, "model": row.1, "provider_type": row.2, "upstream_model_id": row.3,
-                    "strategy": row.4, "health_status": row.5, "endpoint_name": row.6
+                    "id": service.0,
+                    "model": service.1,
+                    "provider_type": if service.3.len() > 1 { "mixed" } else { service.3.first().map(String::as_str).unwrap_or("custom") },
+                    "provider_types": service.3,
+                    "upstream_models": service.4,
+                    "endpoint_count": service.5.len(),
+                    "strategy": service.2,
+                    "health_status": health_status
                 })
             })
             .collect(),
