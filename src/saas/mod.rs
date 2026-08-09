@@ -54,6 +54,8 @@ struct LoginRequest {
 #[derive(Debug, Deserialize, Clone)]
 struct ModelEndpointRequest {
     provider_type: String,
+    #[serde(default)]
+    protocol: Option<String>,
     base_url: String,
     api_key: String,
     upstream_model_id: String,
@@ -67,6 +69,7 @@ struct ModelEndpointRequest {
 #[derive(Debug, Deserialize)]
 struct ModelServiceRequest {
     name: String,
+    model: Option<String>,
     #[serde(default)]
     endpoints: Vec<ModelEndpointRequest>,
     // Keep the legacy fields readable for existing API clients. New clients should use endpoints.
@@ -80,6 +83,11 @@ struct ModelServiceRequest {
     capability_score: Option<f64>,
     supports_tools: Option<bool>,
     context_length: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateModelServiceRequest {
+    model: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,7 +175,9 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/model-services/:id",
-            get(get_model_service).delete(delete_model_service),
+            get(get_model_service)
+                .patch(update_model_service)
+                .delete(delete_model_service),
         )
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
@@ -383,6 +393,7 @@ async fn create_model_service(
             (Some(provider_type), Some(base_url), Some(api_key), Some(upstream_model_id)) => {
                 vec![ModelEndpointRequest {
                     provider_type,
+                    protocol: None,
                     base_url,
                     api_key,
                     upstream_model_id,
@@ -410,6 +421,13 @@ async fn create_model_service(
                 )),
             ));
         }
+        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+        if !matches!(protocol, "openai" | "anthropic") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
+            ));
+        }
         if !endpoint.base_url.starts_with("https://")
             && !endpoint.base_url.starts_with("http://127.0.0.1")
         {
@@ -423,7 +441,20 @@ async fn create_model_service(
     let service_id = Uuid::new_v4().to_string();
     let pool_id = Uuid::new_v4().to_string();
     let model_id = Uuid::new_v4().to_string();
-    let public_model = format!("{}-{}", ctx.user.id, input.name);
+    let public_model = input
+        .model
+        .as_deref()
+        .unwrap_or(&input.name)
+        .trim()
+        .to_string();
+    if public_model.is_empty() || public_model.len() > 120 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error(
+                "Model name must be between 1 and 120 characters",
+            )),
+        ));
+    }
     let strategy = input.strategy.unwrap_or_else(|| "cost_aware".to_string());
     let mut tx = state.db.begin().await.map_err(db_error)?;
     let mut provider_types = Vec::with_capacity(endpoints.len());
@@ -441,11 +472,13 @@ async fn create_model_service(
         let provider_id = Uuid::new_v4().to_string();
         let endpoint_id = Uuid::new_v4().to_string();
         provider_types.push(endpoint.provider_type.clone());
-        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6)")
+        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
             .bind(&provider_id)
             .bind(&ctx.org_id)
             .bind(format!("saas-{service_id}-{}", index + 1))
             .bind(&endpoint.provider_type)
+            .bind(protocol)
             .bind(&endpoint.base_url)
             .bind(&endpoint.api_key)
             .execute(&mut *tx)
@@ -596,6 +629,68 @@ async fn get_model_service(
     }))))
 }
 
+async fn update_model_service(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Path(model_id): Path<String>,
+    Json(input): Json<UpdateModelServiceRequest>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let model = input.model.trim().to_string();
+    if model.is_empty() || model.len() > 120 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error(
+                "Model name must be between 1 and 120 characters",
+            )),
+        ));
+    }
+    let owned: Option<(String,)> = sqlx::query_as(
+        "SELECT vm.id FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
+             SELECT 1 FROM project_model_grants g
+             WHERE g.virtual_model_id = vm.id AND g.project_id = $3
+         )",
+    )
+    .bind(&model_id)
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    if owned.is_none() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Model service not found")),
+        ));
+    }
+    let conflict: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM virtual_models WHERE name = $1 AND id <> $2")
+            .bind(&model)
+            .bind(&model_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(db_error)?;
+    if conflict.is_some() {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ApiResponse::error("This model name is already in use")),
+        ));
+    }
+    sqlx::query(
+        "UPDATE virtual_models SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    )
+    .bind(&model)
+    .bind(&model_id)
+    .execute(&state.db)
+    .await
+    .map_err(db_error)?;
+    Ok(Json(ApiResponse::success(json!({
+        "id": model_id,
+        "model": model,
+    }))))
+}
+
 async fn add_model_service_endpoint(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -612,6 +707,13 @@ async fn add_model_service_endpoint(
             Json(ApiResponse::error(
                 "Provider, URL, API key, and model are required",
             )),
+        ));
+    }
+    let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+    if !matches!(protocol, "openai" | "anthropic") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
         ));
     }
     if !endpoint.base_url.starts_with("https://")
@@ -648,11 +750,12 @@ async fn add_model_service_endpoint(
     let mut tx = state.db.begin().await.map_err(db_error)?;
     let provider_id = Uuid::new_v4().to_string();
     let endpoint_id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6)")
+    sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
         .bind(&provider_id)
         .bind(&ctx.org_id)
         .bind(format!("saas-{model_id}-{}", endpoint_count + 1))
         .bind(&endpoint.provider_type)
+        .bind(endpoint.protocol.as_deref().unwrap_or("openai"))
         .bind(&endpoint.base_url)
         .bind(&endpoint.api_key)
         .execute(&mut *tx)

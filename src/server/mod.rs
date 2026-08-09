@@ -80,6 +80,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             "/v1/chat/completions",
             post(crate::api::proxy::chat_completions),
         )
+        .route("/v1/messages", post(crate::api::proxy::anthropic_messages))
         .route("/v1/responses", post(crate::api::proxy::responses))
         .layer(
             CorsLayer::new()

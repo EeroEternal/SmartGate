@@ -19,10 +19,33 @@ use axum::{
 use std::sync::Arc;
 use unigateway_sdk::core::pool::ExecutionTarget;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChatProtocol {
+    OpenAi,
+    Anthropic,
+}
+
 pub async fn chat_completions(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
-    Json(mut payload): Json<serde_json::Value>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    chat_proxy(state, auth, payload, ChatProtocol::OpenAi).await
+}
+
+pub async fn anthropic_messages(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    chat_proxy(state, auth, payload, ChatProtocol::Anthropic).await
+}
+
+async fn chat_proxy(
+    state: Arc<AppState>,
+    auth: AuthContext,
+    mut payload: serde_json::Value,
+    protocol: ChatProtocol,
 ) -> Response {
     let requested_model = payload
         .get("model")
@@ -136,6 +159,7 @@ pub async fn chat_completions(
 
     let decision = serde_json::json!({
         "product": "smartgate",
+        "protocol": if protocol == ChatProtocol::Anthropic { "anthropic_messages" } else { "openai_chat" },
         "strategy": strategy,
         "input_tokens_est": input_tokens,
         "output_tokens_est": output_tokens,
@@ -183,10 +207,15 @@ pub async fn chat_completions(
         auth.project.id.clone(),
     );
 
-    let mut proxy_request = match unigateway_sdk::protocol::openai_payload_to_chat_request(
-        &payload,
-        &requested_model,
-    ) {
+    let parsed_request = match protocol {
+        ChatProtocol::OpenAi => {
+            unigateway_sdk::protocol::openai_payload_to_chat_request(&payload, &requested_model)
+        }
+        ChatProtocol::Anthropic => {
+            unigateway_sdk::protocol::anthropic_payload_to_chat_request(&payload, &requested_model)
+        }
+    };
+    let mut proxy_request = match parsed_request {
         Ok(req) => req,
         Err(e) => {
             return (StatusCode::BAD_REQUEST, format!("Invalid request: {}", e)).into_response()
@@ -240,7 +269,11 @@ pub async fn chat_completions(
     match state.engine.proxy_chat(proxy_request, target).await {
         Ok(session) => {
             permit.disarm();
-            let response = unigateway_sdk::protocol::render_openai_chat_session(session);
+            let response = if protocol == ChatProtocol::Anthropic {
+                unigateway_sdk::protocol::render_anthropic_chat_session(session)
+            } else {
+                unigateway_sdk::protocol::render_openai_chat_session(session)
+            };
             let mut resp = protocol_response_to_axum(response);
             for (name, value) in budget_headers(&budget, spent, limit) {
                 if let Some(name) = name {

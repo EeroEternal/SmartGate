@@ -108,6 +108,14 @@ type CatalogProvider = {
   models: CatalogOffering[]
 }
 
+function modelOptions(models: CatalogOffering[]) {
+  return Array.from(new Map(models.map((item) => [item.model, { id: item.model, name: item.model_name }])).values())
+}
+
+function hasCatalogDetails(model: CatalogOffering | undefined) {
+  return Boolean(model && (model.input_price_per_1m > 0 || model.output_price_per_1m > 0 || model.context_length || model.supports_tools || model.supports_vision || model.supports_reasoning))
+}
+
 const STRATEGIES = [
   { id: 'cost_aware', name: 'Cost-first routing' },
   { id: 'capability_aware', name: 'Capability-first routing' },
@@ -133,6 +141,7 @@ function serviceStatusLabel(status: string) {
 type DraftEndpoint = {
   provider_type: string
   custom_provider_id: string
+  protocol: string
   base_url: string
   api_key: string
   upstream_model_id: string
@@ -142,7 +151,7 @@ type DraftEndpoint = {
   context_length: string
 }
 
-const emptyEndpoint = (): DraftEndpoint => ({ provider_type: 'custom', custom_provider_id: '', base_url: '', api_key: '', upstream_model_id: '', input_price_per_1m: '', output_price_per_1m: '', capability_score: '0.5', context_length: '' })
+const emptyEndpoint = (): DraftEndpoint => ({ provider_type: 'custom', custom_provider_id: '', protocol: 'openai', base_url: '', api_key: '', upstream_model_id: '', input_price_per_1m: '', output_price_per_1m: '', capability_score: '0.5', context_length: '' })
 
 function endpointComplete(endpoint: DraftEndpoint) {
   return Boolean(
@@ -161,6 +170,7 @@ function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[]) {
 export function NewServicePage() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  const [model, setModel] = useState('')
   const [strategy, setStrategy] = useState('cost_aware')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -170,7 +180,7 @@ export function NewServicePage() {
     if (!name.trim()) { setError('Give this model service a name first.'); return }
     setBusy(true); setError('')
     try {
-      const result = await saasFetch<{ id: string }>('/api/saas/model-services', { method: 'POST', body: JSON.stringify({ name: name.trim(), strategy }) })
+      const result = await saasFetch<{ id: string }>('/api/saas/model-services', { method: 'POST', body: JSON.stringify({ name: name.trim(), model: model.trim() || name.trim(), strategy }) })
       if (!result.data?.id) throw new Error('The model service was created without an id.')
       navigate(`/app/services/${result.data.id}`)
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
@@ -182,10 +192,11 @@ export function NewServicePage() {
         <h1 className="text-xl font-semibold tracking-tight">Create a model service</h1>
         <p className="mt-2 text-sm text-zinc-500">Create the service first, then add one or more provider models from its configuration page.</p>
         <div className="mt-6 space-y-5">
-          <Field label="Model service name" value={name} onChange={setName} placeholder="My AI service" />
+          <Field label="Model service name" value={name} onChange={(value) => { setName(value); if (!model) setModel(value) }} placeholder="My AI service" />
+          <Field label="Model name" value={model} onChange={setModel} placeholder="my-model" />
           <Select label="Routing strategy" options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
         </div>
-        <div className="mt-6 flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>You can add one, two, or more provider models later. All of them will share one public model name.</span></div>
+        <div className="mt-6 flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>Add provider connections after creating the service. They will all use this model name.</span></div>
       </div>
       {error && <ErrorMessage text={error} />}
       <div className="flex justify-end gap-3"><Link to="/app/services" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</Link><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create model service'}</button></div>
@@ -203,9 +214,11 @@ export function ServiceDetailsPage() {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [modelName, setModelName] = useState('')
+  const [savingModel, setSavingModel] = useState(false)
   const load = () => {
     if (!id) return
-    saasFetch<ServiceDetails>(`/api/saas/model-services/${id}`).then((result) => setService(result.data || null)).catch((e: unknown) => setError(errorText(e)))
+    saasFetch<ServiceDetails>(`/api/saas/model-services/${id}`).then((result) => { const next = result.data || null; setService(next); if (next) setModelName(next.model) }).catch((e: unknown) => setError(errorText(e)))
   }
   useEffect(() => {
     load()
@@ -223,16 +236,19 @@ export function ServiceDetailsPage() {
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
+  async function saveModelName(event: FormEvent) {
+    event.preventDefault()
+    if (!id || !modelName.trim()) return
+    setSavingModel(true); setError('')
+    try { await saasFetch(`/api/saas/model-services/${id}`, { method: 'PATCH', body: JSON.stringify({ model: modelName.trim() }) }); load() } catch (e) { setError(errorText(e)) } finally { setSavingModel(false) }
+  }
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
   const routing = service ? routingInfo(service.strategy) : null
   return <Page>
     {error && <ErrorMessage text={error} />}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1><p className="mt-1 text-sm text-zinc-500">Your private model service</p></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Add model</button></div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">How to use this service</h2><p className="mt-1 text-sm text-zinc-500">Use these values in any OpenAI-compatible application.</p><div className="mt-5 space-y-4"><div><div className="text-xs font-medium uppercase tracking-wide text-zinc-400">API model name</div><div className="mt-1 flex items-center gap-2"><code className="min-w-0 flex-1 break-all rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-800">{service.model}</code><button type="button" onClick={copyModelName} className="shrink-0 rounded-lg border border-zinc-200 p-2 text-zinc-500 hover:bg-zinc-50" title="Copy API model name"><Copy className="h-4 w-4" /></button></div><p className="mt-2 text-xs text-zinc-500">Put this exact value in the <code>model</code> field of your API request. {copied && <span className="text-emerald-600">Copied.</span>}</p></div><div><div className="text-xs font-medium uppercase tracking-wide text-zinc-400">Connection</div><p className="mt-1 text-sm text-zinc-700">Use your XGate API key with the OpenAI-compatible API endpoint.</p></div></div></section>
-        <section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Request routing</h2><p className="mt-1 text-sm text-zinc-500">How XGate chooses between your connected providers.</p><div className="mt-5 rounded-lg bg-surface-200 p-4"><div className="font-medium text-zinc-900">{routing?.label}</div><p className="mt-1 text-sm text-zinc-600">{routing?.description}</p></div><div className="mt-4 text-sm text-zinc-600"><span className="font-medium text-zinc-900">{service.endpoint_count} provider{service.endpoint_count === 1 ? '' : 's'}</span> connected</div></section>
-      </div>
+      <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-end justify-between gap-5"><form onSubmit={saveModelName} className="min-w-0 flex-1"><label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">Model name</label><div className="mt-2 flex max-w-xl gap-2"><input value={modelName} onChange={(event) => setModelName(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-primary" placeholder="my-model" /><button type="submit" disabled={savingModel || !modelName.trim()} className="rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white disabled:opacity-50">{savingModel ? 'Saving…' : 'Save'}</button><button type="button" onClick={copyModelName} className="rounded-lg border border-zinc-200 p-2.5 text-zinc-500 hover:bg-zinc-50" title="Copy model name"><Copy className="h-4 w-4" /></button></div><p className="mt-2 text-xs text-zinc-500">Use this name in your API request. {copied && <span className="text-emerald-600">Copied.</span>}</p></form><div className="text-sm text-zinc-600"><span className="font-medium text-zinc-900">Routing:</span> {routing?.label}</div></div><div className="mt-4 border-t border-zinc-100 pt-4 text-xs text-zinc-500">API: OpenAI Chat · OpenAI Responses · Anthropic Messages</div></section>
       <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Connected providers</h2><p className="mt-1 text-sm text-zinc-500">These provider models can receive requests through this service.</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4"><div className="min-w-0"><div className="font-medium">{endpoint.provider_name}</div><div className="mt-1 truncate text-sm text-zinc-500">Model: {endpoint.model}</div><div className="mt-1 truncate text-xs text-zinc-400">{endpoint.base_url}</div></div><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="h-4 w-4" /></button></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet. Add one to start using this service.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Connect a provider</button></div>}</div>
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
@@ -247,25 +263,30 @@ function AddModelModal({ catalog, providers, serviceId, onClose, onSaved }: { ca
   const [error, setError] = useState('')
   const custom = draft.provider_type === 'custom'
   const models = catalog.filter((item) => item.provider_id === draft.provider_type)
-  const providerOptions = [...providers.map((provider) => ({ id: provider.id, name: `${provider.name} · ${provider.modelCount} models` })), { id: 'custom', name: 'Custom provider' }]
+  const providerOptions = [{ id: 'custom', name: 'Custom provider' }, ...providers.map((provider) => ({ id: provider.id, name: provider.name }))]
   const selectedProvider = providers.find((provider) => provider.id === draft.provider_type) || { id: 'custom', name: 'Custom provider' }
+  const protocolOptions = [{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]
+  const selectedProtocol = protocolOptions.find((option) => option.id === draft.protocol) || protocolOptions[0]
   const selectedModel = models.find((item) => item.model === draft.upstream_model_id)
   const patch = (value: Partial<DraftEndpoint>) => setDraft((current) => ({ ...current, ...value }))
   function chooseProvider(option: { id: string | number; name: string }) {
     const provider = String(option.id); const first = catalog.find((item) => item.provider_id === provider)
-    setDraft({ ...emptyEndpoint(), provider_type: provider, upstream_model_id: first?.model || '', base_url: first?.base_url || '', input_price_per_1m: first ? String(first.input_price_per_1m) : '', output_price_per_1m: first ? String(first.output_price_per_1m) : '', capability_score: first ? String(first.supports_reasoning ? 0.8 : 0.5) : '0.5', context_length: first?.context_length ? String(first.context_length) : '' })
+    const protocol = /anthropic|claude/i.test(provider) ? 'anthropic' : 'openai'
+    setDraft({ ...emptyEndpoint(), provider_type: provider, protocol, upstream_model_id: first?.model || '', base_url: first?.base_url || '', input_price_per_1m: first ? String(first.input_price_per_1m) : '', output_price_per_1m: first ? String(first.output_price_per_1m) : '', capability_score: first ? String(first.supports_reasoning ? 0.8 : 0.5) : '0.5', context_length: first?.context_length ? String(first.context_length) : '' })
+    setAdvanced(hasCatalogDetails(first))
   }
   function chooseModel(option: { id: string | number; name: string }) {
     const model = models.find((item) => item.model === String(option.id)); if (!model) return
     patch({ upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: String(model.supports_reasoning ? 0.8 : 0.5), context_length: model.context_length ? String(model.context_length) : '' })
+    if (model.input_price_per_1m || model.output_price_per_1m || model.context_length || model.supports_reasoning) setAdvanced(true)
   }
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!endpointComplete(draft)) { setError('Provider, model, URL, and API key are required.'); return }
     setBusy(true); setError('')
-    try { await saasFetch(`/api/saas/model-services/${serviceId}/endpoints`, { method: 'POST', body: JSON.stringify({ provider_type: custom ? draft.custom_provider_id : draft.provider_type, base_url: draft.base_url, api_key: draft.api_key, upstream_model_id: draft.upstream_model_id, input_price_per_1m: draft.input_price_per_1m ? Number(draft.input_price_per_1m) : undefined, output_price_per_1m: draft.output_price_per_1m ? Number(draft.output_price_per_1m) : undefined, capability_score: Number(draft.capability_score), context_length: draft.context_length ? Number(draft.context_length) : undefined }) }); onSaved() } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
+    try { await saasFetch(`/api/saas/model-services/${serviceId}/endpoints`, { method: 'POST', body: JSON.stringify({ provider_type: custom ? draft.custom_provider_id : draft.provider_type, protocol: draft.protocol, base_url: draft.base_url, api_key: draft.api_key, upstream_model_id: draft.upstream_model_id, input_price_per_1m: draft.input_price_per_1m ? Number(draft.input_price_per_1m) : undefined, output_price_per_1m: draft.output_price_per_1m ? Number(draft.output_price_per_1m) : undefined, capability_score: Number(draft.capability_score), context_length: draft.context_length ? Number(draft.context_length) : undefined }) }); onSaved() } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Add model to service</h2><p className="mt-1 text-sm text-zinc-500">Configure one provider connection at a time.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Select label="Provider" options={providerOptions} selected={selectedProvider} onChange={chooseProvider} />{custom ? <Field label="Provider ID" value={draft.custom_provider_id} onChange={(value) => patch({ custom_provider_id: value })} placeholder="my-provider" /> : <Select label="Model" options={models.map((item) => ({ id: item.model, name: `${item.model_name} (${item.model})` }))} selected={selectedModel ? { id: selectedModel.model, name: `${selectedModel.model_name} (${selectedModel.model})` } : { id: '', name: 'Select a model' }} onChange={chooseModel} />}</div>{custom && <Field label="Model" value={draft.upstream_model_id} onChange={(value) => patch({ upstream_model_id: value })} placeholder="provider-model-name" />}<Field label="OpenAI-compatible base URL" value={draft.base_url} onChange={(value) => patch({ base_url: value })} placeholder="https://api.example.com/v1" /><label className="block text-sm font-medium">Provider API key<div className="relative mt-2"><input required type={visible ? 'text' : 'password'} value={draft.api_key} onChange={(event) => patch({ api_key: event.target.value })} placeholder="Paste your provider key" className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 pr-10 outline-none focus:border-primary" /><button type="button" onClick={() => setVisible((value) => !value)} className="absolute inset-y-0 right-0 px-3 text-zinc-400" aria-label={visible ? 'Hide API key' : 'Show API key'}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label><button type="button" onClick={() => setAdvanced((value) => !value)} className="text-sm text-zinc-600 hover:text-zinc-950">{advanced ? 'Hide advanced settings' : 'Price and capability settings'}</button>{advanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3"><Field required={false} label="Input $/1M" value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" /><Field required={false} label="Output $/1M" value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.5" /><Field required={false} label="Context length" value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" /></div>}{selectedModel && <p className="text-xs text-zinc-500">{selectedModel.description} · {selectedModel.context_length ? `${selectedModel.context_length.toLocaleString()} context` : 'Context length not listed'}</p>}</div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Adding…' : 'Add model'}</button></div></form></div>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Add model to service</h2><p className="mt-1 text-sm text-zinc-500">Configure one provider connection at a time.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Select label="Provider" options={providerOptions} selected={selectedProvider} onChange={chooseProvider} />{custom ? <Field label="Provider ID" value={draft.custom_provider_id} onChange={(value) => patch({ custom_provider_id: value })} placeholder="my-provider" /> : <Select label="Model" options={modelOptions(models)} selected={selectedModel ? { id: selectedModel.model, name: selectedModel.model_name } : { id: '', name: 'Select a model' }} onChange={chooseModel} />}</div><div className="grid gap-5 sm:grid-cols-2">{custom ? <Field label="Model" value={draft.upstream_model_id} onChange={(value) => patch({ upstream_model_id: value })} placeholder="provider-model-name" /> : <div /> }<Select label="Protocol" options={protocolOptions} selected={selectedProtocol} onChange={(option) => patch({ protocol: String(option.id) })} /></div><Field label="Provider API base URL" value={draft.base_url} onChange={(value) => patch({ base_url: value })} placeholder="https://api.example.com/v1" /><label className="block text-sm font-medium">Provider API key<div className="relative mt-2"><input required type={visible ? 'text' : 'password'} value={draft.api_key} onChange={(event) => patch({ api_key: event.target.value })} placeholder="Paste your provider key" className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 pr-10 outline-none focus:border-primary" /><button type="button" onClick={() => setVisible((value) => !value)} className="absolute inset-y-0 right-0 px-3 text-zinc-400" aria-label={visible ? 'Hide API key' : 'Show API key'}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label><button type="button" onClick={() => setAdvanced((value) => !value)} className="text-sm text-zinc-700 hover:text-zinc-950">{advanced ? 'Hide advanced settings' : 'Price and capability settings'}</button>{advanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3 text-zinc-900"><Field required={false} label="Input $/1M" value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" /><Field required={false} label="Output $/1M" value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.5" /><Field required={false} label="Context length" value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" /></div>}{selectedModel && <p className="text-xs text-zinc-500">{selectedModel.description} · {selectedModel.context_length ? `${selectedModel.context_length.toLocaleString()} context` : 'Context length not listed'}</p>}</div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Adding…' : 'Add model'}</button></div></form></div>
 }
 
 function LegacyNewServicePage() {
@@ -297,7 +318,7 @@ function LegacyNewServicePage() {
   }, [])
 
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
-  const providerOptions = [...providers.map((provider) => ({ id: provider.id, name: `${provider.name} · ${provider.modelCount} models` })), { id: 'custom', name: 'Custom provider' }]
+  const providerOptions = [{ id: 'custom', name: 'Custom provider' }, ...providers.map((provider) => ({ id: provider.id, name: provider.name }))]
   const completedCount = endpoints.filter(endpointComplete).length
   const updateEndpoint = (index: number, patch: Partial<DraftEndpoint>) => setEndpoints((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item))
   const toggleIndex = (setter: Dispatch<SetStateAction<number[]>>, index: number) => setter((items) => items.includes(index) ? items.filter((item) => item !== index) : [...items, index])
@@ -316,12 +337,14 @@ function LegacyNewServicePage() {
       capability_score: firstModel ? String(firstModel.supports_reasoning ? 0.8 : 0.5) : '0.5',
       context_length: firstModel?.context_length ? String(firstModel.context_length) : '',
     })
+    if (hasCatalogDetails(firstModel)) setAdvanced((items) => items.includes(index) ? items : [...items, index])
   }
 
   function selectModel(index: number, option: { id: string | number; name: string }) {
     const model = catalog.find((item) => item.provider_id === endpoints[index].provider_type && item.model === String(option.id))
     if (!model) return
     updateEndpoint(index, { upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: String(model.supports_reasoning ? 0.8 : 0.5), context_length: model.context_length ? String(model.context_length) : '' })
+    if (hasCatalogDetails(model)) setAdvanced((items) => items.includes(index) ? items : [...items, index])
   }
 
   function addEndpoint() {
@@ -396,13 +419,13 @@ function LegacyNewServicePage() {
             {isExpanded && <div className="space-y-5 border-t border-zinc-100 p-4 sm:p-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <Select label="Provider" options={providerOptions} selected={selectedProvider} onChange={(option) => selectProvider(index, option)} />
-                {customProvider ? <Field label="Provider ID" value={endpoint.custom_provider_id} onChange={(value) => updateEndpoint(index, { custom_provider_id: value })} placeholder="my-provider" /> : <Select label="Model" options={models.map((item) => ({ id: item.model, name: `${item.model_name} (${item.model})` }))} selected={selectedModel ? { id: selectedModel.model, name: `${selectedModel.model_name} (${selectedModel.model})` } : { id: '', name: 'Select a model' }} onChange={(option) => selectModel(index, option)} />}
+                {customProvider ? <Field label="Provider ID" value={endpoint.custom_provider_id} onChange={(value) => updateEndpoint(index, { custom_provider_id: value })} placeholder="my-provider" /> : <Select label="Model" options={modelOptions(models)} selected={selectedModel ? { id: selectedModel.model, name: selectedModel.model_name } : { id: '', name: 'Select a model' }} onChange={(option) => selectModel(index, option)} />}
               </div>
               {customProvider && <Field label="Model" value={endpoint.upstream_model_id} onChange={(value) => updateEndpoint(index, { upstream_model_id: value })} placeholder="provider-model-name" />}
-              <Field label="OpenAI-compatible base URL" value={endpoint.base_url} onChange={(value) => updateEndpoint(index, { base_url: value })} placeholder="https://api.example.com/v1" />
+              <Field label="Provider API base URL" value={endpoint.base_url} onChange={(value) => updateEndpoint(index, { base_url: value })} placeholder="https://api.example.com/v1" />
               <label className="block text-sm font-medium">Provider API key<div className="relative mt-2"><input required type={isVisible ? 'text' : 'password'} value={endpoint.api_key} onChange={(event) => updateEndpoint(index, { api_key: event.target.value })} placeholder="Paste your provider key" className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 pr-10 outline-none focus:border-primary" /><button type="button" onClick={() => toggleIndex(setVisibleKeys, index)} className="absolute inset-y-0 right-0 px-3 text-zinc-400 hover:text-zinc-700" aria-label={isVisible ? 'Hide API key' : 'Show API key'}>{isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><span className="mt-1 block text-xs font-normal text-zinc-400">Used only for this upstream connection. It is not shown to the other providers.</span></label>
               <button type="button" onClick={() => toggleIndex(setAdvanced, index)} className="inline-flex items-center gap-2 text-sm text-zinc-600 hover:text-zinc-950"><Settings2 className="h-4 w-4" /> {isAdvanced ? 'Hide advanced settings' : 'Price and capability settings'}</button>
-              {isAdvanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3"><Field required={false} label="Input $/1M" value={endpoint.input_price_per_1m} onChange={(value) => updateEndpoint(index, { input_price_per_1m: value })} placeholder="0.14" /><Field required={false} label="Output $/1M" value={endpoint.output_price_per_1m} onChange={(value) => updateEndpoint(index, { output_price_per_1m: value })} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={endpoint.capability_score} onChange={(value) => updateEndpoint(index, { capability_score: value })} placeholder="0.5" /><Field label="Context length" required={false} value={endpoint.context_length} onChange={(value) => updateEndpoint(index, { context_length: value })} placeholder="128000" /></div>}
+              {isAdvanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3 text-zinc-900"><Field required={false} label="Input $/1M" value={endpoint.input_price_per_1m} onChange={(value) => updateEndpoint(index, { input_price_per_1m: value })} placeholder="0.14" /><Field required={false} label="Output $/1M" value={endpoint.output_price_per_1m} onChange={(value) => updateEndpoint(index, { output_price_per_1m: value })} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={endpoint.capability_score} onChange={(value) => updateEndpoint(index, { capability_score: value })} placeholder="0.5" /><Field label="Context length" required={false} value={endpoint.context_length} onChange={(value) => updateEndpoint(index, { context_length: value })} placeholder="128000" /></div>}
               {selectedModel && <p className="text-xs text-zinc-500">{selectedModel.description} · {selectedModel.context_length ? `${selectedModel.context_length.toLocaleString()} context` : 'Context length not listed'} · {selectedModel.price_currency}</p>}
             </div>}
           </div>

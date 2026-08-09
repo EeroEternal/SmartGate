@@ -19,6 +19,7 @@ struct SyncEndpointRow {
     pool_priority: i32,
     pool_weight: i32,
     provider_type: String,
+    protocol: String,
     base_url: String,
     api_key: String,
     account_name: String,
@@ -50,7 +51,7 @@ pub async fn sync_all_pools(
         let rows = sqlx::query_as::<_, SyncEndpointRow>(
             "SELECT e.id, e.account_id, e.upstream_model_id, e.enabled,
                     mpe.priority AS pool_priority, mpe.weight AS pool_weight,
-                    pa.provider_type, pa.base_url, pa.api_key, pa.name AS account_name,
+                    pa.provider_type, pa.protocol, pa.base_url, pa.api_key, pa.name AS account_name,
                     e.input_price_per_1m, e.output_price_per_1m,
                     e.capability_score, e.supports_tools, e.context_length
              FROM endpoints e
@@ -89,7 +90,8 @@ pub async fn sync_all_pools(
         let unigateway_endpoints: Vec<Endpoint> = rows
             .iter()
             .map(|r| {
-                let (provider_kind, driver_id, family) = map_provider(&r.provider_type);
+                let (provider_kind, driver_id, family) =
+                    map_provider(&r.protocol, &r.provider_type);
                 Endpoint {
                     endpoint_id: r.id.clone(),
                     provider_name: Some(r.account_name.clone()),
@@ -109,6 +111,7 @@ pub async fn sync_all_pools(
                         ("account_id".to_string(), r.account_id.clone()),
                         ("account_name".to_string(), r.account_name.clone()),
                         ("provider_type".to_string(), r.provider_type.clone()),
+                        ("protocol".to_string(), r.protocol.clone()),
                     ]),
                 }
             })
@@ -155,9 +158,12 @@ fn map_strategy(strategy: &str) -> LoadBalancingStrategy {
     }
 }
 
-fn map_provider(provider_type: &str) -> (ProviderKind, &'static str, Option<String>) {
-    match provider_type.to_ascii_lowercase().as_str() {
-        "anthropic" | "claude" => (
+fn map_provider(
+    protocol: &str,
+    _provider_type: &str,
+) -> (ProviderKind, &'static str, Option<String>) {
+    match protocol.to_ascii_lowercase().as_str() {
+        "anthropic" => (
             ProviderKind::Anthropic,
             "anthropic",
             Some("anthropic".to_string()),

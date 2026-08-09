@@ -46,6 +46,7 @@ pub struct ProviderAccount {
     pub id: String,
     pub name: String,
     pub provider_type: String,
+    pub protocol: String,
     pub base_url: String,
     pub api_key: String,
     pub status: String,
