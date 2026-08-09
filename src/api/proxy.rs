@@ -260,6 +260,184 @@ pub async fn chat_completions(
     }
 }
 
+pub async fn responses(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let requested_model = payload
+        .get("model")
+        .and_then(|model| model.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let virtual_model = match sqlx::query_as::<_, VirtualModel>(
+        "SELECT vm.* FROM virtual_models vm
+         JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
+         WHERE vm.name = $1 AND pmg.project_id = $2 AND vm.enabled = TRUE",
+    )
+    .bind(&requested_model)
+    .bind(&auth.project.id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(model)) => model,
+        Ok(None) => {
+            return (
+                StatusCode::FORBIDDEN,
+                "Access to this model is not granted or model not found",
+            )
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
+
+    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+        .bind(&virtual_model.pool_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+    let strategy = pool
+        .as_ref()
+        .map(|pool| canonicalize_strategy(&pool.strategy).to_string())
+        .unwrap_or_else(|| "round_robin".to_string());
+
+    let limit = effective_daily_limit(
+        auth.api_key.daily_spend_limit,
+        auth.project.daily_spend_limit,
+    );
+    let spent = spent_today_for_key(&state.db, &auth.api_key.id).await;
+    let budget = evaluate_budget(spent, limit);
+    if budget.is_blocked() {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            budget_headers(&budget, spent, limit),
+            "Daily spend budget exceeded",
+        )
+            .into_response();
+    }
+
+    let prompt_text = extract_openai_prompt_text(&payload);
+    let input_tokens = estimate_tokens_from_text(&prompt_text);
+    let output_tokens = expected_output_tokens(&payload, 512);
+    let difficulty = heuristic_difficulty(&payload);
+    let has_tools = request_has_tools(&payload);
+    let downshift = budget.should_downshift();
+    set_hint(RouteHint {
+        input_tokens,
+        output_tokens,
+        has_tools,
+        difficulty,
+        downshift,
+        pool_id: virtual_model.pool_id.clone(),
+    });
+    let _hint_guard = HintGuard;
+
+    let key_limits = QuotaLimits {
+        rpm_limit: auth.api_key.rpm_limit.map(|value| value as u32),
+        concurrency_limit: auth.api_key.concurrency_limit.map(|value| value as u32),
+    };
+    let project_limits = QuotaLimits {
+        rpm_limit: auth.project.rpm_limit.map(|value| value as u32),
+        concurrency_limit: auth.project.concurrency_limit.map(|value| value as u32),
+    };
+    if let Err(reason) = state.quotas.try_acquire(
+        &auth.api_key.id,
+        &auth.project.id,
+        &key_limits,
+        &project_limits,
+    ) {
+        let mut headers = HeaderMap::new();
+        if let Some(seconds) = reason.retry_after_secs() {
+            if let Ok(value) = HeaderValue::from_str(&seconds.to_string()) {
+                headers.insert("retry-after", value);
+            }
+        }
+        return (StatusCode::TOO_MANY_REQUESTS, headers, reason.message()).into_response();
+    }
+    let permit = QuotaPermit::new(
+        state.quotas.clone(),
+        auth.api_key.id.clone(),
+        auth.project.id.clone(),
+    );
+
+    let mut proxy_request = match unigateway_sdk::protocol::openai_payload_to_responses_request(
+        &payload,
+        &requested_model,
+    ) {
+        Ok(request) => request,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Invalid request: {}", error),
+            )
+                .into_response();
+        }
+    };
+    proxy_request
+        .metadata
+        .insert("org_id".to_string(), auth.project.org_id);
+    proxy_request
+        .metadata
+        .insert("project_id".to_string(), auth.project.id);
+    proxy_request
+        .metadata
+        .insert("key_id".to_string(), auth.api_key.id);
+    proxy_request
+        .metadata
+        .insert("virtual_model_id".to_string(), virtual_model.id);
+    proxy_request
+        .metadata
+        .insert("pool_id".to_string(), virtual_model.pool_id.clone());
+    proxy_request
+        .metadata
+        .insert("routing_strategy".to_string(), strategy);
+    proxy_request.metadata.insert(
+        "routing_decision".to_string(),
+        serde_json::json!({
+            "product": "smartgate",
+            "protocol": "responses",
+            "input_tokens_est": input_tokens,
+            "output_tokens_est": output_tokens,
+            "difficulty": difficulty,
+            "has_tools": has_tools,
+            "downshift": downshift,
+            "spent_today": spent,
+            "daily_limit": limit,
+        })
+        .to_string(),
+    );
+
+    let target = ExecutionTarget::Pool {
+        pool_id: virtual_model.pool_id,
+    };
+    match state.engine.proxy_responses(proxy_request, target).await {
+        Ok(session) => {
+            permit.disarm();
+            let response = unigateway_sdk::protocol::render_openai_responses_session(session);
+            let mut response = protocol_response_to_axum(response);
+            for (name, value) in budget_headers(&budget, spent, limit) {
+                if let Some(name) = name {
+                    response.headers_mut().insert(name, value);
+                }
+            }
+            response
+        }
+        Err(error) => {
+            tracing::error!("Responses proxy error: {}", error);
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("Upstream error: {}", error),
+            )
+                .into_response()
+        }
+    }
+}
+
 fn budget_headers(budget: &BudgetOutcome, spent: f64, limit: Option<f64>) -> HeaderMap {
     let mut headers = HeaderMap::new();
     let status = match budget {

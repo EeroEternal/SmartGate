@@ -139,6 +139,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/model-services",
             get(list_model_services).post(create_model_service),
         )
+        .route("/model-catalog", get(list_model_catalog))
         .route("/model-services/:id", delete(delete_model_service))
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
@@ -268,6 +269,38 @@ async fn me(ctx: SaasContext) -> Json<ApiResponse<Value>> {
     })))
 }
 
+async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Value>> {
+    let providers = eero_llm_providers::list_offerings()
+        .into_iter()
+        .filter(|offering| offering.model.deprecated_at.is_none())
+        .map(|offering| {
+            let provider_name = eero_llm_providers::get_providers_data()
+                .get(offering.provider_id)
+                .map(|provider| provider.label)
+                .unwrap_or(offering.provider_id);
+            json!({
+                "provider_id": offering.provider_id,
+                "provider_name": provider_name,
+                "endpoint_id": offering.endpoint_id,
+                "endpoint_key": offering.endpoint_key,
+                "region": offering.region,
+                "base_url": offering.base_url,
+                "price_currency": offering.price_currency,
+                "model": offering.model.id,
+                "model_name": offering.model.name,
+                "description": offering.model.description,
+                "input_price_per_1m": offering.model.input_price,
+                "output_price_per_1m": offering.model.output_price,
+                "supports_tools": offering.model.supports_tools,
+                "supports_vision": offering.model.supports_vision,
+                "supports_reasoning": offering.model.supports_reasoning,
+                "context_length": offering.model.context_length,
+            })
+        })
+        .collect::<Vec<_>>();
+    Json(ApiResponse::success(json!({ "offerings": providers })))
+}
+
 async fn create_model_service(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -362,7 +395,7 @@ async fn list_model_services(
         rows.into_iter()
             .map(|row| {
                 json!({
-                    "id": row.0, "name": row.1, "provider_type": row.2, "upstream_model_id": row.3,
+                    "id": row.0, "model": row.1, "provider_type": row.2, "upstream_model_id": row.3,
                     "strategy": row.4, "health_status": row.5, "endpoint_name": row.6
                 })
             })
@@ -635,7 +668,9 @@ async fn create_session(db: &PgPool, user_id: &str) -> Result<String, sqlx::Erro
 
 fn session_response(data: Value, token: String, status: StatusCode) -> Response {
     let mut response = (status, Json(ApiResponse::success(data))).into_response();
-    let secure = std::env::var("COOKIE_SECURE").map(|value| value != "0").unwrap_or(false);
+    let secure = std::env::var("COOKIE_SECURE")
+        .map(|value| value != "0")
+        .unwrap_or(false);
     let cookie = format!(
         "{SESSION_COOKIE}={token}; Max-Age={}; Path=/; HttpOnly; SameSite=Lax{}",
         SESSION_DAYS * 24 * 60 * 60,

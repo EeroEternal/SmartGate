@@ -11,8 +11,8 @@ export default {
         mono: ['Menlo', 'Consolas', 'Courier New', 'monospace'],
       },
       colors: {
-        primary: '#635BFF',
-        'primary-hover': '#5148D6',
+        primary: '#8178E8',
+        'primary-hover': '#7067D4',
         background: '#F2F1ED',
         foreground: '#26251E',
         surface: {
