@@ -205,8 +205,8 @@ export function ServiceDetailsPage() {
   return <Page>
     {error && <ErrorMessage text={error} />}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1><p className="mt-1 text-sm text-zinc-500">Public model: <code>{service.model}</code> · {service.strategy}</p></div><button type="button" disabled={service.endpoint_count >= 4} onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-4 w-4" /> Add model</button></div>
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Provider models</h2><p className="mt-1 text-sm text-zinc-500">Add only the upstreams you actually use. {service.endpoint_count}/4 configured.</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4"><div className="min-w-0"><div className="font-medium">{endpoint.provider_name} <span className="font-normal text-zinc-400">· {endpoint.provider_type}</span></div><div className="mt-1 truncate text-sm text-zinc-500">{endpoint.model} · {endpoint.base_url}</div></div><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove model"><Trash2 className="h-4 w-4" /></button></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No provider models have been added yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add the first model</button></div>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1><p className="mt-1 text-sm text-zinc-500">Public model: <code>{service.model}</code> · {service.strategy}</p></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-4 w-4" /> Add model</button></div>
+      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Provider models</h2><p className="mt-1 text-sm text-zinc-500">Add only the upstreams you actually use. {service.endpoint_count} configured.</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4"><div className="min-w-0"><div className="font-medium">{endpoint.provider_name} <span className="font-normal text-zinc-400">· {endpoint.provider_type}</span></div><div className="mt-1 truncate text-sm text-zinc-500">{endpoint.model} · {endpoint.base_url}</div></div><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove model"><Trash2 className="h-4 w-4" /></button></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No provider models have been added yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add the first model</button></div>}</div>
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
   </Page>
@@ -250,8 +250,8 @@ function LegacyNewServicePage() {
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState('cost_aware')
-  const [endpoints, setEndpoints] = useState<DraftEndpoint[]>([emptyEndpoint(), emptyEndpoint(), emptyEndpoint()])
-  const [expanded, setExpanded] = useState<number[]>([0, 1, 2])
+  const [endpoints, setEndpoints] = useState<DraftEndpoint[]>([emptyEndpoint()])
+  const [expanded, setExpanded] = useState<number[]>([0])
   const [advanced, setAdvanced] = useState<number[]>([])
   const [visibleKeys, setVisibleKeys] = useState<number[]>([])
   const endpointRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -312,7 +312,6 @@ function LegacyNewServicePage() {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!name.trim()) { setError('Give this model service a name first.'); return }
-    if (endpoints.length < 3) { setError('Add at least 3 upstream endpoints for a mixed model service.'); return }
     const firstIncomplete = endpoints.findIndex((endpoint) => !endpointComplete(endpoint))
     if (firstIncomplete !== -1) {
       setExpanded((items) => items.includes(firstIncomplete) ? items : [...items, firstIncomplete])
@@ -336,10 +335,10 @@ function LegacyNewServicePage() {
       <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-5">
         <div>
           <div className="flex items-center justify-between gap-4">
-            <div><h1 className="text-xl font-semibold tracking-tight">Create a mixed model service</h1><p className="mt-1 text-sm text-zinc-500">Connect 3-4 providers behind one model name and let XGate route requests between them.</p></div>
+            <div><h1 className="text-xl font-semibold tracking-tight">Create a model service</h1><p className="mt-1 text-sm text-zinc-500">Connect as many provider models as you need behind one public model name.</p></div>
             <span className="hidden shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary sm:inline-flex">{completedCount}/{endpoints.length} ready</span>
           </div>
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min((completedCount / 3) * 100, 100)}%` }} /></div>
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completedCount ? 100 : 0}%` }} /></div>
         </div>
         <Field label="Model service name" value={name} onChange={setName} placeholder="Balanced AI routing" />
         <Select label="Routing strategy" options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
@@ -365,7 +364,7 @@ function LegacyNewServicePage() {
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${endpointComplete(endpoint) ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{endpointComplete(endpoint) ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">Upstream {index + 1}</span><span className="block truncate text-xs text-zinc-500">{isExpanded ? 'Configure provider connection' : `${providerLabel} · ${modelLabel}`}</span></span>
               </button>
-              {endpoints.length > 3 && <button type="button" onClick={() => removeEndpoint(index)} className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" aria-label={`Remove upstream ${index + 1}`}><Trash2 className="h-4 w-4" /></button>}
+              <button type="button" onClick={() => removeEndpoint(index)} className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" aria-label={`Remove upstream ${index + 1}`}><Trash2 className="h-4 w-4" /></button>
             </div>
             {isExpanded && <div className="space-y-5 border-t border-zinc-100 p-4 sm:p-5">
               <div className="grid gap-5 sm:grid-cols-2">
@@ -383,8 +382,7 @@ function LegacyNewServicePage() {
         })}
       </div>
 
-      {endpoints.length < 4 && <button type="button" onClick={addEndpoint} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-4 text-sm text-zinc-600 hover:border-primary hover:text-primary"><Plus className="h-4 w-4" /> Add optional fourth upstream</button>}
-      <div className="flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-xs text-zinc-500"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>At least 3 upstreams are required. Price and capability values can be left at their defaults unless you use cost-aware or capability-aware routing.</span></div>
+      <button type="button" onClick={addEndpoint} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-4 text-sm text-zinc-600 hover:border-primary hover:text-primary"><Plus className="h-4 w-4" /> Add another upstream</button>
       <div className="rounded-lg bg-surface-200 px-4 py-3 text-xs text-zinc-500">The public model works with <code>/v1/chat/completions</code> and <code>/v1/responses</code>. Provider keys stay inside XGate.</div>
       {error && <ErrorMessage text={error} />}
       <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 p-3 shadow-lg backdrop-blur"><span className="hidden text-sm text-zinc-500 sm:inline">{completedCount} of {endpoints.length} upstreams ready</span><button disabled={busy} className="ml-auto rounded-lg bg-zinc-950 px-5 py-3 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create model service'}</button></div>

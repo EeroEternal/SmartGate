@@ -397,14 +397,6 @@ async fn create_model_service(
         }
     };
 
-    if endpoints.len() > 4 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(
-                "A mixed model service can contain 3-4 upstream endpoints",
-            )),
-        ));
-    }
     for endpoint in &endpoints {
         if endpoint.provider_type.trim().is_empty()
             || endpoint.base_url.trim().is_empty()
@@ -653,14 +645,6 @@ async fn add_model_service_endpoint(
             Json(ApiResponse::error("Model service not found")),
         ));
     };
-    if endpoint_count >= 4 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(
-                "A model service can contain at most 4 models",
-            )),
-        ));
-    }
     let mut tx = state.db.begin().await.map_err(db_error)?;
     let provider_id = Uuid::new_v4().to_string();
     let endpoint_id = Uuid::new_v4().to_string();
