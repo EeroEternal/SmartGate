@@ -2,7 +2,7 @@ use crate::models::{ModelPool as DbModelPool, PoolEndpointMember};
 use crate::pricing::{EndpointProfile, UnitPrice};
 use dashmap::DashMap;
 use sqlx::FromRow;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use unigateway_sdk::core::{
@@ -31,12 +31,12 @@ struct SyncEndpointRow {
 /// Push DB pool config into UniGateway and refresh in-memory routing caches.
 pub async fn sync_all_pools(
     engine: &UniGatewayEngine,
-    db: &SqlitePool,
+    db: &PgPool,
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,
 ) -> anyhow::Result<()> {
-    let db_pools = sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = 1")
+    let db_pools = sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
         .fetch_all(db)
         .await?;
 
@@ -54,7 +54,7 @@ pub async fn sync_all_pools(
              FROM endpoints e
              JOIN model_pool_endpoints mpe ON e.id = mpe.endpoint_id
              JOIN provider_accounts pa ON e.account_id = pa.id
-             WHERE mpe.pool_id = ? AND e.enabled = 1 AND pa.status = 'active'
+             WHERE mpe.pool_id = $1 AND e.enabled = TRUE AND pa.status = 'active'
              ORDER BY mpe.priority DESC, mpe.weight DESC, e.id ASC",
         )
         .bind(&pool.id)
@@ -131,7 +131,7 @@ pub async fn sync_all_pools(
 
 pub async fn sync_all_pools_from_state(
     engine: &Arc<UniGatewayEngine>,
-    db: &SqlitePool,
+    db: &PgPool,
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,

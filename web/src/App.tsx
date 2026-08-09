@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
+import LandingPage from './pages/saas/LandingPage'
+import AuthPage from './pages/saas/AuthPage'
+import SaasDashboard from './pages/saas/SaasDashboard'
+import { KeysPage, NewServicePage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import Providers from './pages/Providers'
@@ -188,30 +192,54 @@ function HeaderHealth() {
   )
 }
 
+function AdminConsole() {
+  return (
+    <div className="flex h-screen bg-zinc-50 overflow-hidden font-sans">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-auto">
+        <header className="h-16 border-b border-zinc-200 bg-white flex items-center justify-between px-8">
+          <h2 className="text-sm font-medium text-zinc-500">Admin Console</h2>
+          <HeaderHealth />
+        </header>
+        <main className="p-8">
+          <Routes>
+            <Route path="/admin" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/providers" element={<Providers />} />
+            <Route path="/pools" element={<Pools />} />
+            <Route path="/pools/:id" element={<PoolDetails />} />
+            <Route path="/virtual-models" element={<VirtualModels />} />
+            <Route path="/access" element={<AccessControl />} />
+            <Route path="/stats" element={<Statistics />} />
+            <Route path="*" element={<div className="text-zinc-500">Under Construction</div>} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   return (
     <Router>
-      <div className="flex h-screen bg-zinc-50 overflow-hidden font-sans">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-auto">
-          <header className="h-16 border-b border-zinc-200 bg-white flex items-center justify-between px-8">
-            <h2 className="text-sm font-medium text-zinc-500">Admin Console</h2>
-            <HeaderHealth />
-          </header>
-          <main className="p-8">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/providers" element={<Providers />} />
-              <Route path="/pools" element={<Pools />} />
-              <Route path="/pools/:id" element={<PoolDetails />} />
-              <Route path="/virtual-models" element={<VirtualModels />} />
-              <Route path="/access" element={<AccessControl />} />
-              <Route path="/stats" element={<Statistics />} />
-              <Route path="*" element={<div className="text-zinc-500">Under Construction</div>} />
-            </Routes>
-          </main>
-        </div>
-      </div>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<AuthPage mode="login" />} />
+        <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="/app" element={<SaasDashboard />} />
+        <Route path="/app/services" element={<ServicesPage />} />
+        <Route path="/app/services/new" element={<NewServicePage />} />
+        <Route path="/app/keys" element={<KeysPage />} />
+        <Route path="/app/usage" element={<UsagePage />} />
+        <Route path="/app/savings" element={<UsagePage savings />} />
+        <Route path="/admin/*" element={<AdminConsole />} />
+        <Route path="/providers" element={<AdminConsole />} />
+        <Route path="/pools/*" element={<AdminConsole />} />
+        <Route path="/virtual-models" element={<AdminConsole />} />
+        <Route path="/access" element={<AdminConsole />} />
+        <Route path="/stats" element={<AdminConsole />} />
+        <Route path="*" element={<LandingPage />} />
+      </Routes>
     </Router>
   )
 }

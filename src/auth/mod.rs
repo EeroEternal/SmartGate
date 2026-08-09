@@ -40,7 +40,7 @@ where
         let token_hash = hash_token(token);
 
         let api_key = sqlx::query_as::<_, ApiKey>(
-            "SELECT * FROM api_keys WHERE key_hash = ? AND enabled = 1"
+            "SELECT * FROM api_keys WHERE key_hash = $1 AND enabled = TRUE"
         )
         .bind(token_hash)
         .fetch_optional(&app_state.db)
@@ -52,7 +52,7 @@ where
         .ok_or((StatusCode::UNAUTHORIZED, "Invalid or disabled API key"))?;
 
         let project = sqlx::query_as::<_, Project>(
-            "SELECT * FROM projects WHERE id = ?"
+            "SELECT * FROM projects WHERE id = $1"
         )
         .bind(&api_key.project_id)
         .fetch_one(&app_state.db)

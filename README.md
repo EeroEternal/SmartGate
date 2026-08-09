@@ -27,11 +27,13 @@ See [docs/scope.md](docs/scope.md) §4 and [docs/integrations/harness.md](docs/i
 
 ## Quick start
 
+SmartGate uses PostgreSQL in production.
+
 ```bash
 # Backend
-export ADMIN_TOKEN=admin123
+export ADMIN_TOKEN=change-me
 export ADDR=127.0.0.1:18765
-export DATABASE_URL='sqlite:smartgate.db?mode=rwc'
+export DATABASE_URL='postgres://smartgate:password@127.0.0.1:5432/smartgate'
 cargo run
 
 # Admin UI (another terminal)
@@ -39,7 +41,7 @@ cd web && npm install && npm run dev
 # http://127.0.0.1:18764
 ```
 
-Or: `./scripts/start.sh`
+For Railway and Cloudflare Pages deployment, see [`docs/deployment.md`](docs/deployment.md).
 
 API: `POST /v1/chat/completions` (OpenAI-compatible) with a project API key.
 

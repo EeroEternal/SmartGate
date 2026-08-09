@@ -1,21 +1,22 @@
 //! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
 
-use axum::{
-    extract::{State, Json},
-    http::{HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
-};
-use std::sync::Arc;
-use crate::config::AppState;
 use crate::auth::AuthContext;
+use crate::config::AppState;
 use crate::models::{ModelPool, VirtualModel};
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
     extract_openai_prompt_text, heuristic_difficulty, request_has_tools, set_hint,
-    slim_tool_messages, spent_today_for_key, tool_message_chars, HintGuard, RouteHint, SlimConfig,
+    slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome, HintGuard,
+    RouteHint, SlimConfig,
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
+use axum::{
+    extract::{Json, State},
+    http::{HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+};
+use std::sync::Arc;
 use unigateway_sdk::core::pool::ExecutionTarget;
 
 pub async fn chat_completions(
@@ -32,7 +33,7 @@ pub async fn chat_completions(
     let virtual_model = match sqlx::query_as::<_, VirtualModel>(
         "SELECT vm.* FROM virtual_models vm 
          JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE vm.name = ? AND pmg.project_id = ? AND vm.enabled = 1",
+         WHERE vm.name = $1 AND pmg.project_id = $2 AND vm.enabled = TRUE",
     )
     .bind(&requested_model)
     .bind(&auth.project.id)
@@ -53,7 +54,7 @@ pub async fn chat_completions(
         }
     };
 
-    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = ?")
+    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
         .bind(&virtual_model.pool_id)
         .fetch_optional(&state.db)
         .await
@@ -66,12 +67,17 @@ pub async fn chat_completions(
         .unwrap_or_else(|| "round_robin".to_string());
 
     // --- Control: progressive spend budget ---
-    let limit = effective_daily_limit(auth.api_key.daily_spend_limit, auth.project.daily_spend_limit);
+    let limit = effective_daily_limit(
+        auth.api_key.daily_spend_limit,
+        auth.project.daily_spend_limit,
+    );
     let spent = spent_today_for_key(&state.db, &auth.api_key.id).await;
     let budget = evaluate_budget(spent, limit);
     if budget.is_blocked() {
+        let headers = budget_headers(&budget, spent, limit);
         return (
             StatusCode::TOO_MANY_REQUESTS,
+            headers,
             format!(
                 "Daily spend budget exceeded (spent≈{spent:.4}, limit={limit:?}). Increase limit or wait until reset."
             ),
@@ -177,13 +183,15 @@ pub async fn chat_completions(
         auth.project.id.clone(),
     );
 
-    let mut proxy_request =
-        match unigateway_sdk::protocol::openai_payload_to_chat_request(&payload, &requested_model) {
-            Ok(req) => req,
-            Err(e) => {
-                return (StatusCode::BAD_REQUEST, format!("Invalid request: {}", e)).into_response()
-            }
-        };
+    let mut proxy_request = match unigateway_sdk::protocol::openai_payload_to_chat_request(
+        &payload,
+        &requested_model,
+    ) {
+        Ok(req) => req,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, format!("Invalid request: {}", e)).into_response()
+        }
+    };
 
     proxy_request
         .metadata
@@ -228,6 +236,11 @@ pub async fn chat_completions(
             permit.disarm();
             let response = unigateway_sdk::protocol::render_openai_chat_session(session);
             let mut resp = protocol_response_to_axum(response);
+            for (name, value) in budget_headers(&budget, spent, limit) {
+                if let Some(name) = name {
+                    resp.headers_mut().insert(name, value);
+                }
+            }
             if downshift {
                 if let Ok(v) = HeaderValue::from_str("soft") {
                     resp.headers_mut().insert("x-smartgate-budget", v);
@@ -235,8 +248,7 @@ pub async fn chat_completions(
             }
             if slimmed_chars > 0 {
                 if let Ok(v) = HeaderValue::from_str(&slimmed_chars.to_string()) {
-                    resp.headers_mut()
-                        .insert("x-smartgate-slim-chars", v);
+                    resp.headers_mut().insert("x-smartgate-slim-chars", v);
                 }
             }
             resp
@@ -246,6 +258,28 @@ pub async fn chat_completions(
             (StatusCode::BAD_GATEWAY, format!("Upstream error: {}", e)).into_response()
         }
     }
+}
+
+fn budget_headers(budget: &BudgetOutcome, spent: f64, limit: Option<f64>) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    let status = match budget {
+        BudgetOutcome::Ok => "ok",
+        BudgetOutcome::Soft { .. } => "soft",
+        BudgetOutcome::Hard { .. } => "hard",
+    };
+    headers.insert(
+        "x-smartgate-budget-status",
+        HeaderValue::from_static(status),
+    );
+    if let Some(limit) = limit.filter(|value| *value > 0.0) {
+        if let Ok(value) = HeaderValue::from_str(&format!("{:.4}", spent / limit)) {
+            headers.insert("x-smartgate-budget-used", value);
+        }
+        if let Ok(value) = HeaderValue::from_str(&format!("{:.4}", (limit - spent).max(0.0))) {
+            headers.insert("x-smartgate-budget-remaining", value);
+        }
+    }
+    headers
 }
 
 fn protocol_response_to_axum(resp: unigateway_sdk::protocol::ProtocolHttpResponse) -> Response {

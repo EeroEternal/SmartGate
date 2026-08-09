@@ -1,0 +1,23 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
+
+function apiUrl(path: string) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
+}
+
+export interface ApiResult<T = any> {
+  success: boolean
+  data?: T
+  message?: string
+}
+
+export async function saasFetch<T = any>(path: string, init: RequestInit = {}): Promise<ApiResult<T>> {
+  const headers = new Headers(init.headers || {})
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const response = await fetch(apiUrl(path), { ...init, headers, credentials: 'include' })
+  const data = await response.json().catch(() => ({ success: false, message: 'Invalid server response' }))
+  if (!response.ok && data?.success !== true) throw new Error(data?.message || `Request failed (${response.status})`)
+  return data
+}
+
+export const saasMe = () => saasFetch('/api/saas/auth/me')
+export const saasLogout = () => saasFetch('/api/saas/auth/logout', { method: 'POST' })

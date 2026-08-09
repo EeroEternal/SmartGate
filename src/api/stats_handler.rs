@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::api::models::ApiResponse;
+use crate::auth::AuthContext;
 use crate::config::AppState;
+use crate::policy::{effective_daily_limit, evaluate_budget, spent_today_for_key, BudgetOutcome};
 
 #[derive(Debug, Default, Deserialize)]
 pub struct StatsQuery {
@@ -21,7 +23,7 @@ pub struct StatsQuery {
 
 #[derive(Debug, FromRow)]
 struct UsageStatRow {
-    timestamp: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
     project_id: Option<String>,
     project_name: Option<String>,
     key_id: Option<String>,
@@ -279,10 +281,10 @@ pub async fn get_stats(
              LEFT JOIN model_pools mp ON mp.id = u.pool_id
              LEFT JOIN endpoints e ON e.id = u.endpoint_id
              LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
-             WHERE u.timestamp >= ?
+             WHERE u.timestamp >= $1
              ORDER BY u.timestamp DESC",
         )
-        .bind(since.format("%Y-%m-%d %H:%M:%S").to_string())
+        .bind(since)
         .fetch_all(&state.db)
         .await
     } else {
@@ -344,16 +346,11 @@ pub async fn get_stats(
             _ => "unknown",
         };
         *status_counts.entry(status_class.to_string()).or_default() += 1;
+        let timestamp = row.timestamp.to_rfc3339();
         let bucket = if range == "24h" {
-            row.timestamp
-                .get(..13)
-                .unwrap_or(&row.timestamp)
-                .replace('T', " ")
+            timestamp.get(..13).unwrap_or(&timestamp).replace('T', " ")
         } else {
-            row.timestamp
-                .get(..10)
-                .unwrap_or(&row.timestamp)
-                .to_string()
+            timestamp.get(..10).unwrap_or(&timestamp).to_string()
         };
         hourly.entry(bucket).or_default().add(row);
     }
@@ -438,6 +435,160 @@ pub async fn get_stats(
     }))))
 }
 
+/// Return usage and budget information scoped strictly to the authenticated API key.
+pub async fn get_key_usage(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Query(query): Query<StatsQuery>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let range = query.range.as_deref().unwrap_or("24h");
+    let since = match range {
+        "24h" => Some(Utc::now() - Duration::hours(24)),
+        "7d" => Some(Utc::now() - Duration::days(7)),
+        "30d" => Some(Utc::now() - Duration::days(30)),
+        "all" => None,
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error(
+                    "range must be one of: 24h, 7d, 30d, all",
+                )),
+            ));
+        }
+    };
+
+    let rows: Vec<UsageStatRow> = if let Some(since) = since {
+        sqlx::query_as(
+            "SELECT u.timestamp, u.project_id, p.name AS project_name,
+                    u.key_id, ak.name AS key_name,
+                    u.virtual_model_id, vm.name AS virtual_model_name,
+                    u.pool_id, mp.name AS pool_name,
+                    u.endpoint_id, e.name AS endpoint_name,
+                    u.provider_account_id, pa.name AS provider_name,
+                    u.prompt_tokens, u.completion_tokens, u.total_tokens,
+                    u.latency_ms, u.status_code, u.estimated_cost,
+                    u.routing_strategy, u.routing_decision, u.metadata,
+                    u.tool_message_chars, u.trimmed_chars
+             FROM usage_logs u
+             LEFT JOIN projects p ON p.id = u.project_id
+             LEFT JOIN api_keys ak ON ak.id = u.key_id
+             LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
+             LEFT JOIN model_pools mp ON mp.id = u.pool_id
+             LEFT JOIN endpoints e ON e.id = u.endpoint_id
+             LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
+             WHERE u.key_id = $1 AND u.timestamp >= $2
+             ORDER BY u.timestamp DESC",
+        )
+        .bind(&auth.api_key.id)
+        .bind(since)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as(
+            "SELECT u.timestamp, u.project_id, p.name AS project_name,
+                    u.key_id, ak.name AS key_name,
+                    u.virtual_model_id, vm.name AS virtual_model_name,
+                    u.pool_id, mp.name AS pool_name,
+                    u.endpoint_id, e.name AS endpoint_name,
+                    u.provider_account_id, pa.name AS provider_name,
+                    u.prompt_tokens, u.completion_tokens, u.total_tokens,
+                    u.latency_ms, u.status_code, u.estimated_cost,
+                    u.routing_strategy, u.routing_decision, u.metadata,
+                    u.tool_message_chars, u.trimmed_chars
+             FROM usage_logs u
+             LEFT JOIN projects p ON p.id = u.project_id
+             LEFT JOIN api_keys ak ON ak.id = u.key_id
+             LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
+             LEFT JOIN model_pools mp ON mp.id = u.pool_id
+             LEFT JOIN endpoints e ON e.id = u.endpoint_id
+             LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
+             WHERE u.key_id = $1
+             ORDER BY u.timestamp DESC",
+        )
+        .bind(&auth.api_key.id)
+        .fetch_all(&state.db)
+        .await
+    }
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
+    })?;
+
+    let row_refs: Vec<&UsageStatRow> = rows.iter().collect();
+    let mut summary = Aggregate::default();
+    for row in &rows {
+        summary.add(row);
+    }
+    summary = summary.finish();
+
+    let daily_limit = effective_daily_limit(
+        auth.api_key.daily_spend_limit,
+        auth.project.daily_spend_limit,
+    );
+    let spent_today = spent_today_for_key(&state.db, &auth.api_key.id).await;
+    let budget = evaluate_budget(spent_today, daily_limit);
+    let (budget_status, budget_warning) = match budget {
+        BudgetOutcome::Ok => ("ok", false),
+        BudgetOutcome::Soft { .. } => ("soft", true),
+        BudgetOutcome::Hard { .. } => ("hard", true),
+    };
+    let remaining = daily_limit.map(|limit| (limit - spent_today).max(0.0));
+    let usage_ratio = daily_limit
+        .filter(|limit| *limit > 0.0)
+        .map(|limit| spent_today / limit);
+
+    let recent_requests: Vec<Value> = rows
+        .iter()
+        .take(20)
+        .map(|row| {
+            serde_json::json!({
+                "timestamp": row.timestamp,
+                "virtual_model": label(&row.virtual_model_name, &row.virtual_model_id),
+                "provider": label(&row.provider_name, &row.provider_account_id),
+                "endpoint": label(&row.endpoint_name, &row.endpoint_id),
+                "prompt_tokens": row.prompt_tokens,
+                "completion_tokens": row.completion_tokens,
+                "total_tokens": row.total_tokens,
+                "latency_ms": row.latency_ms,
+                "status_code": row.status_code,
+                "estimated_spend": row.estimated_cost,
+            })
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::success(serde_json::json!({
+        "period": {
+            "range": range,
+            "from": since.map(|value| value.to_rfc3339()),
+            "to": Utc::now().to_rfc3339(),
+        },
+        "api_key": {
+            "name": auth.api_key.name,
+            "prefix": auth.api_key.key_prefix,
+            "project_id": auth.project.id,
+        },
+        "summary": aggregate_json(&summary),
+        "budget": {
+            "status": budget_status,
+            "warning": budget_warning,
+            "spent_today": spent_today,
+            "daily_limit": daily_limit,
+            "remaining_today": remaining,
+            "usage_ratio": usage_ratio,
+            "soft_threshold": 0.8,
+            "hard_threshold": 1.0,
+        },
+        "breakdowns": {
+            "providers": breakdown(&row_refs, |row| label(&row.provider_name, &row.provider_account_id)),
+            "virtual_models": breakdown(&row_refs, |row| label(&row.virtual_model_name, &row.virtual_model_id)),
+            "endpoints": breakdown(&row_refs, |row| label(&row.endpoint_name, &row.endpoint_id)),
+        },
+        "recent_requests": recent_requests,
+    }))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,7 +614,7 @@ mod tests {
 
     fn test_row(status_code: i32) -> UsageStatRow {
         UsageStatRow {
-            timestamp: "2026-01-01 00:00:00".to_string(),
+            timestamp: chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc),
             project_id: None,
             project_name: None,
             key_id: None,

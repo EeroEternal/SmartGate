@@ -1,6 +1,6 @@
 -- Endpoint health (product-level routing state)
 ALTER TABLE endpoints ADD COLUMN health_status TEXT NOT NULL DEFAULT 'healthy';
-ALTER TABLE endpoints ADD COLUMN cooldown_until DATETIME;
+ALTER TABLE endpoints ADD COLUMN cooldown_until TIMESTAMPTZ;
 
 -- Project hard limits (NULL = unlimited)
 ALTER TABLE projects ADD COLUMN rpm_limit INTEGER;

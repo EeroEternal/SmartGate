@@ -1,17 +1,23 @@
-use axum::{Router, routing::{get, post}};
-use crate::config::{Config, AppState};
+use crate::config::{AppState, Config};
 use crate::db::init_db;
 use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
 use crate::usage::SmartGateHooks;
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use dashmap::DashMap;
 use std::sync::Arc;
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    trace::TraceLayer,
+};
 use unigateway_sdk::core::UniGatewayEngine;
 
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let db = init_db(&config.database_url).await?;
-    
+
     let metrics = Arc::new(DashMap::new());
     let pools = Arc::new(DashMap::new());
     let pool_members = Arc::new(DashMap::new());
@@ -53,12 +59,42 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         quotas,
         engine,
     });
-    
+
     let app = Router::new()
-        .route("/", get(|| async { "SmartGate API is running. Admin UI: http://localhost:18764" }))
+        .route(
+            "/",
+            get(|| async { "SmartGate API is running. Admin UI: http://localhost:18764" }),
+        )
         .route("/health", get(|| async { "OK" }))
-        .nest("/api/admin", crate::api::admin::admin_routes(app_state.clone()))
-        .route("/v1/chat/completions", post(crate::api::proxy::chat_completions))
+        .nest(
+            "/api/admin",
+            crate::api::admin::admin_routes(app_state.clone()),
+        )
+        .nest("/api/saas", crate::saas::routes(app_state.clone()))
+        .route("/v1/usage", get(crate::api::stats_handler::get_key_usage))
+        .route(
+            "/v1/chat/completions",
+            post(crate::api::proxy::chat_completions),
+        )
+        .layer(
+            CorsLayer::new()
+                .allow_origin(AllowOrigin::list(
+                    config
+                        .cors_allowed_origins
+                        .iter()
+                        .filter_map(|origin| origin.parse().ok())
+                        .collect::<Vec<_>>(),
+                ))
+                .allow_credentials(true)
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::PATCH,
+                    axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers(tower_http::cors::Any),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
 

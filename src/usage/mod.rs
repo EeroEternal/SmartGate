@@ -5,14 +5,14 @@ use crate::routing::{COOLDOWN_SECS, FAILURE_THRESHOLD};
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
 use futures_util::future::BoxFuture;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::sync::Arc;
 use unigateway_sdk::core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
 use unigateway_sdk::core::response::RequestReport;
 
 /// Data-plane hooks: metrics, health, usage, quota release.
 pub struct SmartGateHooks {
-    pub db: SqlitePool,
+    pub db: PgPool,
     pub metrics: Arc<DashMap<String, EndpointMetric>>,
     pub quotas: Arc<QuotaLimiter>,
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
@@ -101,7 +101,7 @@ impl GatewayHooks for SmartGateHooks {
 
             if health_changed {
                 let _ = sqlx::query(
-                    "UPDATE endpoints SET health_status = ?, cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE endpoints SET health_status = $1, cooldown_until = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
                 )
                 .bind(&health_status)
                 .bind(cooldown_until)
@@ -174,7 +174,7 @@ impl GatewayHooks for SmartGateHooks {
                     latency_ms, status_code, error_message, metadata,
                     estimated_cost, routing_strategy, routing_decision,
                     tool_message_chars, trimmed_chars
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)",
             )
             .bind(uuid::Uuid::new_v4().to_string())
             .bind(report.metadata.get("org_id"))

@@ -11,6 +11,7 @@ pub mod policy;
 pub mod pricing;
 pub mod quota;
 pub mod routing;
+pub mod saas;
 pub mod server;
 pub mod sync;
 pub mod usage;

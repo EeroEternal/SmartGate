@@ -63,7 +63,7 @@ async fn create_provider(
     
     sqlx::query(
         "INSERT INTO provider_accounts (id, name, provider_type, base_url, api_key) 
-         VALUES (?, ?, ?, ?, ?)"
+         VALUES ($1, $2, $3, $4, $5)"
     )
     .bind(&id)
     .bind(&payload.name)
@@ -77,7 +77,7 @@ async fn create_provider(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    let provider = sqlx::query_as::<_, ProviderAccount>("SELECT * FROM provider_accounts WHERE id = ?")
+    let provider = sqlx::query_as::<_, ProviderAccount>("SELECT * FROM provider_accounts WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -118,7 +118,7 @@ async fn create_pool(
     
     sqlx::query(
         "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars)
-         VALUES (?, ?, ?, ?, ?, ?)"
+         VALUES ($1, $2, $3, $4, $5, $6)"
     )
     .bind(&id)
     .bind(&payload.name)
@@ -133,7 +133,7 @@ async fn create_pool(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = ?")
+    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -234,7 +234,7 @@ async fn create_endpoint(
             id, account_id, name, upstream_model_id, priority, weight,
             input_price_per_1m, output_price_per_1m,
             capability_score, supports_tools, context_length
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
     )
     .bind(&id)
     .bind(&payload.account_id)
@@ -254,7 +254,7 @@ async fn create_endpoint(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    let endpoint = sqlx::query_as::<_, Endpoint>("SELECT * FROM endpoints WHERE id = ?")
+    let endpoint = sqlx::query_as::<_, Endpoint>("SELECT * FROM endpoints WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -321,7 +321,7 @@ async fn create_virtual_model(
     let id = uuid::Uuid::new_v4().to_string();
     
     sqlx::query(
-        "INSERT INTO virtual_models (id, pool_id, name) VALUES (?, ?, ?)"
+        "INSERT INTO virtual_models (id, pool_id, name) VALUES ($1, $2, $3)"
     )
     .bind(&id)
     .bind(&payload.pool_id)
@@ -333,7 +333,7 @@ async fn create_virtual_model(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    let model = sqlx::query_as::<_, VirtualModel>("SELECT * FROM virtual_models WHERE id = ?")
+    let model = sqlx::query_as::<_, VirtualModel>("SELECT * FROM virtual_models WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -357,7 +357,7 @@ async fn bind_endpoint_to_pool(
     Json(payload): Json<BindEndpointToPoolReq>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
     sqlx::query(
-        "INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES (?, ?, ?, ?)
+        "INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES ($1, $2, $3, $4)
          ON CONFLICT(pool_id, endpoint_id) DO UPDATE SET priority=excluded.priority, weight=excluded.weight"
     )
     .bind(&payload.pool_id)
@@ -401,7 +401,7 @@ async fn create_org(
 ) -> Result<Json<ApiResponse<Org>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
     
-    sqlx::query("INSERT INTO orgs (id, name, description) VALUES (?, ?, ?)")
+    sqlx::query("INSERT INTO orgs (id, name, description) VALUES ($1, $2, $3)")
         .bind(&id)
         .bind(&payload.name)
         .bind(&payload.description)
@@ -409,7 +409,7 @@ async fn create_org(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    let org = sqlx::query_as::<_, Org>("SELECT * FROM orgs WHERE id = ?")
+    let org = sqlx::query_as::<_, Org>("SELECT * FROM orgs WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -437,7 +437,7 @@ async fn create_project(
     
     sqlx::query(
         "INSERT INTO projects (id, org_id, name, description, rpm_limit, concurrency_limit, daily_spend_limit)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
         .bind(&id)
         .bind(&payload.org_id)
@@ -450,7 +450,7 @@ async fn create_project(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = ?")
+    let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
@@ -463,7 +463,7 @@ async fn grant_model_to_project(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<GrantModelToProjectReq>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
-    sqlx::query("INSERT OR IGNORE INTO project_model_grants (project_id, virtual_model_id) VALUES (?, ?)")
+    sqlx::query("INSERT INTO project_model_grants (project_id, virtual_model_id) VALUES ($1, $2) ON CONFLICT (project_id, virtual_model_id) DO NOTHING")
         .bind(&payload.project_id)
         .bind(&payload.virtual_model_id)
         .execute(&state.db)
@@ -478,7 +478,7 @@ async fn revoke_model_from_project(
     Json(payload): Json<RevokeModelFromProjectReq>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
     sqlx::query(
-        "DELETE FROM project_model_grants WHERE project_id = ? AND virtual_model_id = ?"
+        "DELETE FROM project_model_grants WHERE project_id = $1 AND virtual_model_id = $2"
     )
     .bind(&payload.project_id)
     .bind(&payload.virtual_model_id)
@@ -554,7 +554,7 @@ async fn create_api_key(
     
     sqlx::query(
         "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(&id)
     .bind(&payload.project_id)
@@ -608,7 +608,7 @@ async fn list_pool_endpoints(
          FROM model_pool_endpoints mpe
          JOIN endpoints e ON e.id = mpe.endpoint_id
          JOIN provider_accounts pa ON pa.id = e.account_id
-         WHERE mpe.pool_id = ?
+         WHERE mpe.pool_id = $1
          ORDER BY mpe.priority DESC, mpe.weight DESC, e.name ASC"
     )
     .bind(&pool_id)
@@ -659,7 +659,7 @@ async fn update_project_quota(
     Path(project_id): Path<String>,
     Json(payload): Json<UpdateProjectQuotaReq>,
 ) -> Result<Json<ApiResponse<Project>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)")
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1)")
         .bind(&project_id)
         .fetch_one(&state.db)
         .await
@@ -670,7 +670,7 @@ async fn update_project_quota(
     }
 
     sqlx::query(
-        "UPDATE projects SET rpm_limit = ?, concurrency_limit = ?, daily_spend_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE projects SET rpm_limit = $1, concurrency_limit = $2, daily_spend_limit = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4"
     )
     .bind(payload.rpm_limit)
     .bind(payload.concurrency_limit)
@@ -680,7 +680,7 @@ async fn update_project_quota(
     .await
     .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = ?")
+    let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = $1")
         .bind(&project_id)
         .fetch_one(&state.db)
         .await
@@ -694,7 +694,7 @@ async fn update_api_key_quota(
     Path(key_id): Path<String>,
     Json(payload): Json<UpdateApiKeyQuotaReq>,
 ) -> Result<Json<ApiResponse<ApiKey>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM api_keys WHERE id = ?)")
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM api_keys WHERE id = $1)")
         .bind(&key_id)
         .fetch_one(&state.db)
         .await
@@ -705,7 +705,7 @@ async fn update_api_key_quota(
     }
 
     sqlx::query(
-        "UPDATE api_keys SET rpm_limit = ?, concurrency_limit = ?, daily_spend_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        "UPDATE api_keys SET rpm_limit = $1, concurrency_limit = $2, daily_spend_limit = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4"
     )
     .bind(payload.rpm_limit)
     .bind(payload.concurrency_limit)
@@ -715,7 +715,7 @@ async fn update_api_key_quota(
     .await
     .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
 
-    let key = sqlx::query_as::<_, ApiKey>("SELECT * FROM api_keys WHERE id = ?")
+    let key = sqlx::query_as::<_, ApiKey>("SELECT * FROM api_keys WHERE id = $1")
         .bind(&key_id)
         .fetch_one(&state.db)
         .await
