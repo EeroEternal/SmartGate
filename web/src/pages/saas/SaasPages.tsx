@@ -78,7 +78,7 @@ export function ServicesPage() {
   useEffect(() => { load() }, [])
   async function remove(id: string) { if (!window.confirm('Remove this model service?')) return; await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' }); load() }
   return <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="w-4 h-4" /> Add service</Link>}>
-    {error && <ErrorMessage text={error} />}{!services.length ? <Empty text="No model services yet." href="/app/services/new" /> : <div className="space-y-3">{services.map((service) => <div key={service.id} className="bg-white border border-zinc-200 rounded-xl p-5 flex items-center justify-between gap-4"><div><div className="font-medium">{service.name}</div><div className="mt-1 text-sm text-zinc-500">{service.provider_type} · {service.model} · {service.endpoint_count || 1} upstream{(service.endpoint_count || 1) === 1 ? '' : 's'} · {service.strategy}</div></div><div className="flex items-center gap-4"><span className={`text-xs ${service.health_status === 'draft' ? 'text-amber-600' : 'text-emerald-600'}`}>{service.health_status || 'ready'}</span><Link to={`/app/services/${service.id}`} className="text-sm font-medium text-primary hover:text-primary-hover">Configure</Link><button onClick={() => remove(service.id)} className="text-zinc-400 hover:text-rose-600" title="Remove"><Trash2 className="w-4 h-4" /></button></div></div>)}</div>}
+    {error && <ErrorMessage text={error} />}{!services.length ? <Empty text="No model services yet." href="/app/services/new" /> : <div className="space-y-3">{services.map((service) => { const routing = routingInfo(service.strategy); const count = service.endpoint_count || 0; return <div key={service.id} className="bg-white border border-zinc-200 rounded-xl p-5 flex items-center justify-between gap-4"><div className="min-w-0"><div className="font-medium">{service.name}</div><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500"><span>{count} provider{count === 1 ? '' : 's'} connected</span><span className="text-zinc-300">·</span><span>{routing.label}</span></div></div><div className="flex items-center gap-4"><span className={`text-xs ${service.health_status === 'draft' ? 'text-amber-600' : 'text-emerald-600'}`}>{serviceStatusLabel(service.health_status || 'ready')}</span><Link to={`/app/services/${service.id}`} className="text-sm font-medium text-primary hover:text-primary-hover">{service.health_status === 'draft' ? 'Set up' : 'Manage'}</Link><button onClick={() => remove(service.id)} className="text-zinc-400 hover:text-rose-600" title="Remove"><Trash2 className="w-4 h-4" /></button></div></div>})}</div>}
   </Page>
 }
 
@@ -109,11 +109,26 @@ type CatalogProvider = {
 }
 
 const STRATEGIES = [
-  { id: 'cost_aware', name: 'Cost aware' },
-  { id: 'capability_aware', name: 'Capability aware' },
-  { id: 'load_aware', name: 'Load aware' },
-  { id: 'round_robin', name: 'Round robin' },
+  { id: 'cost_aware', name: 'Cost-first routing' },
+  { id: 'capability_aware', name: 'Capability-first routing' },
+  { id: 'load_aware', name: 'Load-balanced routing' },
+  { id: 'round_robin', name: 'Even distribution' },
 ]
+
+const ROUTING_INFO: Record<string, { label: string; description: string }> = {
+  cost_aware: { label: 'Cost-first routing', description: 'Prefers the lower-cost provider when it can handle the request.' },
+  capability_aware: { label: 'Capability-first routing', description: 'Prefers the provider with the strongest fit for the request.' },
+  load_aware: { label: 'Load-balanced routing', description: 'Sends traffic toward providers with more available capacity.' },
+  round_robin: { label: 'Even distribution', description: 'Distributes requests evenly across connected providers.' },
+}
+
+function routingInfo(strategy: string) {
+  return ROUTING_INFO[strategy] || { label: strategy.replaceAll('_', ' '), description: 'Routes requests across your connected providers.' }
+}
+
+function serviceStatusLabel(status: string) {
+  return status === 'draft' ? 'Setup needed' : 'Ready'
+}
 
 type DraftEndpoint = {
   provider_type: string
@@ -187,6 +202,7 @@ export function ServiceDetailsPage() {
   const [catalog, setCatalog] = useState<CatalogOffering[]>([])
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const load = () => {
     if (!id) return
     saasFetch<ServiceDetails>(`/api/saas/model-services/${id}`).then((result) => setService(result.data || null)).catch((e: unknown) => setError(errorText(e)))
@@ -201,12 +217,23 @@ export function ServiceDetailsPage() {
     if (!id || !window.confirm('Remove this model from the service?')) return
     try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
+  async function copyModelName() {
+    if (!service?.model) return
+    await navigator.clipboard.writeText(service.model)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
+  const routing = service ? routingInfo(service.strategy) : null
   return <Page>
     {error && <ErrorMessage text={error} />}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1><p className="mt-1 text-sm text-zinc-500">Public model: <code>{service.model}</code> · {service.strategy}</p></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-4 w-4" /> Add model</button></div>
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Provider models</h2><p className="mt-1 text-sm text-zinc-500">Add only the upstreams you actually use. {service.endpoint_count} configured.</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4"><div className="min-w-0"><div className="font-medium">{endpoint.provider_name} <span className="font-normal text-zinc-400">· {endpoint.provider_type}</span></div><div className="mt-1 truncate text-sm text-zinc-500">{endpoint.model} · {endpoint.base_url}</div></div><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove model"><Trash2 className="h-4 w-4" /></button></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No provider models have been added yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add the first model</button></div>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1><p className="mt-1 text-sm text-zinc-500">Your private model service</p></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Add model</button></div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">How to use this service</h2><p className="mt-1 text-sm text-zinc-500">Use these values in any OpenAI-compatible application.</p><div className="mt-5 space-y-4"><div><div className="text-xs font-medium uppercase tracking-wide text-zinc-400">API model name</div><div className="mt-1 flex items-center gap-2"><code className="min-w-0 flex-1 break-all rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-800">{service.model}</code><button type="button" onClick={copyModelName} className="shrink-0 rounded-lg border border-zinc-200 p-2 text-zinc-500 hover:bg-zinc-50" title="Copy API model name"><Copy className="h-4 w-4" /></button></div><p className="mt-2 text-xs text-zinc-500">Put this exact value in the <code>model</code> field of your API request. {copied && <span className="text-emerald-600">Copied.</span>}</p></div><div><div className="text-xs font-medium uppercase tracking-wide text-zinc-400">Connection</div><p className="mt-1 text-sm text-zinc-700">Use your XGate API key with the OpenAI-compatible API endpoint.</p></div></div></section>
+        <section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Request routing</h2><p className="mt-1 text-sm text-zinc-500">How XGate chooses between your connected providers.</p><div className="mt-5 rounded-lg bg-surface-200 p-4"><div className="font-medium text-zinc-900">{routing?.label}</div><p className="mt-1 text-sm text-zinc-600">{routing?.description}</p></div><div className="mt-4 text-sm text-zinc-600"><span className="font-medium text-zinc-900">{service.endpoint_count} provider{service.endpoint_count === 1 ? '' : 's'}</span> connected</div></section>
+      </div>
+      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Connected providers</h2><p className="mt-1 text-sm text-zinc-500">These provider models can receive requests through this service.</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4"><div className="min-w-0"><div className="font-medium">{endpoint.provider_name}</div><div className="mt-1 truncate text-sm text-zinc-500">Model: {endpoint.model}</div><div className="mt-1 truncate text-xs text-zinc-400">{endpoint.base_url}</div></div><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="h-4 w-4" /></button></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet. Add one to start using this service.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Connect a provider</button></div>}</div>
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
   </Page>
