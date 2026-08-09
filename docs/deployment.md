@@ -1,5 +1,7 @@
 # Railway + Cloudflare Pages deployment
 
+> Deployment connectivity check: this document is intentionally updated through the `main` branch so Railway auto-deploy can be verified.
+
 SmartGate runs as a Rust/Axum service on Railway. The React frontend runs on Cloudflare Pages. PostgreSQL is provided by a Railway PostgreSQL service.
 
 ```text
