@@ -55,8 +55,7 @@ impl GatewayHooks for SmartGateHooks {
                 if metric.ema_latency_ms == 0.0 {
                     metric.ema_latency_ms = latency;
                 } else {
-                    metric.ema_latency_ms =
-                        (1.0 - alpha) * metric.ema_latency_ms + alpha * latency;
+                    metric.ema_latency_ms = (1.0 - alpha) * metric.ema_latency_ms + alpha * latency;
                 }
 
                 let mut health_changed = false;
@@ -65,9 +64,8 @@ impl GatewayHooks for SmartGateHooks {
                     if metric.ema_success_latency_ms == 0.0 {
                         metric.ema_success_latency_ms = latency;
                     } else {
-                        metric.ema_success_latency_ms = (1.0 - alpha)
-                            * metric.ema_success_latency_ms
-                            + alpha * latency;
+                        metric.ema_success_latency_ms =
+                            (1.0 - alpha) * metric.ema_success_latency_ms + alpha * latency;
                     }
                     metric.consecutive_failures = 0;
                     if metric.health_status != "healthy" {
@@ -129,25 +127,61 @@ impl GatewayHooks for SmartGateHooks {
                 .cloned()
                 .unwrap_or_else(|| report.selected_endpoint_id.clone());
 
-            let prompt_tokens = report.usage.as_ref().and_then(|u| u.input_tokens).unwrap_or(0);
-            let completion_tokens = report
-                .usage
-                .as_ref()
-                .and_then(|u| u.output_tokens)
+            let estimated_input_tokens = report
+                .metadata
+                .get("input_tokens_est")
+                .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(0);
-            let total_tokens = report
-                .usage
-                .as_ref()
-                .and_then(|u| u.total_tokens)
+            let estimated_output_tokens = report
+                .metadata
+                .get("output_tokens_est")
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(0);
+            let provider_usage = report.usage.as_ref();
+            let usage_source = if provider_usage.is_some() {
+                "provider_reported"
+            } else if estimated_input_tokens > 0 || estimated_output_tokens > 0 {
+                "local_estimate"
+            } else {
+                "unavailable"
+            };
+            let usage_confidence = match (
+                provider_usage,
+                provider_usage.and_then(|usage| usage.input_tokens),
+                provider_usage.and_then(|usage| usage.output_tokens),
+            ) {
+                (Some(_), Some(_), Some(_)) => "high",
+                (Some(_), _, _) => "partial",
+                (None, _, _) if usage_source == "local_estimate" => "low",
+                _ => "unknown",
+            };
+            let prompt_tokens = provider_usage
+                .and_then(|usage| usage.input_tokens)
+                .unwrap_or(estimated_input_tokens);
+            let completion_tokens = provider_usage
+                .and_then(|usage| usage.output_tokens)
+                .unwrap_or(estimated_output_tokens);
+            let total_tokens = provider_usage
+                .and_then(|usage| usage.total_tokens)
                 .unwrap_or(prompt_tokens + completion_tokens);
 
-            let estimated_cost = profiles
+            let (input_price, output_price, pricing_source) = profiles
                 .get(&endpoint_id)
-                .map(|p| {
-                    p.price
-                        .estimate_cost(prompt_tokens as u32, completion_tokens as u32)
+                .map(|profile| {
+                    let source = if profile.price.is_priced() {
+                        "configured_endpoint"
+                    } else {
+                        "unpriced"
+                    };
+                    (
+                        profile.price.input_per_1m,
+                        profile.price.output_per_1m,
+                        source,
+                    )
                 })
-                .unwrap_or(0.0);
+                .unwrap_or((0.0, 0.0, "unpriced"));
+            let estimated_cost = (prompt_tokens as f64 / 1_000_000.0) * input_price
+                + (completion_tokens as f64 / 1_000_000.0) * output_price;
 
             let routing_strategy = report.metadata.get("routing_strategy").cloned();
             let routing_decision = report.metadata.get("routing_decision").cloned();
@@ -162,8 +196,17 @@ impl GatewayHooks for SmartGateHooks {
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(0);
 
-            let metadata = serde_json::to_string(&report.metadata).unwrap_or_default();
-            let status_code = if report.error_kind.is_some() { 502 } else { 200 };
+            let mut metadata_values = report.metadata.clone();
+            metadata_values.insert("usage_source".to_string(), usage_source.to_string());
+            metadata_values.insert("usage_confidence".to_string(), usage_confidence.to_string());
+            metadata_values.insert("pricing_source".to_string(), pricing_source.to_string());
+            let metadata = serde_json::to_string(&metadata_values).unwrap_or_default();
+            let provider_account_id = report.metadata.get("account_id").cloned();
+            let status_code = if report.error_kind.is_some() {
+                502
+            } else {
+                200
+            };
             let error_message = report.error_kind.map(|k| format!("{k:?}"));
 
             let res = sqlx::query(
@@ -173,8 +216,10 @@ impl GatewayHooks for SmartGateHooks {
                     prompt_tokens, completion_tokens, total_tokens,
                     latency_ms, status_code, error_message, metadata,
                     estimated_cost, routing_strategy, routing_decision,
-                    tool_message_chars, trimmed_chars
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)",
+                    tool_message_chars, trimmed_chars,
+                    usage_source, usage_confidence, pricing_source,
+                    input_price_snapshot, output_price_snapshot, pricing_version
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
             )
             .bind(uuid::Uuid::new_v4().to_string())
             .bind(report.metadata.get("org_id"))
@@ -183,7 +228,7 @@ impl GatewayHooks for SmartGateHooks {
             .bind(report.metadata.get("virtual_model_id"))
             .bind(report.metadata.get("pool_id").cloned().or(report.pool_id.clone()))
             .bind(endpoint_id)
-            .bind(report.metadata.get("provider_account_id"))
+            .bind(provider_account_id)
             .bind(prompt_tokens as i32)
             .bind(completion_tokens as i32)
             .bind(total_tokens as i32)
@@ -196,6 +241,16 @@ impl GatewayHooks for SmartGateHooks {
             .bind(routing_decision)
             .bind(tool_message_chars)
             .bind(trimmed_chars)
+            .bind(usage_source)
+            .bind(usage_confidence)
+            .bind(pricing_source)
+            .bind(input_price)
+            .bind(output_price)
+            .bind(if pricing_source == "configured_endpoint" {
+                Some(eero_llm_providers::registry_version())
+            } else {
+                None
+            })
             .execute(&db)
             .await;
 

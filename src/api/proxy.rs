@@ -221,6 +221,12 @@ pub async fn chat_completions(
     proxy_request
         .metadata
         .insert("trimmed_chars".to_string(), slimmed_chars.to_string());
+    proxy_request
+        .metadata
+        .insert("input_tokens_est".to_string(), input_tokens.to_string());
+    proxy_request
+        .metadata
+        .insert("output_tokens_est".to_string(), output_tokens.to_string());
     if downshift {
         proxy_request
             .metadata
@@ -396,6 +402,12 @@ pub async fn responses(
     proxy_request
         .metadata
         .insert("routing_strategy".to_string(), strategy);
+    proxy_request
+        .metadata
+        .insert("input_tokens_est".to_string(), input_tokens.to_string());
+    proxy_request
+        .metadata
+        .insert("output_tokens_est".to_string(), output_tokens.to_string());
     proxy_request.metadata.insert(
         "routing_decision".to_string(),
         serde_json::json!({

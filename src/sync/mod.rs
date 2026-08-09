@@ -13,6 +13,7 @@ use unigateway_sdk::core::{
 #[derive(Debug, FromRow)]
 struct SyncEndpointRow {
     id: String,
+    account_id: String,
     upstream_model_id: String,
     enabled: bool,
     pool_priority: i32,
@@ -36,9 +37,10 @@ pub async fn sync_all_pools(
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,
 ) -> anyhow::Result<()> {
-    let db_pools = sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
-        .fetch_all(db)
-        .await?;
+    let db_pools =
+        sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
+            .fetch_all(db)
+            .await?;
 
     pools.clear();
     pool_members.clear();
@@ -46,7 +48,7 @@ pub async fn sync_all_pools(
 
     for pool in db_pools {
         let rows = sqlx::query_as::<_, SyncEndpointRow>(
-            "SELECT e.id, e.upstream_model_id, e.enabled,
+            "SELECT e.id, e.account_id, e.upstream_model_id, e.enabled,
                     mpe.priority AS pool_priority, mpe.weight AS pool_weight,
                     pa.provider_type, pa.base_url, pa.api_key, pa.name AS account_name,
                     e.input_price_per_1m, e.output_price_per_1m,
@@ -104,6 +106,7 @@ pub async fn sync_all_pools(
                     enabled: r.enabled,
                     max_concurrency: None,
                     metadata: HashMap::from([
+                        ("account_id".to_string(), r.account_id.clone()),
                         ("account_name".to_string(), r.account_name.clone()),
                         ("provider_type".to_string(), r.provider_type.clone()),
                     ]),

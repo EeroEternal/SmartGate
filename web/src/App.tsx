@@ -4,7 +4,7 @@ import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'l
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
-import { KeysPage, NewServicePage, SaasLayout, ServicesPage, UsagePage } from './pages/saas/SaasPages'
+import { KeysPage, NewServicePage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import Providers from './pages/Providers'
@@ -229,6 +229,7 @@ function App() {
         <Route path="/app" element={<SaasDashboard />} />
         <Route path="/app/services" element={<SaasLayout><ServicesPage /></SaasLayout>} />
         <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
+        <Route path="/app/services/:id" element={<SaasLayout><ServiceDetailsPage /></SaasLayout>} />
         <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
         <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
         <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
