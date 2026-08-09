@@ -93,7 +93,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     axum::http::Method::DELETE,
                     axum::http::Method::OPTIONS,
                 ])
-                .allow_headers(tower_http::cors::Any),
+                .allow_headers([
+                    axum::http::header::ACCEPT,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::ORIGIN,
+                ]),
         )
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
