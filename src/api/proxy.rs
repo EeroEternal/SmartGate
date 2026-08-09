@@ -54,12 +54,23 @@ async fn chat_proxy(
         .to_string();
 
     let virtual_model = match sqlx::query_as::<_, VirtualModel>(
-        "SELECT vm.* FROM virtual_models vm 
+        "SELECT vm.* FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
          JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE vm.name = $1 AND pmg.project_id = $2 AND vm.enabled = TRUE",
+         WHERE (vm.name = $1 OR mp.name = $1) AND pmg.project_id = $2 AND vm.enabled = TRUE
+           AND (EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $3 AND akmg.virtual_model_id = vm.id
+           ) OR NOT EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $3
+           ))
+         ORDER BY CASE WHEN vm.name = $1 THEN 0 ELSE 1 END, vm.id
+         LIMIT 1",
     )
     .bind(&requested_model)
     .bind(&auth.project.id)
+    .bind(&auth.api_key.id)
     .fetch_optional(&state.db)
     .await
     {
@@ -312,11 +323,22 @@ pub async fn responses(
 
     let virtual_model = match sqlx::query_as::<_, VirtualModel>(
         "SELECT vm.* FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
          JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE vm.name = $1 AND pmg.project_id = $2 AND vm.enabled = TRUE",
+         WHERE (vm.name = $1 OR mp.name = $1) AND pmg.project_id = $2 AND vm.enabled = TRUE
+           AND (EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $3 AND akmg.virtual_model_id = vm.id
+           ) OR NOT EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $3
+           ))
+         ORDER BY CASE WHEN vm.name = $1 THEN 0 ELSE 1 END, vm.id
+         LIMIT 1",
     )
     .bind(&requested_model)
     .bind(&auth.project.id)
+    .bind(&auth.api_key.id)
     .fetch_optional(&state.db)
     .await
     {

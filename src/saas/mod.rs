@@ -72,7 +72,6 @@ struct ModelEndpointRequest {
 #[derive(Debug, Deserialize)]
 struct ModelServiceRequest {
     name: String,
-    model: Option<String>,
     #[serde(default)]
     endpoints: Vec<ModelEndpointRequest>,
     // Keep the legacy fields readable for existing API clients. New clients should use endpoints.
@@ -86,11 +85,6 @@ struct ModelServiceRequest {
     capability_score: Option<f64>,
     supports_tools: Option<bool>,
     context_length: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateModelServiceRequest {
-    model: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,6 +106,8 @@ struct UpdateModelEndpointRequest {
 #[derive(Debug, Deserialize)]
 struct CreateSaasKeyRequest {
     name: String,
+    #[serde(default)]
+    model_service_ids: Vec<String>,
     daily_spend_limit: Option<f64>,
     rpm_limit: Option<i32>,
     concurrency_limit: Option<i32>,
@@ -196,9 +192,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/model-services/:id",
-            get(get_model_service)
-                .patch(update_model_service)
-                .delete(delete_model_service),
+            get(get_model_service).delete(delete_model_service),
         )
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
@@ -460,22 +454,19 @@ async fn create_model_service(
         }
     }
 
-    let pool_id = Uuid::new_v4().to_string();
-    let model_id = Uuid::new_v4().to_string();
-    let public_model = input
-        .model
-        .as_deref()
-        .unwrap_or(&input.name)
-        .trim()
-        .to_string();
-    if public_model.is_empty() || public_model.len() > 120 {
+    let service_name = input.name.trim().to_string();
+    if service_name.len() > 120 {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error(
-                "Model name must be between 1 and 120 characters",
+                "Model service name must be 120 characters or fewer",
             )),
         ));
     }
+    let pool_id = Uuid::new_v4().to_string();
+    let model_id = Uuid::new_v4().to_string();
+    // The client-facing model is always the model service name.
+    let public_model = service_name.clone();
     let strategy = input.strategy.unwrap_or_else(|| "cost_aware".to_string());
     let mut tx = state.db.begin().await.map_err(db_error)?;
     let mut provider_types = Vec::with_capacity(endpoints.len());
@@ -483,7 +474,7 @@ async fn create_model_service(
     sqlx::query("INSERT INTO model_pools (id, org_id, name, strategy) VALUES ($1, $2, $3, $4)")
         .bind(&pool_id)
         .bind(&ctx.org_id)
-        .bind(&input.name)
+        .bind(&service_name)
         .bind(&strategy)
         .execute(&mut *tx)
         .await
@@ -508,7 +499,7 @@ async fn create_model_service(
         sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(&endpoint_id)
             .bind(&provider_id)
-            .bind(format!("{}-{}", input.name, index + 1))
+            .bind(format!("{}-{}", service_name, index + 1))
             .bind(&endpoint.upstream_model_id)
             .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
             .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
@@ -543,7 +534,7 @@ async fn create_model_service(
     sync(&state).await;
     Ok(Json(ApiResponse::success(json!({
         "id": model_id,
-        "name": input.name,
+        "name": service_name,
         "model": public_model,
         "provider_type": if provider_types.len() > 1 { "mixed".to_string() } else { provider_types.first().cloned().unwrap_or_else(|| "not_configured".to_string()) },
         "provider_types": provider_types,
@@ -573,7 +564,7 @@ async fn get_model_service(
     .fetch_optional(&state.db)
     .await
     .map_err(db_error)?;
-    let Some((id, public_model, name, strategy)) = service else {
+    let Some((id, _legacy_model, name, strategy)) = service else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model service not found")),
@@ -646,75 +637,13 @@ async fn get_model_service(
     Ok(Json(ApiResponse::success(json!({
         "id": id,
         "name": name,
-        "model": public_model,
+        "model": name,
         "strategy": strategy,
         "provider_type": if provider_types.len() > 1 { "mixed" } else { provider_types.first().map(String::as_str).unwrap_or("not_configured") },
         "provider_types": provider_types,
         "endpoint_count": endpoint_count,
         "endpoints": endpoint_values,
         "status": if endpoint_count == 0 { "draft" } else { "active" },
-    }))))
-}
-
-async fn update_model_service(
-    State(state): State<Arc<AppState>>,
-    ctx: SaasContext,
-    Path(model_id): Path<String>,
-    Json(input): Json<UpdateModelServiceRequest>,
-) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let model = input.model.trim().to_string();
-    if model.is_empty() || model.len() > 120 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(
-                "Model name must be between 1 and 120 characters",
-            )),
-        ));
-    }
-    let owned: Option<(String,)> = sqlx::query_as(
-        "SELECT vm.id FROM virtual_models vm
-         JOIN model_pools mp ON mp.id = vm.pool_id
-         WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
-             SELECT 1 FROM project_model_grants g
-             WHERE g.virtual_model_id = vm.id AND g.project_id = $3
-         )",
-    )
-    .bind(&model_id)
-    .bind(&ctx.org_id)
-    .bind(&ctx.project_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(db_error)?;
-    if owned.is_none() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Model service not found")),
-        ));
-    }
-    let conflict: Option<(String,)> =
-        sqlx::query_as("SELECT id FROM virtual_models WHERE name = $1 AND id <> $2")
-            .bind(&model)
-            .bind(&model_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(db_error)?;
-    if conflict.is_some() {
-        return Err((
-            StatusCode::CONFLICT,
-            Json(ApiResponse::error("This model name is already in use")),
-        ));
-    }
-    sqlx::query(
-        "UPDATE virtual_models SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-    )
-    .bind(&model)
-    .bind(&model_id)
-    .execute(&state.db)
-    .await
-    .map_err(db_error)?;
-    Ok(Json(ApiResponse::success(json!({
-        "id": model_id,
-        "model": model,
     }))))
 }
 
@@ -896,7 +825,7 @@ async fn list_model_services(
                 json!({
                     "id": service.0,
                     "name": service.2,
-                    "model": service.1,
+                    "model": service.2,
                     "provider_type": if service.4.len() > 1 { "mixed" } else { service.4.first().map(String::as_str).unwrap_or("custom") },
                     "provider_types": service.4,
                     "upstream_models": service.5,
@@ -1160,10 +1089,25 @@ async fn list_api_keys(
     let rows: Vec<(String, String, String, bool, Option<i32>, Option<i32>, Option<f64>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>)> = sqlx::query_as(
         "SELECT id, name, key_prefix, enabled, rpm_limit, concurrency_limit, daily_spend_limit, last_used_at, created_at FROM api_keys WHERE project_id = $1 ORDER BY created_at DESC",
     ).bind(&ctx.project_id).fetch_all(&state.db).await.map_err(db_error)?;
-    Ok(Json(ApiResponse::success(rows.into_iter().map(|r| json!({
-        "id": r.0, "name": r.1, "prefix": r.2, "enabled": r.3, "rpm_limit": r.4,
-        "concurrency_limit": r.5, "daily_spend_limit": r.6, "last_used_at": r.7, "created_at": r.8
-    })).collect())))
+    let mut keys = Vec::with_capacity(rows.len());
+    for row in rows {
+        let services: Vec<(String, String)> = sqlx::query_as(
+            "SELECT vm.id, vm.name FROM api_key_model_grants g
+             JOIN virtual_models vm ON vm.id = g.virtual_model_id
+             WHERE g.api_key_id = $1 ORDER BY vm.name",
+        )
+        .bind(&row.0)
+        .fetch_all(&state.db)
+        .await
+        .map_err(db_error)?;
+        keys.push(json!({
+            "id": row.0, "name": row.1, "prefix": row.2, "enabled": row.3,
+            "rpm_limit": row.4, "concurrency_limit": row.5, "daily_spend_limit": row.6,
+            "last_used_at": row.7, "created_at": row.8,
+            "model_services": services.into_iter().map(|service| json!({"id": service.0, "name": service.1})).collect::<Vec<_>>()
+        }));
+    }
+    Ok(Json(ApiResponse::success(keys)))
 }
 
 async fn create_api_key(
@@ -1171,21 +1115,69 @@ async fn create_api_key(
     ctx: SaasContext,
     Json(input): Json<CreateSaasKeyRequest>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    if input.name.trim().is_empty() {
+    let name = input.name.trim().to_string();
+    if name.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error("Key name is required")),
         ));
     }
+    if input.model_service_ids.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Select at least one model service")),
+        ));
+    }
+    let mut service_ids = input.model_service_ids.clone();
+    service_ids.sort();
+    service_ids.dedup();
+    let service_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id
+         WHERE mp.org_id = $1 AND g.project_id = $2 AND vm.id = ANY($3)",
+    )
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .bind(&service_ids)
+    .fetch_one(&state.db)
+    .await
+    .map_err(db_error)?;
+    if service_count != service_ids.len() as i64 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error(
+                "One or more selected model services are unavailable",
+            )),
+        ));
+    }
     let id = Uuid::new_v4().to_string();
     let raw = format!("pk_{}", Uuid::new_v4().simple());
     let prefix = raw[..7].to_string();
+    let mut tx = state.db.begin().await.map_err(db_error)?;
     sqlx::query("INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
-        .bind(&id).bind(&ctx.project_id).bind(&input.name).bind(hash_token(&raw)).bind(&prefix)
+        .bind(&id).bind(&ctx.project_id).bind(&name).bind(hash_token(&raw)).bind(&prefix)
         .bind(input.rpm_limit).bind(input.concurrency_limit).bind(input.daily_spend_limit)
-        .execute(&state.db).await.map_err(db_error)?;
+        .execute(&mut *tx).await.map_err(|error| {
+            if error.as_database_error().and_then(|database| database.constraint()).is_some_and(|constraint| constraint.contains("idx_api_keys_project_name")) {
+                conflict_error("An API key with this name already exists")
+            } else {
+                db_error(error)
+            }
+        })?;
+    for service_id in &service_ids {
+        sqlx::query(
+            "INSERT INTO api_key_model_grants (api_key_id, virtual_model_id) VALUES ($1, $2)",
+        )
+        .bind(&id)
+        .bind(service_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    }
+    tx.commit().await.map_err(db_error)?;
     Ok(Json(ApiResponse::success(
-        json!({"id": id, "name": input.name, "key": raw, "prefix": prefix}),
+        json!({"id": id, "name": name, "key": raw, "prefix": prefix, "model_service_ids": service_ids}),
     )))
 }
 

@@ -14,7 +14,7 @@
 - SmartGate 的路由职责是 **策略计算**（Priority / LoadAware / CostAware / CapabilityAware 等），生成 UniGateway 可执行的候选顺序与 feedback。
 - UniGateway 的路由职责是 **执行机制**：按候选 endpoint、feedback 与中立 metadata 完成协议渲染、请求执行、fallback、响应归一化与报告。
 - 若 UniGateway 的 fallback、ordered endpoints 或 driver 不足，优先增强 UniGateway 机制，而不是在 SmartGate handler 里硬编码 provider/协议逻辑。
-- API Key 绑定 Project；Project 授权 Virtual Model；Virtual Model → Model Pool → Endpoints。不要设计成 API Key 直接绑 Endpoint 或承载 provider-specific 行为。
+- API Key 绑定 Project，并可显式授权一个或多个 Model service（Virtual Model）；Virtual Model → Model Pool → Endpoints。API Key 不直接绑定 Endpoint，也不承载 provider-specific 行为。请求中的 `model` 使用被授权的 Model service 名称。历史 key 若没有显式 service 授权记录，可兼容继承其 Project 的 service 授权。
 - **不做 meta-harness**（任务级 harness 选择、共驾 session、OS sandbox）；那是 Omnigent 等客户端层。SmartGate 做请求级模型路由与公司级花费治理。
 - 修复前先判断问题属于控制面（配置/策略/预算）还是数据面（协议/driver）；边界不清时先说明归属。
 
@@ -42,6 +42,12 @@
 - 所有新增的 UI 文本（包括标签、提示语、CTA 等）**必须同步更新至所有现存的本地化文件** (`en.json`, `zh.json`, `ja.json`, `ko.json`)。
 - 禁止在前端组件中直接硬编码中文或英文文案。
 - 如果不确定翻译，请优先提供准确的英文，并明确标注待补充语种，避免仅维护单一语言。
+
+#### SaaS 资源操作
+
+- API key、Model service、Provider 等资源的创建、编辑、授权和删除操作，默认不得把完整表单长期平铺在页面内容中；应使用页面右侧或顶部的主操作按钮打开弹窗完成。
+- API key 创建弹窗必须允许选择一个或多个 Model service，并明确说明 API key 用于客户端调用、请求中的 `model` 使用所选 service 名称。
+- 资源列表只展示摘要和状态；详细配置、授权关系和敏感字段应在弹窗或详情交互中处理。
 
 ## 部署纪律
 
