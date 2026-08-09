@@ -197,8 +197,9 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
             "/api-keys/:id",
-            patch(update_api_key).delete(revoke_api_key),
+            patch(update_api_key).delete(delete_api_key),
         )
+        .route("/api-keys/:id/revoke", post(revoke_api_key))
         .route("/usage", get(get_usage))
         .route("/savings", get(get_savings))
         .with_state(state)
@@ -1203,7 +1204,12 @@ async fn revoke_api_key(
     ctx: SaasContext,
     Path(key_id): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let result = sqlx::query("UPDATE api_keys SET enabled = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND project_id = $2").bind(key_id).bind(ctx.project_id).execute(&state.db).await.map_err(db_error)?;
+    let result = sqlx::query("UPDATE api_keys SET enabled = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND project_id = $2")
+        .bind(key_id)
+        .bind(ctx.project_id)
+        .execute(&state.db)
+        .await
+        .map_err(db_error)?;
     if result.rows_affected() == 0 {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1211,6 +1217,26 @@ async fn revoke_api_key(
         ));
     }
     Ok(Json(ApiResponse::success(json!({"revoked": true}))))
+}
+
+async fn delete_api_key(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Path(key_id): Path<String>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let result = sqlx::query("DELETE FROM api_keys WHERE id = $1 AND project_id = $2")
+        .bind(key_id)
+        .bind(ctx.project_id)
+        .execute(&state.db)
+        .await
+        .map_err(db_error)?;
+    if result.rows_affected() == 0 {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("API key not found")),
+        ));
+    }
+    Ok(Json(ApiResponse::success(json!({"deleted": true}))))
 }
 
 async fn get_usage(
