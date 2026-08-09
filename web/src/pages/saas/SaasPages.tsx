@@ -298,12 +298,18 @@ export function ServiceDetailsPage() {
 function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: string; onChange: (api: CallApi) => void }) {
   const example = callExample(api, model)
   const command = [`curl ${example.path} \\`, ...example.headers.map((header) => `  -H "${header}" \\`), `  -d '${example.body}'`].join('\n')
+  const [copied, setCopied] = useState(false)
   const tabs: { id: CallApi; label: string }[] = [
     { id: 'openai-chat', label: 'OpenAI Chat' },
     { id: 'openai-responses', label: 'OpenAI Responses' },
     { id: 'anthropic-messages', label: 'Anthropic Messages' },
   ]
-  return <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">How to call</h2><p className="mt-1 text-sm text-zinc-500">Use the model service name as the <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">model</code> value.</p></div><div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">{tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={api === tab.id} onClick={() => onChange(tab.id)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${api === tab.id ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-950'}`}>{tab.label}</button>)}</div></div><div className="mt-4 overflow-hidden rounded-xl bg-zinc-950"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-sm font-medium text-white">{example.label}</span><span className="text-xs text-zinc-400">cURL</span></div><pre role="tabpanel" className="overflow-x-auto p-4 text-xs leading-6 text-zinc-100">{command}</pre></div></section>
+  async function copyExample() {
+    await navigator.clipboard.writeText(command)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+  return <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">How to call</h2><p className="mt-1 text-sm text-zinc-500">Use the model service name as the <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">model</code> value.</p></div><div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">{tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={api === tab.id} onClick={() => onChange(tab.id)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${api === tab.id ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-950'}`}>{tab.label}</button>)}</div></div><div className="mt-4 overflow-hidden rounded-xl bg-[var(--color-primary-soft)] text-zinc-950"><div className="flex items-center justify-between border-b border-primary/20 px-4 py-3"><span className="text-sm font-medium text-zinc-950">{example.label}</span><div className="flex items-center gap-3"><span className="text-xs text-zinc-950">cURL</span><button type="button" onClick={copyExample} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-950 transition-colors hover:bg-white/60" title="Copy example" aria-label="Copy example">{copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Copied' : 'Copy'}</button></div></div><pre role="tabpanel" className="overflow-x-auto p-4 text-xs leading-6 text-zinc-950">{command}</pre></div></section>
 }
 
 function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint: ServiceEndpoint; serviceId: string; onClose: () => void; onSaved: () => void }) {
