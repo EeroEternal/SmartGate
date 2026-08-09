@@ -1,5 +1,6 @@
 import { ArrowRight, BarChart3, KeyRound, Route, ShieldCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import BrandMark from '../../components/BrandMark'
 
 const features = [
   { icon: Route, title: 'One endpoint, smarter routing', text: 'Connect your model providers once and let SmartGate route each request by cost, capability, and health.' },
@@ -12,7 +13,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-zinc-50 text-zinc-950">
       <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 font-semibold tracking-tight">
-          <span className="w-9 h-9 rounded-xl bg-zinc-950 text-white flex items-center justify-center"><span className="w-4 h-4 border-2 border-white rounded-sm" /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white"><BrandMark className="h-6 w-6" /></span>
           XGate
         </Link>
         <div className="flex items-center gap-3 text-sm">

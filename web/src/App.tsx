@@ -7,6 +7,7 @@ import SaasDashboard from './pages/saas/SaasDashboard'
 import { KeysPage, NewServicePage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
+import BrandMark from './components/BrandMark'
 import Providers from './pages/Providers'
 import Pools from './pages/Pools'
 import PoolDetails from './pages/PoolDetails'
@@ -122,8 +123,8 @@ function Sidebar() {
     <div className="w-64 border-r border-zinc-200 bg-white flex flex-col">
       <div className="p-6 border-b border-zinc-200">
         <h1 className="text-xl font-bold tracking-tight text-black flex items-center gap-2">
-          <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
-            <div className="w-4 h-4 border-2 border-white rounded-sm" />
+          <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-white">
+            <BrandMark className="h-5 w-5" />
           </div>
           XGate
         </h1>
