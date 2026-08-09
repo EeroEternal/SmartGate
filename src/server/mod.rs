@@ -15,6 +15,10 @@ use tower_http::{
 };
 use unigateway_sdk::core::UniGatewayEngine;
 
+async fn health_check() -> &'static str {
+    "OK"
+}
+
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let db = init_db(&config.database_url).await?;
 
@@ -65,7 +69,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             "/",
             get(|| async { "SmartGate API is running. Admin UI: http://localhost:18764" }),
         )
-        .route("/health", get(|| async { "OK" }))
+        .route("/health", get(health_check))
         .nest(
             "/api/admin",
             crate::api::admin::admin_routes(app_state.clone()),
