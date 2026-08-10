@@ -69,6 +69,7 @@ Core routing is not locked behind a paywall.
 - [Product scope](docs/scope.md)
 - [Roadmap](docs/roadmap.md)
 - [Harness integration](docs/integrations/harness.md)
+- [Codex + XGate setup](docs/integrations/codex.md)
 - [Technical design](docs/design.md)
 - [UniGateway primitives](docs/unigateway_optimization.md)
 
