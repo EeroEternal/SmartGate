@@ -6,8 +6,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use unigateway_sdk::core::{
-    Endpoint, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool, RetryPolicy,
-    SecretString, UniGatewayEngine,
+    Endpoint, EndpointCapabilities, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool,
+    RetryPolicy, SecretString, UniGatewayEngine,
 };
 
 #[derive(Debug, FromRow)]
@@ -107,6 +107,7 @@ pub async fn sync_all_pools(
                     },
                     enabled: r.enabled,
                     max_concurrency: None,
+                    capabilities: EndpointCapabilities::default(),
                     metadata: HashMap::from([
                         ("account_id".to_string(), r.account_id.clone()),
                         ("account_name".to_string(), r.account_name.clone()),
