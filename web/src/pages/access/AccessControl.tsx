@@ -587,7 +587,7 @@ export default function AccessControl() {
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">
-                Edit Limits · {quotaTarget.name}
+                Edit Limits: {quotaTarget.name}
               </h3>
               <button onClick={() => setQuotaTarget(null)}>
                 <X className="w-4 h-4" />

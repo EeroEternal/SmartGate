@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import HealthBadge from '../../components/HealthBadge'
 import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
@@ -60,7 +60,7 @@ const number = (value = 0) => value.toLocaleString()
 const money = (value = 0) => `$${value.toFixed(4)}`
 const percent = (value = 0) => `${(value * 100).toFixed(1)}%`
 
-function MetricCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function MetricCard({ label, value, detail }: { label: string; value: string; detail?: ReactNode }) {
   return (
     <div className="bg-white p-5 border border-zinc-200 rounded-lg shadow-sm">
       <div className="text-sm text-zinc-500 font-medium">{label}</div>
@@ -138,7 +138,7 @@ export default function Statistics() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard label="Estimated spend" value={money(summary?.estimated_spend)} detail="Based on configured endpoint prices" />
           <MetricCard label="Requests" value={number(summary?.requests)} detail={`${percent(summary?.success_rate)} success rate`} />
-          <MetricCard label="Total tokens" value={number(summary?.total_tokens)} detail={`${number(summary?.prompt_tokens)} input · ${number(summary?.completion_tokens)} output`} />
+          <MetricCard label="Total tokens" value={number(summary?.total_tokens)} detail={<><span className="block">{number(summary?.prompt_tokens)} input</span><span className="block">{number(summary?.completion_tokens)} output</span></>} />
           <MetricCard label="Average latency" value={`${Math.round(summary?.average_latency_ms ?? 0)} ms`} detail={`P95 ${Math.round(stats.latency?.p95_ms ?? 0)} ms`} />
         </div>
 

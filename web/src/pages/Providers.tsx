@@ -240,7 +240,7 @@ export default function Providers() {
               <th className="px-6 py-3 font-medium">Provider</th>
               <th className="px-6 py-3 font-medium">Upstream Model</th>
               <th className="px-6 py-3 font-medium">Health</th>
-              <th className="px-6 py-3 font-medium">$/1M in·out</th>
+              <th className="px-6 py-3 font-medium">$/1M input/output</th>
               <th className="px-6 py-3 font-medium">Capability</th>
               <th className="px-6 py-3 font-medium">Priority</th>
               <th className="px-6 py-3 font-medium">Weight</th>
