@@ -118,6 +118,12 @@ struct RangeQuery {
     range: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct SavingsBaselineRequest {
+    virtual_model_id: String,
+    endpoint_id: String,
+}
+
 #[async_trait]
 impl<S> FromRequestParts<S> for SaasContext
 where
@@ -202,6 +208,10 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/api-keys/:id/revoke", post(revoke_api_key))
         .route("/usage", get(get_usage))
         .route("/savings", get(get_savings))
+        .route(
+            "/savings-baseline",
+            get(get_savings_baseline).patch(update_savings_baseline),
+        )
         .with_state(state)
 }
 
@@ -1443,18 +1453,198 @@ async fn get_usage(
     )))
 }
 
+async fn get_savings_baseline(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let baseline = sqlx::query_as::<_, (String, String, String, String, String, f64, f64)>(
+        "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
+                pa.name, e.input_price_per_1m, e.output_price_per_1m
+         FROM savings_baselines sb
+         JOIN virtual_models vm ON vm.id = sb.virtual_model_id
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = sb.project_id
+         JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
+         JOIN endpoints e ON e.id = mpe.endpoint_id
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE sb.project_id = $1 AND mp.org_id = $2 AND mpe.endpoint_id = sb.endpoint_id",
+    )
+    .bind(&ctx.project_id)
+    .bind(&ctx.org_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+
+    let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
+        return Ok(Json(ApiResponse::success(json!({"configured": false}))));
+    };
+    Ok(Json(ApiResponse::success(json!({
+        "configured": true,
+        "virtual_model_id": virtual_model_id,
+        "endpoint_id": endpoint_id,
+        "model_service_name": service_name,
+        "model": model,
+        "provider_name": provider_name,
+        "input_price_per_1m": input_price,
+        "output_price_per_1m": output_price,
+    }))))
+}
+
+async fn update_savings_baseline(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Json(input): Json<SavingsBaselineRequest>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let valid: Option<(String,)> = sqlx::query_as(
+        "SELECT e.id
+         FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = $4
+         JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
+         JOIN endpoints e ON e.id = mpe.endpoint_id
+         WHERE vm.id = $1 AND e.id = $2 AND mp.org_id = $3",
+    )
+    .bind(&input.virtual_model_id)
+    .bind(&input.endpoint_id)
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    if valid.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("The selected model endpoint is not available to this project")),
+        ));
+    }
+
+    sqlx::query(
+        "INSERT INTO savings_baselines (project_id, virtual_model_id, endpoint_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (project_id) DO UPDATE SET
+           virtual_model_id = EXCLUDED.virtual_model_id,
+           endpoint_id = EXCLUDED.endpoint_id,
+           updated_at = CURRENT_TIMESTAMP",
+    )
+    .bind(&ctx.project_id)
+    .bind(&input.virtual_model_id)
+    .bind(&input.endpoint_id)
+    .execute(&state.db)
+    .await
+    .map_err(db_error)?;
+
+    Ok(Json(ApiResponse::success(json!({"updated": true}))));
+}
+
 async fn get_savings(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
     Query(query): Query<RangeQuery>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let usage = get_usage(State(state.clone()), ctx.clone(), Query(query)).await?;
-    let data = usage.0.data.unwrap_or(Value::Null);
-    let estimated_spend = data.get("estimated_spend").cloned().unwrap_or(json!(0));
-    let trimmed_chars = data.get("trimmed_chars").cloned().unwrap_or(json!(0));
-    Ok(Json(ApiResponse::success(
-        json!({"estimated_spend": estimated_spend, "estimated_savings": Value::Null, "trimmed_chars": trimmed_chars, "basis": "A reliable dollar baseline requires a configured comparison endpoint; current savings signals are usage reduction and cost-aware routing.", "is_estimated": true}),
-    )))
+    let range = query.range.as_deref().unwrap_or("24h");
+    let since = range_since(range)?;
+    let baseline = sqlx::query_as::<_, (String, String, String, String, String, f64, f64)>(
+        "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
+                pa.name, e.input_price_per_1m, e.output_price_per_1m
+         FROM savings_baselines sb
+         JOIN virtual_models vm ON vm.id = sb.virtual_model_id
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = sb.project_id
+         JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
+         JOIN endpoints e ON e.id = mpe.endpoint_id
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE sb.project_id = $1 AND mp.org_id = $2 AND mpe.endpoint_id = sb.endpoint_id",
+    )
+    .bind(&ctx.project_id)
+    .bind(&ctx.org_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+
+    let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
+        return Ok(Json(ApiResponse::success(json!({
+            "estimated_spend": Value::Null,
+            "estimated_savings": Value::Null,
+            "trimmed_chars": 0,
+            "configured": false,
+            "basis": "Configure a model service baseline to estimate dollar savings from context reduction and cost-aware routing.",
+            "is_estimated": true,
+        }))));
+    };
+    if input_price <= 0.0 && output_price <= 0.0 {
+        return Ok(Json(ApiResponse::success(json!({
+            "estimated_spend": Value::Null,
+            "estimated_savings": Value::Null,
+            "trimmed_chars": 0,
+            "configured": true,
+            "baseline": {"virtual_model_id": virtual_model_id, "endpoint_id": endpoint_id, "model_service_name": service_name, "model": model, "provider_name": provider_name, "input_price_per_1m": input_price, "output_price_per_1m": output_price},
+            "basis": "Add input or output pricing to the selected model endpoint to estimate dollar savings.",
+            "is_estimated": true,
+        }))));
+    }
+
+    let (where_sql, since_value) = if since.is_some() {
+        ("AND u.timestamp >= $3", since)
+    } else {
+        ("", None)
+    };
+    let sql = format!(
+        "SELECT COALESCE(SUM(u.prompt_tokens), 0),
+                COALESCE(SUM(u.completion_tokens), 0),
+                COALESCE(SUM(u.trimmed_chars), 0),
+                COALESCE(SUM(u.estimated_cost), 0)
+         FROM usage_logs u JOIN projects p ON p.id = u.project_id
+         WHERE p.org_id = $1 AND u.virtual_model_id = $2 {where_sql}"
+    );
+    let usage: (i64, i64, i64, f64) = if let Some(value) = since_value {
+        sqlx::query_as(&sql)
+            .bind(&ctx.org_id)
+            .bind(&virtual_model_id)
+            .bind(value)
+            .fetch_one(&state.db)
+            .await
+    } else {
+        sqlx::query_as(&sql)
+            .bind(&ctx.org_id)
+            .bind(&virtual_model_id)
+            .fetch_one(&state.db)
+            .await
+    }
+    .map_err(db_error)?;
+    let (baseline_cost, estimated_savings) = calculate_savings(
+        usage.0,
+        usage.1,
+        usage.2,
+        usage.3,
+        input_price,
+        output_price,
+    );
+
+    Ok(Json(ApiResponse::success(json!({
+        "estimated_spend": usage.3,
+        "estimated_savings": estimated_savings,
+        "baseline_cost": baseline_cost,
+        "trimmed_chars": usage.2,
+        "configured": true,
+        "baseline": {"virtual_model_id": virtual_model_id, "endpoint_id": endpoint_id, "model_service_name": service_name, "model": model, "provider_name": provider_name, "input_price_per_1m": input_price, "output_price_per_1m": output_price},
+        "basis": "Estimated against the selected model service endpoint using recorded tokens and restored trimmed context; actual provider billing may differ.",
+        "is_estimated": true,
+    }))));
+}
+
+fn calculate_savings(
+    prompt_tokens: i64,
+    completion_tokens: i64,
+    trimmed_chars: i64,
+    estimated_spend: f64,
+    input_price_per_1m: f64,
+    output_price_per_1m: f64,
+) -> (f64, f64) {
+    let restored_prompt_tokens = trimmed_chars as f64 / 4.0;
+    let baseline_cost = ((prompt_tokens as f64 + restored_prompt_tokens) / 1_000_000.0)
+        * input_price_per_1m
+        + (completion_tokens as f64 / 1_000_000.0) * output_price_per_1m;
+    (baseline_cost, baseline_cost - estimated_spend)
 }
 
 fn range_since(
@@ -1471,6 +1661,18 @@ fn range_since(
                 "range must be one of: 24h, 7d, 30d, all",
             )),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::calculate_savings;
+
+    #[test]
+    fn savings_baseline_restores_trimmed_prompt_context() {
+        let (baseline, savings) = calculate_savings(1_000_000, 100_000, 4_000, 1.0, 2.0, 3.0);
+        assert!((baseline - 2.302).abs() < 1e-9);
+        assert!((savings - 1.302).abs() < 1e-9);
     }
 }
 

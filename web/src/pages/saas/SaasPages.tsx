@@ -632,20 +632,52 @@ type UsageData = {
   breakdowns?: { providers: UsageBreakdown[]; models: UsageBreakdown[] }
 }
 
+type SavingsBaseline = {
+  virtual_model_id: string
+  endpoint_id: string
+  model_service_name: string
+  model: string
+  provider_name: string
+  input_price_per_1m: number
+  output_price_per_1m: number
+}
+
+type SavingsData = {
+  estimated_spend?: number | null
+  estimated_savings?: number | null
+  trimmed_chars: number
+  configured: boolean
+  baseline?: SavingsBaseline
+  basis: string
+}
+
 const money = (value: number | undefined) => `$${(value || 0).toFixed(4)}`
 const compactNumber = (value: number | undefined) => (value || 0).toLocaleString()
 
 export function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null)
-  const [savings, setSavings] = useState<any>(null)
+  const [savings, setSavings] = useState<SavingsData | null>(null)
+  const [baseline, setBaseline] = useState<SavingsBaseline | null>(null)
+  const [baselineOptions, setBaselineOptions] = useState<ServiceDetails[]>([])
+  const [baselineOpen, setBaselineOpen] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     Promise.all([
       saasFetch<UsageData>('/api/saas/usage?range=30d'),
-      saasFetch('/api/saas/savings?range=30d'),
+      saasFetch<SavingsData>('/api/saas/savings?range=30d'),
+      saasFetch<{ configured?: boolean } & Partial<SavingsBaseline>>('/api/saas/savings-baseline'),
+      saasFetch<Service[]>('/api/saas/model-services'),
     ])
-      .then(([usage, savingsResult]) => { setData(usage.data || null); setSavings(savingsResult.data) })
+      .then(async ([usage, savingsResult, baselineResult, servicesResult]) => {
+        setData(usage.data || null)
+        setSavings(savingsResult.data || null)
+        setBaseline(baselineResult.data?.configured ? baselineResult.data as SavingsBaseline : null)
+        const details = await Promise.all((servicesResult.data || []).map(async (service) => {
+          try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
+        }))
+        setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
+      })
       .catch((e: unknown) => setError(errorText(e)))
   }, [])
 
@@ -664,11 +696,39 @@ export function UsagePage() {
       <Stat label="Success rate" value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
     </div>
 
-    <div className="mt-6 grid gap-6 xl:grid-cols-2"><div className="space-y-6"><section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">By provider</h2><p className="mt-1 text-sm text-zinc-500">Where your requests and estimated spend went.</p>{providers.length ? <div className="mt-5 space-y-4">{providers.map((item) => <div key={item.provider}><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{item.provider}</span><span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} /></div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div></div></div>)}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section><section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Context savings</h2><p className="mt-1 text-sm text-zinc-500">Signals produced by context reduction. This is separate from provider billing.</p><div className="mt-5 grid gap-4 sm:grid-cols-2"><Stat label="Context characters trimmed" value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} /><Stat label="Estimated dollar savings" value={savings?.estimated_savings == null ? 'Not available' : money(Number(savings.estimated_savings))} /></div><p className="mt-4 text-xs text-zinc-500">{savings?.basis || 'Savings are calculated when a comparison baseline is available.'}</p></section></div><section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">By model</h2><p className="mt-1 text-sm text-zinc-500">Models are identified from the actual selected upstream endpoint.</p>{models.length ? <div className="mt-5 divide-y divide-zinc-100">{models.slice(0, 10).map((item) => <div key={`${item.provider}-${item.model}`} className="flex items-center justify-between gap-4 py-3 first:pt-0"><div className="min-w-0"><div className="truncate text-sm font-medium">{item.model}</div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>Provider: {item.provider}</div><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div></div></div><span className="shrink-0 font-mono text-sm text-zinc-600">{money(item.estimated_spend)}</span></div>)}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section></div>
+    <div className="mt-6 grid gap-6 xl:grid-cols-2"><div className="space-y-6"><section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">By provider</h2><p className="mt-1 text-sm text-zinc-500">Where your requests and estimated spend went.</p>{providers.length ? <div className="mt-5 space-y-4">{providers.map((item) => <div key={item.provider}><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{item.provider}</span><span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} /></div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div></div></div>)}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section><section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">Context savings</h2><p className="mt-1 text-sm text-zinc-500">Signals produced by context reduction. This is separate from provider billing.</p></div><button type="button" onClick={() => setBaselineOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950"><Settings2 className="h-4 w-4" />{baseline ? 'Change baseline' : 'Configure baseline'}</button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Stat label="Context characters trimmed" value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} /><Stat label="Estimated dollar savings" value={savings?.estimated_savings == null ? 'Not available' : money(Number(savings.estimated_savings))} /></div>{baseline && <p className="mt-4 text-xs text-zinc-500">Compared with {baseline.model_service_name} / {baseline.model} ({baseline.provider_name}).</p>}<p className="mt-2 text-xs text-zinc-500">{savings?.basis || 'Configure a model service baseline to estimate dollar savings.'}</p></section></div><section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">By model</h2><p className="mt-1 text-sm text-zinc-500">Models are identified from the actual selected upstream endpoint.</p>{models.length ? <div className="mt-5 divide-y divide-zinc-100">{models.slice(0, 10).map((item) => <div key={`${item.provider}-${item.model}`} className="flex items-center justify-between gap-4 py-3 first:pt-0"><div className="min-w-0"><div className="truncate text-sm font-medium">{item.model}</div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>Provider: {item.provider}</div><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div></div></div><span className="shrink-0 font-mono text-sm text-zinc-600">{money(item.estimated_spend)}</span></div>)}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section></div>
 
     {data?.budget && <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex justify-between text-sm"><span>Today’s budget</span><span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : 'No limit set'}</span></div><div className="mt-3 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} /></div><div className="mt-2 text-xs text-zinc-500">Status: {data.budget.status}</div></div>}
     {data?.coverage && <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Data quality</h2><p className="mt-1 text-sm text-zinc-500">Coverage shows how much of the automatic estimate is based on reliable source data.</p></div><span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{coveragePercent(data.coverage.usage)} usage coverage</span></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Coverage label="Provider-reported tokens" value={data.coverage.usage} detail={`${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests`} /><Coverage label="Configured pricing" value={data.coverage.pricing} detail={`${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests`} /></div></section>}
   </Page>
+}
+
+function SavingsBaselineModal({ services, baseline, onClose, onSaved }: { services: ServiceDetails[]; baseline: SavingsBaseline | null; onClose: () => void; onSaved: (baseline: SavingsBaseline) => void }) {
+  const initialService = services.find((service) => service.id === baseline?.virtual_model_id) || services[0]
+  const [serviceId, setServiceId] = useState(initialService?.id || '')
+  const service = services.find((item) => item.id === serviceId) || initialService
+  const endpoint = service?.endpoints.find((item) => item.id === baseline?.endpoint_id) || service?.endpoints[0]
+  const [endpointId, setEndpointId] = useState(endpoint?.id || '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const next = service?.endpoints.find((item) => item.id === (serviceId === baseline?.virtual_model_id ? baseline?.endpoint_id : '')) || service?.endpoints[0]
+    setEndpointId(next?.id || '')
+  }, [serviceId, service, baseline])
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!service || !endpointId) { setError('Select a model service and model first.'); return }
+    setBusy(true); setError('')
+    try {
+      await saasFetch('/api/saas/savings-baseline', { method: 'PATCH', body: JSON.stringify({ virtual_model_id: service.id, endpoint_id: endpointId }) })
+      const saved = service.endpoints.find((item) => item.id === endpointId)
+      if (saved) onSaved({ virtual_model_id: service.id, endpoint_id: saved.id, model_service_name: service.name, model: saved.model, provider_name: saved.provider_name, input_price_per_1m: saved.input_price_per_1m, output_price_per_1m: saved.output_price_per_1m })
+    } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
+  }
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Savings comparison baseline</h2><p className="mt-1 text-sm text-zinc-500">Choose one model from a Model Service as the comparison price.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>{services.length ? <div className="mt-6 space-y-5"><Select label="Model service" options={services.map((item) => ({ id: item.id, name: item.name }))} selected={service ? { id: service.id, name: service.name } : { id: '', name: 'Select a model service' }} onChange={(option) => setServiceId(String(option.id))} /><Select label="Model / provider endpoint" options={(service?.endpoints || []).map((item) => ({ id: item.id, name: `${item.model} — ${item.provider_name}` }))} selected={endpoint ? { id: endpoint.id, name: `${endpoint.model} — ${endpoint.provider_name}` } : { id: '', name: 'Select a model' }} onChange={(option) => setEndpointId(String(option.id))} />{endpoint && <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Input ${endpoint.input_price_per_1m}/1M · Output ${endpoint.output_price_per_1m}/1M</div>}<p className="text-xs text-zinc-500">The estimate uses this endpoint’s configured prices. A single model is supported in the first version.</p></div> : <div className="mt-6 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800">Create a Model Service with at least one endpoint before configuring a baseline.</div>}{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save baseline'}</button></div></form></div>
 }
 
 function Coverage({ label, value, detail }: { label: string; value: number; detail: string }) { return <div><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono">{Math.round(value * 100)}%</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(value * 100, value > 0 ? 2 : 0)}%` }} /></div><div className="mt-1 text-xs text-zinc-500">{detail}</div></div> }
