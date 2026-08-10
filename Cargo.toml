@@ -7,7 +7,7 @@ description = "Open-source AI gateway with control/data plane separation — cut
 
 [dependencies]
 # Core Engine
-unigateway-sdk = { version = "2.6.0", features = ["host"] }
+unigateway-sdk = { version = "2.10.1", features = ["host"] }
 
 # Web Framework
 axum = { version = "0.7", features = ["macros"] }
