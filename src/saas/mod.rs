@@ -1629,7 +1629,7 @@ async fn get_savings(
         "baseline": {"virtual_model_id": virtual_model_id, "endpoint_id": endpoint_id, "model_service_name": service_name, "model": model, "provider_name": provider_name, "input_price_per_1m": input_price, "output_price_per_1m": output_price},
         "basis": "Estimated against the selected model service endpoint using recorded tokens and restored trimmed context; actual provider billing may differ.",
         "is_estimated": true,
-    })))
+    }))))
 }
 
 fn calculate_savings(
