@@ -1188,15 +1188,92 @@ async fn update_api_key(
     Path(key_id): Path<String>,
     Json(input): Json<CreateSaasKeyRequest>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let name = input.name.trim().to_string();
+    if name.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Key name is required")),
+        ));
+    }
+    if input.model_service_ids.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Select at least one model service")),
+        ));
+    }
+
+    let mut service_ids = input.model_service_ids.clone();
+    service_ids.sort();
+    service_ids.dedup();
+    let service_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id
+         WHERE mp.org_id = $1 AND g.project_id = $2 AND vm.enabled = TRUE AND vm.id = ANY($3)",
+    )
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .bind(&service_ids)
+    .fetch_one(&state.db)
+    .await
+    .map_err(db_error)?;
+    if service_count != service_ids.len() as i64 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error(
+                "One or more selected model services are unavailable",
+            )),
+        ));
+    }
+
+    let mut tx = state.db.begin().await.map_err(db_error)?;
     let result = sqlx::query("UPDATE api_keys SET name = $1, rpm_limit = $2, concurrency_limit = $3, daily_spend_limit = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 AND project_id = $6")
-        .bind(input.name).bind(input.rpm_limit).bind(input.concurrency_limit).bind(input.daily_spend_limit).bind(key_id).bind(ctx.project_id).execute(&state.db).await.map_err(db_error)?;
+        .bind(&name)
+        .bind(input.rpm_limit)
+        .bind(input.concurrency_limit)
+        .bind(input.daily_spend_limit)
+        .bind(&key_id)
+        .bind(&ctx.project_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| {
+            if error
+                .as_database_error()
+                .and_then(|database| database.constraint())
+                .is_some_and(|constraint| constraint.contains("idx_api_keys_project_name"))
+            {
+                conflict_error("An API key with this name already exists")
+            } else {
+                db_error(error)
+            }
+        })?;
     if result.rows_affected() == 0 {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("API key not found")),
         ));
     }
-    Ok(Json(ApiResponse::success(json!({"updated": true}))))
+
+    sqlx::query("DELETE FROM api_key_model_grants WHERE api_key_id = $1")
+        .bind(&key_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    for service_id in &service_ids {
+        sqlx::query(
+            "INSERT INTO api_key_model_grants (api_key_id, virtual_model_id) VALUES ($1, $2)",
+        )
+        .bind(&key_id)
+        .bind(service_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    }
+    tx.commit().await.map_err(db_error)?;
+    Ok(Json(ApiResponse::success(json!({
+        "updated": true,
+        "model_service_ids": service_ids,
+    }))))
 }
 
 async fn revoke_api_key(

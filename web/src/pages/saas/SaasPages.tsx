@@ -527,6 +527,7 @@ export function KeysPage() {
   const [raw, setRaw] = useState('')
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingKey, setEditingKey] = useState<Key | null>(null)
   const load = () => {
     Promise.all([
       saasFetch<Key[]>('/api/saas/api-keys'),
@@ -546,6 +547,14 @@ export function KeysPage() {
     setModalOpen(false)
     load()
   }
+  async function update(id: string, name: string, modelServiceIds: string[]) {
+    await saasFetch(`/api/saas/api-keys/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name, model_service_ids: modelServiceIds }),
+    })
+    setEditingKey(null)
+    load()
+  }
   async function revoke(id: string) {
     if (!await showConfirm('Existing requests will not be interrupted.', 'Revoke this API key?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}/revoke`, { method: 'POST' }); load() } catch (e) { setError(errorText(e)) }
@@ -557,9 +566,28 @@ export function KeysPage() {
   return <Page action={<button type="button" onClick={() => { setError(''); setModalOpen(true) }} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Create key</button>}>
     {dialog}{raw && <div className="rounded-xl border border-amber-200 bg-amber-50 p-5"><div className="text-sm font-medium text-amber-900">Copy this key now. It will not be shown again.</div><div className="mt-3 flex gap-2"><code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">{raw}</code><button type="button" onClick={() => navigator.clipboard.writeText(raw)} className="rounded-lg border border-amber-300 p-2"><Copy className="h-4 w-4" /></button></div></div>}
     {error && <ErrorMessage text={error} />}
-    {!keys.length ? <Empty text="No API keys yet." href="/app/services" /> : <div className="mt-6 space-y-3">{keys.map((key) => <div key={key.id} className="flex justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-5"><div className="min-w-0"><div className="font-medium">{key.name}</div><div className="mt-1 font-mono text-sm text-zinc-500">{key.prefix}••••••••</div><div className="mt-2 space-y-1 text-xs text-zinc-400"><div>Created {key.created_at}</div>{key.last_used_at && <div>Last used {key.last_used_at}</div>}</div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${key.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{key.enabled ? 'Active' : 'Revoked'}</span>{key.model_services?.length ? key.model_services.map((service) => <span key={service.id} className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600">{service.name}</span>) : <span className="text-zinc-400">All project services (legacy key)</span>}</div></div><div className="flex shrink-0 items-start gap-3">{key.enabled && <button type="button" onClick={() => revoke(key.id)} className="self-start text-xs text-rose-600 hover:text-rose-700">Revoke</button>}<button type="button" onClick={() => remove(key.id)} className="self-start text-xs text-zinc-500 hover:text-rose-600">Delete</button></div></div>)}</div>}
+    {!keys.length ? <Empty text="No API keys yet." href="/app/services" /> : <div className="mt-6 space-y-3">{keys.map((key) => <div key={key.id} className="flex justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-5"><div className="min-w-0"><div className="font-medium">{key.name}</div><div className="mt-1 font-mono text-sm text-zinc-500">{key.prefix}••••••••</div><div className="mt-2 space-y-1 text-xs text-zinc-400"><div>Created {key.created_at}</div>{key.last_used_at && <div>Last used {key.last_used_at}</div>}</div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${key.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{key.enabled ? 'Active' : 'Revoked'}</span>{key.model_services?.length ? key.model_services.map((service) => <span key={service.id} className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600">{service.name}</span>) : <span className="text-zinc-400">All project services (legacy key)</span>}</div></div><div className="flex shrink-0 items-start gap-3">{key.enabled && <button type="button" onClick={() => setEditingKey(key)} className="self-start text-xs text-zinc-600 hover:text-zinc-950" aria-label={`Edit ${key.name}`}><Pencil className="h-4 w-4" /></button>}{key.enabled && <button type="button" onClick={() => revoke(key.id)} className="self-start text-xs text-rose-600 hover:text-rose-700">Revoke</button>}<button type="button" onClick={() => remove(key.id)} className="self-start text-xs text-zinc-500 hover:text-rose-600">Delete</button></div></div>)}</div>}
     {modalOpen && <CreateKeyModal services={services} existingNames={keys.map((key) => key.name)} onClose={() => setModalOpen(false)} onCreate={create} />}
+    {editingKey && <EditKeyModal keyData={editingKey} services={services} existingNames={keys.map((key) => key.name)} onClose={() => setEditingKey(null)} onUpdate={update} />}
   </Page>
+}
+
+function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: { keyData: Key; services: Service[]; existingNames: string[]; onClose: () => void; onUpdate: (id: string, name: string, modelServiceIds: string[]) => Promise<void> }) {
+  const [name, setName] = useState(keyData.name)
+  const [selected, setSelected] = useState<string[]>(keyData.model_services?.map((service) => service.id) || [])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  function toggle(id: string) { setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]) }
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    const normalizedName = name.trim()
+    if (!normalizedName) { setError('Key name is required'); return }
+    if (existingNames.some((value) => value.toLowerCase() === normalizedName.toLowerCase() && value !== keyData.name)) { setError('An API key with this name already exists'); return }
+    if (!selected.length) { setError('Select at least one model service'); return }
+    setBusy(true); setError('')
+    try { await onUpdate(keyData.id, normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
+  }
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Edit API key</h2><p className="mt-1 text-sm text-zinc-500">Update the services this key can call.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><Field label="Key name" value={name} onChange={setName} placeholder="Production app" /><fieldset><legend className="text-sm font-medium text-zinc-700">Model services</legend><p className="mt-1 text-xs text-zinc-500">Requests must use one of the selected service names as the <code>model</code> value.</p><div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">{services.length ? services.map((service) => <label key={service.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-zinc-50"><input type="checkbox" checked={selected.includes(service.id)} onChange={() => toggle(service.id)} className="h-4 w-4 accent-zinc-950" /><span className="text-sm text-zinc-700">{service.name}</span></label>) : <p className="px-3 py-2 text-sm text-zinc-500">Create a model service before editing this key.</p>}</div></fieldset></div>{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>
 }
 
 function CreateKeyModal({ services, existingNames, onClose, onCreate }: { services: Service[]; existingNames: string[]; onClose: () => void; onCreate: (name: string, modelServiceIds: string[]) => Promise<void> }) {
