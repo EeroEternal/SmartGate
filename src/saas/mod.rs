@@ -1624,11 +1624,13 @@ async fn get_usage(
     )))
 }
 
-async fn get_savings_baseline(
-    State(state): State<Arc<AppState>>,
-    ctx: SaasContext,
-) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let baseline = sqlx::query_as::<_, (String, String, String, String, String, f64, f64)>(
+type SavingsBaselineRow = (String, String, String, String, String, f64, f64);
+
+async fn load_savings_baseline(
+    state: &AppState,
+    ctx: &SaasContext,
+) -> Result<Option<SavingsBaselineRow>, sqlx::Error> {
+    let baseline = sqlx::query_as::<_, SavingsBaselineRow>(
         "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
                 pa.name, e.input_price_per_1m, e.output_price_per_1m
          FROM savings_baselines sb
@@ -1643,8 +1645,70 @@ async fn get_savings_baseline(
     .bind(&ctx.project_id)
     .bind(&ctx.org_id)
     .fetch_optional(&state.db)
-    .await
-    .map_err(db_error)?;
+    .await?;
+    if baseline.is_some() {
+        return Ok(baseline);
+    }
+
+    // Pick a stable default on first access. Prefer priced endpoints so the
+    // default is useful for savings estimation, then randomize among peers.
+    let candidate: Option<(String, String)> = sqlx::query_as(
+        "SELECT vm.id, e.id
+         FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = $2
+         JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
+         JOIN endpoints e ON e.id = mpe.endpoint_id
+         WHERE mp.org_id = $1 AND e.enabled = TRUE
+         ORDER BY (e.input_price_per_1m > 0 OR e.output_price_per_1m > 0) DESC, RANDOM()
+         LIMIT 1",
+    )
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .fetch_optional(&state.db)
+    .await?;
+    if let Some((virtual_model_id, endpoint_id)) = candidate {
+        sqlx::query(
+            "INSERT INTO savings_baselines (project_id, virtual_model_id, endpoint_id)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (project_id) DO NOTHING",
+        )
+        .bind(&ctx.project_id)
+        .bind(virtual_model_id)
+        .bind(endpoint_id)
+        .execute(&state.db)
+        .await?;
+
+        // Re-read the row so concurrent first requests return the same
+        // persisted baseline rather than their own random candidate.
+        return sqlx::query_as::<_, SavingsBaselineRow>(
+            "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
+                    pa.name, e.input_price_per_1m, e.output_price_per_1m
+             FROM savings_baselines sb
+             JOIN virtual_models vm ON vm.id = sb.virtual_model_id
+             JOIN model_pools mp ON mp.id = vm.pool_id
+             JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = sb.project_id
+             JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
+             JOIN endpoints e ON e.id = mpe.endpoint_id
+             JOIN provider_accounts pa ON pa.id = e.account_id
+             WHERE sb.project_id = $1 AND mp.org_id = $2 AND mpe.endpoint_id = sb.endpoint_id",
+        )
+        .bind(&ctx.project_id)
+        .bind(&ctx.org_id)
+        .fetch_optional(&state.db)
+        .await;
+    }
+
+    Ok(None)
+}
+
+async fn get_savings_baseline(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let baseline = load_savings_baseline(&state, &ctx)
+        .await
+        .map_err(db_error)?;
 
     let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
         return Ok(Json(ApiResponse::success(json!({"configured": false}))));
@@ -1714,23 +1778,9 @@ async fn get_savings(
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
     let range = query.range.as_deref().unwrap_or("24h");
     let since = range_since(range)?;
-    let baseline = sqlx::query_as::<_, (String, String, String, String, String, f64, f64)>(
-        "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
-                pa.name, e.input_price_per_1m, e.output_price_per_1m
-         FROM savings_baselines sb
-         JOIN virtual_models vm ON vm.id = sb.virtual_model_id
-         JOIN model_pools mp ON mp.id = vm.pool_id
-         JOIN project_model_grants g ON g.virtual_model_id = vm.id AND g.project_id = sb.project_id
-         JOIN model_pool_endpoints mpe ON mpe.pool_id = mp.id
-         JOIN endpoints e ON e.id = mpe.endpoint_id
-         JOIN provider_accounts pa ON pa.id = e.account_id
-         WHERE sb.project_id = $1 AND mp.org_id = $2 AND mpe.endpoint_id = sb.endpoint_id",
-    )
-    .bind(&ctx.project_id)
-    .bind(&ctx.org_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(db_error)?;
+    let baseline = load_savings_baseline(&state, &ctx)
+        .await
+        .map_err(db_error)?;
 
     let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
         return Ok(Json(ApiResponse::success(json!({
