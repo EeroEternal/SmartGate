@@ -20,4 +20,6 @@ export async function saasFetch<T = any>(path: string, init: RequestInit = {}): 
 }
 
 export const saasMe = () => saasFetch('/api/saas/auth/me')
+export const saasUpdateProfile = (data: { current_password: string; email?: string; new_password?: string }) =>
+  saasFetch('/api/saas/auth/me', { method: 'PATCH', body: JSON.stringify(data) })
 export const saasLogout = () => saasFetch('/api/saas/auth/logout', { method: 'POST' })

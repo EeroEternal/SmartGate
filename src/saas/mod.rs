@@ -61,6 +61,13 @@ struct LoginRequest {
     password: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct UpdateProfileRequest {
+    current_password: String,
+    email: Option<String>,
+    new_password: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 struct ModelEndpointRequest {
     provider_type: String,
@@ -190,7 +197,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/auth/send-verification-code", post(send_verification_code))
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
-        .route("/auth/me", get(me))
+        .route("/auth/me", get(me).patch(update_profile))
         .route(
             "/model-services",
             get(list_model_services).post(create_model_service),
@@ -460,6 +467,85 @@ async fn me(ctx: SaasContext) -> Json<ApiResponse<Value>> {
         "email": ctx.user.email,
         "org_id": ctx.org_id,
         "project_id": ctx.project_id,
+    })))
+}
+
+async fn update_profile(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Json(input): Json<UpdateProfileRequest>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    if input.email.is_none() && input.new_password.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Provide an email or a new password to update")),
+        ));
+    }
+    if !verify_password(&input.current_password, &ctx.user.password_hash) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::error("Current password is incorrect")),
+        ));
+    }
+
+    let email = input.email.map(|value| normalize_email(&value));
+    if let Some(email) = &email {
+        validate_email(email)?;
+    }
+    if let Some(password) = &input.new_password {
+        if password.len() < 10 || password.len() > 256 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("New password must be 10-256 characters")),
+            ));
+        }
+    }
+
+    let password_hash = input.new_password.as_deref().map(hash_password);
+    match (email.as_deref(), password_hash.as_deref()) {
+        (Some(email), Some(password_hash)) => sqlx::query(
+            "UPDATE saas_users SET email = $1, password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+        )
+        .bind(email)
+        .bind(password_hash)
+        .bind(&ctx.user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|error| {
+            if is_unique_violation(&error) {
+                conflict_error("Email is already registered")
+            } else {
+                db_error(error)
+            }
+        })?,
+        (Some(email), None) => sqlx::query(
+            "UPDATE saas_users SET email = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+        )
+        .bind(email)
+        .bind(&ctx.user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|error| {
+            if is_unique_violation(&error) {
+                conflict_error("Email is already registered")
+            } else {
+                db_error(error)
+            }
+        })?,
+        (None, Some(password_hash)) => sqlx::query(
+            "UPDATE saas_users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+        )
+        .bind(password_hash)
+        .bind(&ctx.user.id)
+        .execute(&state.db)
+        .await
+        .map_err(db_error)?,
+        (None, None) => unreachable!("empty profile update was rejected above"),
+    };
+
+    Json(ApiResponse::success(json!({
+        "id": ctx.user.id,
+        "email": email.unwrap_or(ctx.user.email),
     })))
 }
 
@@ -2086,4 +2172,8 @@ fn db_error<E: std::fmt::Display>(error: E) -> (StatusCode, Json<ApiResponse<()>
 }
 fn conflict_error(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
     (StatusCode::CONFLICT, Json(ApiResponse::error(message)))
+}
+
+fn is_unique_violation(error: &sqlx::Error) -> bool {
+    matches!(error, sqlx::Error::Database(database_error) if database_error.code().as_deref() == Some("23505"))
 }

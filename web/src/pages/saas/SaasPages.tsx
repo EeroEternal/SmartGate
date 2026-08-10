@@ -1,7 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Copy, Eye, EyeOff, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { saasFetch, saasLogout } from '../../lib/saasApi'
+import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import BrandMark from '../../components/BrandMark'
 import { useDialog } from '../../components/Dialog'
@@ -13,6 +13,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [accountOpen, setAccountOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -49,15 +50,16 @@ export function SaasLayout({ children }: { children: ReactNode }) {
         XGate
       </Link>
       <div ref={accountRef} className="relative">
-        <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
-          <UserCircle className="h-5 w-5" />
-          <span className="hidden max-w-48 truncate sm:inline">{email || 'Account'}</span>
+        <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
+          <UserCircle className="h-6 w-6" />
           <ChevronDown className={`h-4 w-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
         </button>
-        {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
+        {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
           <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">Signed in as</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || 'Account'}</div></div>
-          <button type="button" role="menuitem" onClick={logout} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> Logout</button>
+          <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> Edit profile</button>
+          <button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> Logout</button>
         </div>}
+        {profileOpen && <ProfileDialog email={email} onClose={() => setProfileOpen(false)} onSaved={(updatedEmail) => { setEmail(updatedEmail); setProfileOpen(false) }} />}
       </div>
     </header>
     <div className="mx-auto grid max-w-6xl min-w-0 gap-10 px-6 py-8 md:px-10 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -767,6 +769,37 @@ function SavingsBaselineModal({ services, baseline, onClose, onSaved }: { servic
 }
 
 function Coverage({ label, value, detail }: { label: string; value: number; detail: string }) { return <div><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono">{Math.round(value * 100)}%</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(value * 100, value > 0 ? 2 : 0)}%` }} /></div><div className="mt-1 text-xs text-zinc-500">{detail}</div></div> }
+
+function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: () => void; onSaved: (email: string) => void }) {
+  const [updatedEmail, setUpdatedEmail] = useState(email)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    setBusy(true)
+    try {
+      const result = await saasUpdateProfile({ current_password: currentPassword, email: updatedEmail, ...(newPassword ? { new_password: newPassword } : {}) })
+      onSaved(result.data?.email || updatedEmail)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+    <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">Edit profile</h2><p className="mt-1 text-sm text-zinc-500">Update your account information.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>
+      <div className="mt-6 space-y-5"><Field label="Email" value={updatedEmail} onChange={setUpdatedEmail} type="email" /><Field label="New password (optional)" value={newPassword} onChange={setNewPassword} type="password" required={false} placeholder="Leave blank to keep your password" /><Field label="Current password" value={currentPassword} onChange={setCurrentPassword} type="password" placeholder="Required to save changes" /></div>
+      {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
+      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div>
+    </form>
+  </div>
+}
 
 function errorText(error: unknown) { return error instanceof globalThis.Error ? error.message : 'Something went wrong' }
 function Page({ action, children }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) { return <div>{action && <div className="flex justify-end">{action}</div>}<div className={action ? 'mt-6' : ''}>{children}</div></div> }
