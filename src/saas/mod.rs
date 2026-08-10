@@ -543,10 +543,10 @@ async fn update_profile(
         (None, None) => unreachable!("empty profile update was rejected above"),
     };
 
-    Json(ApiResponse::success(json!({
+    Ok(Json(ApiResponse::success(json!({
         "id": ctx.user.id,
         "email": email.unwrap_or(ctx.user.email),
-    })))
+    }))))
 }
 
 async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Value>> {
