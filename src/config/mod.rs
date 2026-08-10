@@ -14,6 +14,8 @@ pub struct Config {
     pub database_url: String,
     pub admin_token: String,
     pub cors_allowed_origins: Vec<String>,
+    pub resend_api_key: Option<String>,
+    pub resend_from_email: Option<String>,
 }
 
 #[derive(Clone)]
@@ -59,6 +61,8 @@ impl Config {
             database_url,
             admin_token,
             cors_allowed_origins,
+            resend_api_key: std::env::var("RESEND_API_KEY").ok(),
+            resend_from_email: std::env::var("RESEND_FROM_EMAIL").ok(),
         })
     }
 }

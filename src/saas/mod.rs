@@ -24,6 +24,9 @@ use crate::{
 
 const SESSION_COOKIE: &str = "smartgate_session";
 const SESSION_DAYS: i64 = 30;
+const VERIFICATION_CODE_TTL_MINUTES: i64 = 10;
+const VERIFICATION_RESEND_SECONDS: i64 = 60;
+const VERIFICATION_MAX_ATTEMPTS: i32 = 5;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct SaasUser {
@@ -44,6 +47,12 @@ pub struct SaasContext {
 struct RegisterRequest {
     email: String,
     password: String,
+    verification_code: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct VerificationCodeRequest {
+    email: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,6 +187,7 @@ where
 pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/auth/register", post(register))
+        .route("/auth/send-verification-code", post(send_verification_code))
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
@@ -221,19 +231,55 @@ async fn register(
 ) -> Result<Response, (StatusCode, Json<ApiResponse<()>>)> {
     let email = normalize_email(&input.email);
     validate_credentials(&email, &input.password)?;
+    validate_verification_code(&input.verification_code)?;
     let password_hash = hash_password(&input.password);
     let user_id = Uuid::new_v4().to_string();
     let org_id = Uuid::new_v4().to_string();
     let project_id = Uuid::new_v4().to_string();
 
     let mut tx = state.db.begin().await.map_err(db_error)?;
+    let verification: Option<(String, i32, chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>)> =
+        sqlx::query_as(
+            "SELECT code_hash, attempts, expires_at, used_at
+             FROM saas_email_verifications WHERE email = $1 FOR UPDATE",
+        )
+        .bind(&email)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    let Some((code_hash, attempts, expires_at, used_at)) = verification else {
+        return Err(verification_error("Request a verification code first"));
+    };
+    if used_at.is_some() || expires_at <= Utc::now() || attempts >= VERIFICATION_MAX_ATTEMPTS {
+        return Err(verification_error("The verification code is invalid or expired"));
+    }
+    if code_hash != verification_code_hash(&email, &input.verification_code) {
+        sqlx::query("UPDATE saas_email_verifications SET attempts = attempts + 1 WHERE email = $1")
+            .bind(&email)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        return Err(verification_error("The verification code is invalid or expired"));
+    }
+    sqlx::query("UPDATE saas_email_verifications SET used_at = CURRENT_TIMESTAMP WHERE email = $1")
+        .bind(&email)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
     sqlx::query("INSERT INTO saas_users (id, email, password_hash) VALUES ($1, $2, $3)")
         .bind(&user_id)
         .bind(&email)
         .bind(password_hash)
         .execute(&mut *tx)
         .await
-        .map_err(|_| conflict_error("Email is already registered"))?;
+        .map_err(|error| {
+            if let sqlx::Error::Database(database_error) = &error {
+                if database_error.constraint() == Some("saas_users_email_key") {
+                    return conflict_error("Email is already registered");
+                }
+            }
+            db_error(error)
+        })?;
     sqlx::query("INSERT INTO orgs (id, name, description) VALUES ($1, $2, $3)")
         .bind(&org_id)
         .bind(format!("{}'s workspace", email))
@@ -265,6 +311,90 @@ async fn register(
         token,
         StatusCode::CREATED,
     ))
+}
+
+async fn send_verification_code(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<VerificationCodeRequest>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let email = normalize_email(&input.email);
+    validate_email(&email)?;
+
+    let already_registered: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM saas_users WHERE email = $1",
+    )
+    .bind(&email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    if already_registered.is_some() {
+        return Ok(Json(ApiResponse::success(json!({"sent": true}))));
+    }
+
+    let recent: Option<(chrono::DateTime<Utc>,)> = sqlx::query_as(
+        "SELECT sent_at FROM saas_email_verifications
+         WHERE email = $1 AND used_at IS NULL",
+    )
+    .bind(&email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    if let Some((sent_at,)) = recent {
+        let elapsed = (Utc::now() - sent_at).num_seconds();
+        if elapsed < VERIFICATION_RESEND_SECONDS {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ApiResponse::error("Please wait before requesting another code")),
+            ));
+        }
+    }
+
+    let (Some(api_key), Some(from_email)) = (
+        state.config.resend_api_key.as_deref(),
+        state.config.resend_from_email.as_deref(),
+    ) else {
+        tracing::error!("Email verification is not configured");
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiResponse::error("Email verification is not configured")),
+        ));
+    };
+
+    let code = format!("{:06}", (Uuid::new_v4().as_u128() % 1_000_000) as u32);
+    let response = reqwest::Client::new()
+        .post("https://api.resend.com/emails")
+        .bearer_auth(api_key)
+        .json(&json!({
+            "from": from_email,
+            "to": [email],
+            "subject": "Your SmartGate verification code",
+            "html": format!("<p>Your SmartGate verification code is <strong>{code}</strong>.</p><p>This code expires in {VERIFICATION_CODE_TTL_MINUTES} minutes.</p>"),
+        }))
+        .send()
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "Failed to send verification email");
+            email_service_error()
+        })?;
+    if !response.status().is_success() {
+        tracing::error!(status = %response.status(), "Resend rejected verification email");
+        return Err(email_service_error());
+    }
+
+    sqlx::query(
+        "INSERT INTO saas_email_verifications (email, code_hash, attempts, sent_at, expires_at, used_at)
+         VALUES ($1, $2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + ($3 * INTERVAL '1 minute'), NULL)
+         ON CONFLICT (email) DO UPDATE SET code_hash = EXCLUDED.code_hash,
+           attempts = 0, sent_at = EXCLUDED.sent_at, expires_at = EXCLUDED.expires_at, used_at = NULL",
+    )
+    .bind(&email)
+    .bind(verification_code_hash(&email, &code))
+    .bind(VERIFICATION_CODE_TTL_MINUTES)
+    .execute(&state.db)
+    .await
+    .map_err(db_error)?;
+
+    Ok(Json(ApiResponse::success(json!({"sent": true}))))
 }
 
 async fn login(
@@ -1666,7 +1796,26 @@ fn range_since(
 
 #[cfg(test)]
 mod tests {
-    use super::calculate_savings;
+    use super::{calculate_savings, validate_verification_code, verification_code_hash};
+
+    #[test]
+    fn verification_code_hash_is_bound_to_email() {
+        assert_eq!(
+            verification_code_hash("user@example.com", "123456"),
+            verification_code_hash("user@example.com", "123456")
+        );
+        assert_ne!(
+            verification_code_hash("user@example.com", "123456"),
+            verification_code_hash("other@example.com", "123456")
+        );
+    }
+
+    #[test]
+    fn verification_code_requires_six_digits() {
+        assert!(validate_verification_code("123456").is_ok());
+        assert!(validate_verification_code("12345").is_err());
+        assert!(validate_verification_code("12345a").is_err());
+    }
 
     #[test]
     fn savings_baseline_restores_trimmed_prompt_context() {
@@ -1692,11 +1841,26 @@ fn normalize_email(email: &str) -> String {
     email.trim().to_ascii_lowercase()
 }
 
+fn validate_email(email: &str) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
+    let valid = email.len() <= 254
+        && email.split_once('@').is_some_and(|(local, domain)| {
+            !local.is_empty() && !domain.is_empty() && !domain.starts_with('.') && !domain.ends_with('.')
+        });
+    if !valid {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Use a valid email address")),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_credentials(
     email: &str,
     password: &str,
 ) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
-    if !email.contains('@') || email.len() > 254 || password.len() < 10 || password.len() > 256 {
+    validate_email(email)?;
+    if password.len() < 10 || password.len() > 256 {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error(
@@ -1705,6 +1869,30 @@ fn validate_credentials(
         ));
     }
     Ok(())
+}
+
+fn validate_verification_code(
+    code: &str,
+) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
+    if code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(verification_error("Enter the 6-digit verification code"));
+    }
+    Ok(())
+}
+
+fn verification_code_hash(email: &str, code: &str) -> String {
+    hash_token(&format!("smartgate-email-verification-v1:{email}:{code}"))
+}
+
+fn verification_error(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
+    (StatusCode::BAD_REQUEST, Json(ApiResponse::error(message)))
+}
+
+fn email_service_error() -> (StatusCode, Json<ApiResponse<()>>) {
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(ApiResponse::error("Unable to send the verification email")),
+    )
 }
 
 fn hash_password(password: &str) -> String {

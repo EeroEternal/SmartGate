@@ -33,6 +33,8 @@ Set these variables in the API service's **Variables** page. Use **Add Reference
 | `ADMIN_TOKEN` | Generate a long random value in Railway Secrets |
 | `CORS_ALLOWED_ORIGIN` | `https://app.example.com` |
 | `COOKIE_SECURE` | `1` |
+| `RESEND_API_KEY` | Resend API key stored as a Railway secret |
+| `RESEND_FROM_EMAIL` | A sender address on a verified Resend domain |
 | `RUST_LOG` | `smartgate=info,tower_http=info` |
 
 Railway provides `PORT` automatically. Do not hard-code it. SmartGate listens on `0.0.0.0:$PORT` when `ADDR` is not set.
