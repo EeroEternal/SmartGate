@@ -27,6 +27,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 rounded-full bg-white border border-zinc-200 px-3 py-1 text-xs text-zinc-600"><Sparkles className="w-3.5 h-3.5" /> Cost-aware AI routing</div>
             <h1 className="mt-6 text-5xl md:text-7xl font-semibold tracking-[-0.06em] leading-[.98]">Use the right model.<br /><span className="text-zinc-400">Spend less by default.</span></h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-zinc-600">XGate gives you one simple API for your AI model services, routing each request by cost, capability, and health so you do not overpay.</p>
+            <p className="mt-4 text-sm font-medium text-zinc-600">Works with Codex through the OpenAI Responses API.</p>
             <div className="mt-9 flex flex-wrap items-center gap-4">
               <Link to="/register" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 text-white px-5 py-3 text-sm font-medium hover:bg-zinc-700">Create your workspace <ArrowRight className="w-4 h-4" /></Link>
               <Link to="/login" className="text-sm font-medium text-zinc-600 hover:text-zinc-950">Already have an account?</Link>

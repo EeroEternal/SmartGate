@@ -1468,8 +1468,8 @@ async fn get_usage(
     } else {
         ("", None)
     };
-    let sql = format!("SELECT COUNT(*), COALESCE(SUM(u.prompt_tokens),0), COALESCE(SUM(u.completion_tokens),0), COALESCE(SUM(u.total_tokens),0), COALESCE(SUM(u.estimated_cost),0), COALESCE(AVG(u.latency_ms)::double precision, 0.0), COALESCE(SUM(CASE WHEN u.status_code >= 200 AND u.status_code < 300 THEN 1 ELSE 0 END),0), COALESCE(SUM(u.trimmed_chars),0) FROM usage_logs u JOIN projects p ON p.id = u.project_id WHERE p.org_id = $1 {where_sql}");
-    let row: (i64, i64, i64, i64, f64, f64, i64, i64) = if let Some(value) = since_value {
+    let sql = format!("SELECT COUNT(*), COALESCE(SUM(u.prompt_tokens),0), COALESCE(SUM(u.completion_tokens),0), COALESCE(SUM(u.total_tokens),0), COALESCE(SUM(u.estimated_cost),0), COALESCE(AVG(u.latency_ms)::double precision, 0.0), COALESCE(SUM(CASE WHEN u.status_code >= 200 AND u.status_code < 300 THEN 1 ELSE 0 END),0), COALESCE(SUM(u.trimmed_chars),0), COALESCE(SUM(u.cache_hit_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_hit_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_hit_tokens), COALESCE(SUM(CASE WHEN u.cache_hit_tokens IS NOT NULL THEN u.prompt_tokens ELSE 0 END),0), COALESCE(SUM(u.cache_write_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_write_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_write_tokens) FROM usage_logs u JOIN projects p ON p.id = u.project_id WHERE p.org_id = $1 {where_sql}");
+    let row: (i64, i64, i64, i64, f64, f64, i64, i64, i64, i64, i64, i64, i64, i64, i64) = if let Some(value) = since_value {
         sqlx::query_as(&sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -1501,6 +1501,8 @@ async fn get_usage(
         "SELECT COALESCE(pa.provider_type, 'unknown'), COALESCE(e.upstream_model_id, 'unknown'),
                 COUNT(*), COALESCE(SUM(u.prompt_tokens), 0), COALESCE(SUM(u.completion_tokens), 0),
                 COALESCE(SUM(u.total_tokens), 0), COALESCE(SUM(u.estimated_cost), 0),
+                COALESCE(SUM(u.cache_hit_tokens), 0)::bigint,
+                COALESCE(SUM(u.cache_write_tokens), 0)::bigint,
                 COALESCE(SUM(CASE WHEN u.usage_source = 'provider_reported' THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN u.pricing_source <> 'unpriced' THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN u.usage_source <> 'provider_reported' THEN 1 ELSE 0 END), 0),
@@ -1513,7 +1515,22 @@ async fn get_usage(
          WHERE p.org_id = $1 {where_sql}
          GROUP BY pa.provider_type, e.upstream_model_id",
     );
-    let breakdown_rows: Vec<(String, String, i64, i64, i64, i64, f64, i64, i64, i64, i64, i64)> =
+    let breakdown_rows: Vec<(
+        String,
+        String,
+        i64,
+        i64,
+        i64,
+        i64,
+        f64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+    )> =
         if let Some(value) = since_value {
             sqlx::query_as(&breakdown_sql)
                 .bind(&ctx.org_id)
@@ -1528,8 +1545,8 @@ async fn get_usage(
         }
         .map_err(db_error)?;
 
-    let mut provider_groups: BTreeMap<String, (i64, i64, i64, i64, f64)> = BTreeMap::new();
-    let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64)> = BTreeMap::new();
+    let mut provider_groups: BTreeMap<String, (i64, i64, i64, i64, f64, i64, i64)> = BTreeMap::new();
+    let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64, i64, i64)> = BTreeMap::new();
     let mut provider_reported_requests = 0_i64;
     let mut priced_requests = 0_i64;
     let mut missing_usage_groups: BTreeMap<(String, String), (i64, i64, i64)> = BTreeMap::new();
@@ -1541,6 +1558,8 @@ async fn get_usage(
         completion,
         total,
         cost,
+        cache_hit,
+        cache_write,
         reported,
         priced,
         missing,
@@ -1554,6 +1573,8 @@ async fn get_usage(
         provider_entry.2 += completion;
         provider_entry.3 += total;
         provider_entry.4 += cost;
+        provider_entry.5 += cache_hit;
+        provider_entry.6 += cache_write;
         let model_entry = model_groups
             .entry((provider.clone(), model.clone()))
             .or_default();
@@ -1562,6 +1583,8 @@ async fn get_usage(
         model_entry.2 += completion;
         model_entry.3 += total;
         model_entry.4 += cost;
+        model_entry.5 += cache_hit;
+        model_entry.6 += cache_write;
         provider_reported_requests += reported;
         priced_requests += priced;
         if missing > 0 {
@@ -1577,14 +1600,14 @@ async fn get_usage(
     }
     let provider_breakdown = provider_groups
         .into_iter()
-        .map(|(provider, (requests, prompt, completion, total, cost))| {
-            json!({"provider": provider, "requests": requests, "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total, "estimated_spend": cost})
+        .map(|(provider, (requests, prompt, completion, total, cost, cache_hit, cache_write))| {
+            json!({"provider": provider, "requests": requests, "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total, "cache_hit_tokens": cache_hit, "cache_write_tokens": cache_write, "estimated_spend": cost})
         })
         .collect::<Vec<_>>();
     let model_breakdown = model_groups
         .into_iter()
-        .map(|((provider, model), (requests, prompt, completion, total, cost))| {
-            json!({"model": model, "provider": provider, "requests": requests, "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total, "estimated_spend": cost})
+        .map(|((provider, model), (requests, prompt, completion, total, cost, cache_hit, cache_write))| {
+            json!({"model": model, "provider": provider, "requests": requests, "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total, "cache_hit_tokens": cache_hit, "cache_write_tokens": cache_write, "estimated_spend": cost})
         })
         .collect::<Vec<_>>();
     let missing_usage_requests = row.0 - provider_reported_requests;
@@ -1610,6 +1633,16 @@ async fn get_usage(
     } else {
         0.0
     };
+    let cache_hit_rate = if row.11 > 0 {
+        row.8 as f64 / row.11 as f64
+    } else {
+        0.0
+    };
+    let cache_write_rate = if row.1 > 0 {
+        row.12 as f64 / row.1 as f64
+    } else {
+        0.0
+    };
     let mut data_quality = Vec::new();
     if usage_coverage < 1.0 {
         data_quality.push("Some requests did not include provider-reported token usage; those records use local estimates or are unavailable.");
@@ -1619,8 +1652,11 @@ async fn get_usage(
             "Some models do not have configured pricing, so estimated spend may be incomplete.",
         );
     }
+    if row.10 == 0 {
+        data_quality.push("No provider-reported cache metrics were recorded for this period.");
+    }
     Ok(Json(ApiResponse::success(
-        json!({"range": range, "requests": row.0, "prompt_tokens": row.1, "completion_tokens": row.2, "total_tokens": row.3, "estimated_spend": row.4, "average_latency_ms": row.5, "success_rate": success_rate, "trimmed_chars": row.7, "budget": {"spent_today": spent_today, "daily_limit": daily_limit, "remaining_today": remaining, "status": match evaluate_budget(spent_today, daily_limit) { BudgetOutcome::Ok => "ok", BudgetOutcome::Soft { .. } => "soft", BudgetOutcome::Hard { .. } => "hard" }}, "coverage": {"usage": usage_coverage, "pricing": pricing_coverage, "provider_reported_requests": provider_reported_requests, "priced_requests": priced_requests, "missing_usage_requests": missing_usage_requests, "missing_usage_breakdown": missing_usage_breakdown}, "data_quality": data_quality, "breakdowns": {"providers": provider_breakdown, "models": model_breakdown}}),
+        json!({"range": range, "requests": row.0, "prompt_tokens": row.1, "completion_tokens": row.2, "total_tokens": row.3, "estimated_spend": row.4, "average_latency_ms": row.5, "success_rate": success_rate, "trimmed_chars": row.7, "cache": {"hit_tokens": row.8, "hit_requests": row.9, "reported_requests": row.10, "reported_input_tokens": row.11, "hit_rate": cache_hit_rate, "write_tokens": row.12, "write_requests": row.13, "reported_write_requests": row.14, "write_rate": cache_write_rate}, "budget": {"spent_today": spent_today, "daily_limit": daily_limit, "remaining_today": remaining, "status": match evaluate_budget(spent_today, daily_limit) { BudgetOutcome::Ok => "ok", BudgetOutcome::Soft { .. } => "soft", BudgetOutcome::Hard { .. } => "hard" }}, "coverage": {"usage": usage_coverage, "pricing": pricing_coverage, "provider_reported_requests": provider_reported_requests, "priced_requests": priced_requests, "missing_usage_requests": missing_usage_requests, "missing_usage_breakdown": missing_usage_breakdown}, "data_quality": data_quality, "breakdowns": {"providers": provider_breakdown, "models": model_breakdown}}),
     )))
 }
 
@@ -2041,7 +2077,8 @@ async fn sync(state: &Arc<AppState>) {
     .await;
 }
 
-fn db_error<E>(_error: E) -> (StatusCode, Json<ApiResponse<()>>) {
+fn db_error<E: std::fmt::Display>(error: E) -> (StatusCode, Json<ApiResponse<()>>) {
+    tracing::error!("SaaS database error: {}", error);
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(ApiResponse::error("Database error")),

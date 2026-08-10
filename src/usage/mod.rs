@@ -164,6 +164,8 @@ impl GatewayHooks for SmartGateHooks {
             let total_tokens = provider_usage
                 .and_then(|usage| usage.total_tokens)
                 .unwrap_or(prompt_tokens + completion_tokens);
+            let cache_hit_tokens = provider_usage.and_then(|usage| usage.cache_hit_tokens);
+            let cache_write_tokens = provider_usage.and_then(|usage| usage.cache_write_tokens);
 
             let (input_price, output_price, pricing_source) = profiles
                 .get(&endpoint_id)
@@ -213,13 +215,13 @@ impl GatewayHooks for SmartGateHooks {
                 "INSERT INTO usage_logs (
                     id, org_id, project_id, key_id, virtual_model_id,
                     pool_id, endpoint_id, provider_account_id,
-                    prompt_tokens, completion_tokens, total_tokens,
+                    prompt_tokens, completion_tokens, total_tokens, cache_hit_tokens, cache_write_tokens,
                     latency_ms, status_code, error_message, metadata,
                     estimated_cost, routing_strategy, routing_decision,
                     tool_message_chars, trimmed_chars,
                     usage_source, usage_confidence, pricing_source,
                     input_price_snapshot, output_price_snapshot, pricing_version
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)",
             )
             .bind(uuid::Uuid::new_v4().to_string())
             .bind(report.metadata.get("org_id"))
@@ -232,6 +234,8 @@ impl GatewayHooks for SmartGateHooks {
             .bind(prompt_tokens as i32)
             .bind(completion_tokens as i32)
             .bind(total_tokens as i32)
+            .bind(cache_hit_tokens.map(|value| value as i64))
+            .bind(cache_write_tokens.map(|value| value as i64))
             .bind(report.latency_ms as i32)
             .bind(status_code)
             .bind(error_message)
