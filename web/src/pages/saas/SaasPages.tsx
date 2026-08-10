@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Copy, Eye, EyeOff, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -39,6 +39,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
     ['Overview', '/app'],
     ['Model services', '/app/services'],
     ['API keys', '/app/keys'],
+    ['Codex', '/app/codex'],
     ['Usage', '/app/usage'],
   ]
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
@@ -69,6 +70,84 @@ export function SaasLayout({ children }: { children: ReactNode }) {
       <main className="min-w-0">{children}</main>
     </div>
   </div>
+}
+
+export function CodexPage() {
+  const profileConfig = `model = "fusion"
+model_provider = "xgate"
+preferred_auth_method = "apikey"
+model_reasoning_effort = "high"
+model_catalog_json = "/Users/you/.codex/models.json"
+
+[model_providers.xgate]
+name = "XGate"
+base_url = "https://api.xgate.sh/v1"
+wire_api = "chat_completions"
+experimental_bearer_token = "<project-api-key>"`
+
+  const modelCatalog = `{
+  "models": [{
+    "slug": "fusion",
+    "display_name": "Fusion (XGate)",
+    "context_window": 128000,
+    "max_context_window": 128000,
+    "default_reasoning_level": "high",
+    "supported_reasoning_levels": [
+      {"effort": "low", "description": "Low reasoning effort"},
+      {"effort": "high", "description": "High reasoning effort"}
+    ],
+    "supports_parallel_tool_calls": true,
+    "support_verbosity": true,
+    "default_verbosity": "low",
+    "input_modalities": ["text"],
+    "shell_type": "shell_command",
+    "visibility": "list",
+    "supported_in_api": true,
+    "priority": 1,
+    "truncation_policy": {"mode": "tokens", "limit": 10000},
+    "tool_mode": "code_mode_only",
+    "apply_patch_tool_type": "freeform",
+    "experimental_supported_tools": [],
+    "base_instructions": "You are a helpful coding assistant."
+  }]
+}`
+
+  return <Page>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-medium text-primary"><FileCode2 className="h-4 w-4" /> Codex integration</div>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Use Codex with XGate</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">Connect Codex GUI to an XGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while XGate provides routing, provider fallback, budgets, and usage tracking.</p>
+      </div>
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">Codex supported</div>
+    </div>
+
+    <section className="mt-8 grid gap-4 md:grid-cols-3">
+      {[
+        ['1', 'Create a model service', 'Connect providers and choose the routing strategy for Codex requests.', '/app/services', 'Open model services'],
+        ['2', 'Create an API key', 'Authorize the model service so Codex can call it using its service name.', '/app/keys', 'Open API keys'],
+        ['3', 'Configure Codex', 'Add the Profile and model catalog below, then restart Codex with the Profile.', null, null],
+      ].map(([number, title, text, href, action]) => <div key={number} className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{number}</div><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{text}</p>{href && action && <Link to={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">{action} <ExternalLink className="h-3.5 w-3.5" /></Link>}</div>)}
+    </section>
+
+    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Codex Profile</h2><p className="mt-1 text-sm text-zinc-500">Save this as <code>~/.codex/fusion.config.toml</code>. Replace the path, endpoint, model name, and API key with values from this workspace.</p></div><span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">Profile</span></div>
+      <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
+      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Why Chat Completions?</strong> Codex uses the OpenAI Responses API, while XGate translates the request for the configured upstream. For the Fusion Profile, use <code>wire_api = "chat_completions"</code> when the upstream does not accept the Responses API <code>thinking_budget</code> parameter.</div>
+    </section>
+
+    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+      <div><h2 className="font-semibold">Model catalog</h2><p className="mt-1 text-sm text-zinc-500">Save this as <code>~/.codex/models.json</code>. The <code>slug</code> must match the model service name authorized for the API key.</p></div>
+      <pre className="mt-5 max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
+    </section>
+
+    <section className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Start Codex</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Use the standalone Profile so Codex does not try to load the model catalog from the base configuration.</p><pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre><p className="mt-3 text-xs leading-5 text-zinc-500">Restart Codex after changing the Profile or model catalog.</p></div>
+      <div className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Troubleshooting</h2><div className="mt-4 space-y-3 text-sm"><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>401 Unauthorized:</strong> check the project API key and service grant.</p></div><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>Reasoning preset error:</strong> use objects with <code>effort</code> and <code>description</code>, not strings.</p></div><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>AbsolutePathBuf error:</strong> keep <code>model_catalog_json</code> in the standalone Profile.</p></div></div></div>
+    </section>
+
+    <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 p-4 text-xs leading-5 text-zinc-600">Keep <code>experimental_bearer_token</code> private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed.</div>
+  </Page>
 }
 
 export function ServicesPage() {
