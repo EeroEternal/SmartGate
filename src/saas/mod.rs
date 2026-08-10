@@ -1502,7 +1502,10 @@ async fn get_usage(
                 COUNT(*), COALESCE(SUM(u.prompt_tokens), 0), COALESCE(SUM(u.completion_tokens), 0),
                 COALESCE(SUM(u.total_tokens), 0), COALESCE(SUM(u.estimated_cost), 0),
                 COALESCE(SUM(CASE WHEN u.usage_source = 'provider_reported' THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN u.pricing_source <> 'unpriced' THEN 1 ELSE 0 END), 0)
+                COALESCE(SUM(CASE WHEN u.pricing_source <> 'unpriced' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN u.usage_source <> 'provider_reported' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN u.usage_source = 'local_estimate' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN u.usage_source = 'unavailable' THEN 1 ELSE 0 END), 0)
          FROM usage_logs u
          LEFT JOIN endpoints e ON e.id = u.endpoint_id
          LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
@@ -1510,7 +1513,7 @@ async fn get_usage(
          WHERE p.org_id = $1 {where_sql}
          GROUP BY pa.provider_type, e.upstream_model_id",
     );
-    let breakdown_rows: Vec<(String, String, i64, i64, i64, i64, f64, i64, i64)> =
+    let breakdown_rows: Vec<(String, String, i64, i64, i64, i64, f64, i64, i64, i64, i64, i64)> =
         if let Some(value) = since_value {
             sqlx::query_as(&breakdown_sql)
                 .bind(&ctx.org_id)
@@ -1529,8 +1532,21 @@ async fn get_usage(
     let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64)> = BTreeMap::new();
     let mut provider_reported_requests = 0_i64;
     let mut priced_requests = 0_i64;
-    for (provider, model, requests, prompt, completion, total, cost, reported, priced) in
-        breakdown_rows
+    let mut missing_usage_groups: BTreeMap<(String, String), (i64, i64, i64)> = BTreeMap::new();
+    for (
+        provider,
+        model,
+        requests,
+        prompt,
+        completion,
+        total,
+        cost,
+        reported,
+        priced,
+        missing,
+        local_estimate,
+        unavailable,
+    ) in breakdown_rows
     {
         let provider_entry = provider_groups.entry(provider.clone()).or_default();
         provider_entry.0 += requests;
@@ -1538,7 +1554,9 @@ async fn get_usage(
         provider_entry.2 += completion;
         provider_entry.3 += total;
         provider_entry.4 += cost;
-        let model_entry = model_groups.entry((provider, model)).or_default();
+        let model_entry = model_groups
+            .entry((provider.clone(), model.clone()))
+            .or_default();
         model_entry.0 += requests;
         model_entry.1 += prompt;
         model_entry.2 += completion;
@@ -1546,6 +1564,16 @@ async fn get_usage(
         model_entry.4 += cost;
         provider_reported_requests += reported;
         priced_requests += priced;
+        if missing > 0 {
+            missing_usage_groups
+                .entry((provider, model))
+                .and_modify(|entry| {
+                    entry.0 += missing;
+                    entry.1 += local_estimate;
+                    entry.2 += unavailable;
+                })
+                .or_insert((missing, local_estimate, unavailable));
+        }
     }
     let provider_breakdown = provider_groups
         .into_iter()
@@ -1557,6 +1585,19 @@ async fn get_usage(
         .into_iter()
         .map(|((provider, model), (requests, prompt, completion, total, cost))| {
             json!({"model": model, "provider": provider, "requests": requests, "prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total, "estimated_spend": cost})
+        })
+        .collect::<Vec<_>>();
+    let missing_usage_requests = row.0 - provider_reported_requests;
+    let missing_usage_breakdown = missing_usage_groups
+        .into_iter()
+        .map(|((provider, model), (missing, local_estimate, unavailable))| {
+            json!({
+                "provider": provider,
+                "model": model,
+                "requests": missing,
+                "local_estimate_requests": local_estimate,
+                "unavailable_requests": unavailable,
+            })
         })
         .collect::<Vec<_>>();
     let usage_coverage = if row.0 > 0 {
@@ -1579,7 +1620,7 @@ async fn get_usage(
         );
     }
     Ok(Json(ApiResponse::success(
-        json!({"range": range, "requests": row.0, "prompt_tokens": row.1, "completion_tokens": row.2, "total_tokens": row.3, "estimated_spend": row.4, "average_latency_ms": row.5, "success_rate": success_rate, "trimmed_chars": row.7, "budget": {"spent_today": spent_today, "daily_limit": daily_limit, "remaining_today": remaining, "status": match evaluate_budget(spent_today, daily_limit) { BudgetOutcome::Ok => "ok", BudgetOutcome::Soft { .. } => "soft", BudgetOutcome::Hard { .. } => "hard" }}, "coverage": {"usage": usage_coverage, "pricing": pricing_coverage, "provider_reported_requests": provider_reported_requests, "priced_requests": priced_requests}, "data_quality": data_quality, "breakdowns": {"providers": provider_breakdown, "models": model_breakdown}}),
+        json!({"range": range, "requests": row.0, "prompt_tokens": row.1, "completion_tokens": row.2, "total_tokens": row.3, "estimated_spend": row.4, "average_latency_ms": row.5, "success_rate": success_rate, "trimmed_chars": row.7, "budget": {"spent_today": spent_today, "daily_limit": daily_limit, "remaining_today": remaining, "status": match evaluate_budget(spent_today, daily_limit) { BudgetOutcome::Ok => "ok", BudgetOutcome::Soft { .. } => "soft", BudgetOutcome::Hard { .. } => "hard" }}, "coverage": {"usage": usage_coverage, "pricing": pricing_coverage, "provider_reported_requests": provider_reported_requests, "priced_requests": priced_requests, "missing_usage_requests": missing_usage_requests, "missing_usage_breakdown": missing_usage_breakdown}, "data_quality": data_quality, "breakdowns": {"providers": provider_breakdown, "models": model_breakdown}}),
     )))
 }
 

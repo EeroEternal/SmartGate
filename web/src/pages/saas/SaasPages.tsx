@@ -618,6 +618,14 @@ type UsageBreakdown = {
   estimated_spend: number
 }
 
+type MissingUsageBreakdown = {
+  provider: string
+  model: string
+  requests: number
+  local_estimate_requests: number
+  unavailable_requests: number
+}
+
 type UsageData = {
   requests: number
   prompt_tokens: number
@@ -627,7 +635,14 @@ type UsageData = {
   success_rate: number
   trimmed_chars: number
   budget?: { status: string; spent_today: number; daily_limit: number | null; remaining_today: number | null }
-  coverage?: { usage: number; pricing: number; provider_reported_requests: number; priced_requests: number }
+  coverage?: {
+    usage: number
+    pricing: number
+    provider_reported_requests: number
+    priced_requests: number
+    missing_usage_requests: number
+    missing_usage_breakdown: MissingUsageBreakdown[]
+  }
   data_quality?: string[]
   breakdowns?: { providers: UsageBreakdown[]; models: UsageBreakdown[] }
 }
@@ -692,6 +707,7 @@ export function UsagePage() {
     return groups
   }, new Map())
   const maxProviderSpend = Math.max(...providers.map((item) => item.estimated_spend), 0.000001)
+  const missingUsage = data?.coverage?.missing_usage_breakdown || []
 
   return <Page>
     {error && <ErrorMessage text={error} />}
@@ -708,7 +724,7 @@ export function UsagePage() {
     <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">Context savings</h2><p className="mt-1 text-sm text-zinc-500">Signals produced by context reduction. This is separate from provider billing.</p></div><button type="button" onClick={() => setBaselineOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950"><Settings2 className="h-4 w-4" />{baseline ? 'Change baseline' : 'Configure baseline'}</button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Stat label="Context characters trimmed" value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} /><Stat label="Estimated dollar savings" value={savings?.estimated_savings == null ? 'Not available' : money(Number(savings.estimated_savings))} /></div>{baseline && <p className="mt-4 text-xs text-zinc-500">Compared with {baseline.model_service_name} / {baseline.model} ({baseline.provider_name}).</p>}<p className="mt-2 text-xs text-zinc-500">{savings?.basis || 'Configure a model service baseline to estimate dollar savings.'}</p></section>
 
     {data?.budget && <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex justify-between text-sm"><span>Today’s budget</span><span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : 'No limit set'}</span></div><div className="mt-3 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} /></div><div className="mt-2 text-xs text-zinc-500">Status: {data.budget.status}</div></div>}
-    {data?.coverage && <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Data quality</h2><p className="mt-1 text-sm text-zinc-500">Coverage shows how much of the automatic estimate is based on reliable source data.</p></div><span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{coveragePercent(data.coverage.usage)} usage coverage</span></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Coverage label="Provider-reported tokens" value={data.coverage.usage} detail={`${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests`} /><Coverage label="Configured pricing" value={data.coverage.pricing} detail={`${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests`} /></div></section>}
+    {data?.coverage && <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Usage data coverage</h2><p className="mt-1 text-sm text-zinc-500">Shows which requests use provider-reported tokens and which rely on estimates.</p></div><span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{coveragePercent(data.coverage.usage)} provider-reported</span></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Coverage label="Provider-reported tokens" value={data.coverage.usage} detail={`${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests include token data`} /><Coverage label="Configured pricing" value={data.coverage.pricing} detail={`${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests have a pricing rule`} /></div>{missingUsage.length > 0 && <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4"><div className="font-medium text-amber-900">Requests without provider-reported tokens</div><p className="mt-1 text-sm text-amber-800">{compactNumber(data.coverage.missing_usage_requests)} requests below use a local estimate or have no token data.</p><div className="mt-4 divide-y divide-amber-200/70">{missingUsage.slice(0, 10).map((item) => <div key={`${item.provider}-${item.model}`} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><div className="truncate text-sm font-medium text-amber-950">{item.provider} / {item.model}</div><div className="mt-1 space-y-0.5 text-xs text-amber-800"><div>{compactNumber(item.requests)} requests without provider-reported tokens</div>{item.local_estimate_requests > 0 && <div>{compactNumber(item.local_estimate_requests)} use local estimates</div>}{item.unavailable_requests > 0 && <div>{compactNumber(item.unavailable_requests)} have no token data</div>}</div></div><span className="shrink-0 rounded-full bg-white/70 px-2 py-1 text-xs font-medium text-amber-900">Needs review</span></div>)}</div>{missingUsage.length > 10 && <div className="mt-3 text-xs text-amber-800">Showing the first 10 provider and model groups.</div>}</div>}</section>}
   </Page>
 }
 
