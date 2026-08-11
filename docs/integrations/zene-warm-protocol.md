@@ -1,11 +1,11 @@
 # Zene Warm Inference Gateway Protocol
 
-> Status: Warm MVP protocol baseline
+> Status: Warm MVP implemented; Redis persistence hardened in `729ea60`
 >
-> This document defines the target protocol for SmartGate to act as Zene's
-> **Warm layer**. It distinguishes the fields and behaviors already compatible
-> with the current Zene client from stricter follow-up requirements. It does not
-> make SmartGate an Agent runtime.
+> This document defines the protocol and the current SmartGate implementation
+> for Zene's **Warm layer**. It distinguishes implemented behavior from client
+> responsibilities and future inference-engine work. It does not make SmartGate
+> an Agent runtime.
 
 ## 1. Purpose and boundary
 
@@ -29,7 +29,26 @@ SmartGate provides the execution-side Warm layer:
 SmartGate stores a **prefix snapshot**, not a recoverable Agent transcript and not
 model KV blocks. KV continuation remains an optional inference-engine capability.
 
-### 1.1 Responsibility versus implementation status
+### 1.1 Hardening summary
+
+The Redis-backed Warm implementation was hardened in three priority groups:
+
+- **P0 correctness and isolation:** authorize the published Virtual Model against
+  the authenticated Project/API Key, bind sessions to the authenticated namespace,
+  and publish the prefix plus model binding atomically with Redis Lua.
+- **P1 operational safety:** replace blocking Redis `KEYS` cleanup with cursor-based
+  `SCAN`, support environment-specific Redis key prefixes, and preserve safe
+  cleanup across expiry and deletion.
+- **P2 operability and protection:** add configurable idle/absolute TTLs, prefix/
+  tail/assembled-size limits, Virtual Model ID validation, bounded Warm metrics,
+  an authenticated metrics endpoint, and a Redis integration test in CI.
+
+The implementation was verified locally with a real Redis server and in Railway
+with Virtual Model `fusion`: a publish succeeded, SmartGate was redeployed, a
+real post-redeploy delta returned a normal model response, and the test session
+was deleted successfully.
+
+### 1.2 Responsibility versus implementation status
 
 This specification defines a contract between three independently evolving
 components. The responsibility matrix is normative even when a component does
@@ -528,10 +547,11 @@ invalidate/release operation for `(session_id, epoch)`.
 | Streaming | Consumes response | Preserves proxy behavior | Parses/renders protocol stream |
 | KV continuation | Supplies session identifiers | May select affinity | Owns KV lifecycle and invalidate/release |
 
-## 12. Current compatibility gaps
+## 12. Client compatibility gaps and SmartGate status
 
-This document is the target SmartGate Warm baseline, not a claim that the current
-Zene client or reference stub already satisfies every rule.
+The SmartGate Warm MVP is implemented. The remaining items in this section are
+primarily Zene client responsibilities or future inference-engine capabilities;
+they should not be confused with missing Redis persistence in SmartGate.
 
 ### 12.1 Zene client work
 
@@ -546,21 +566,28 @@ Zene must still add or verify:
 - provide stable request IDs if request-level retry correlation is required;
 - keep header and body context values identical when both are sent.
 
-### 12.2 SmartGate and reference-stub work
+### 12.2 SmartGate implementation status
 
-SmartGate or the reference implementation must still add or verify:
+The SmartGate implementation now provides the following baseline:
 
 - exact `tail_start == stored.message_count` validation;
-- idempotent publish and `STALE_EPOCH` / `EPOCH_CONFLICT` responses;
-- structured error codes and retry guidance;
-- namespace isolation and ownership checks;
-- durable-write-before-2xx publish semantics;
-- `503 PUBLISH_UNAVAILABLE` for failed or uncertain storage;
-- no upstream call after context validation failure;
-- hash v1 compatibility vectors and explicit version handling.
+- monotonic, idempotent publish with `STALE_EPOCH` and `EPOCH_CONFLICT` handling;
+- structured JSON Warm errors with stable codes and retryability;
+- namespace isolation by authenticated Project, API Key, and session ID;
+- publish-time authorization of the requested Virtual Model;
+- durable-write-before-2xx semantics for the configured store;
+- `503 PUBLISH_UNAVAILABLE` for storage or authorization-store failures;
+- validation before UniGateway/upstream dispatch;
+- v1 prefix fingerprint calculation and verification;
+- atomic Redis prefix and Virtual Model binding publication through Lua;
+- Redis cleanup using cursor-based `SCAN`, not blocking `KEYS`;
+- configurable TTL, size limits, key prefixes, and protected operational metrics;
+- CI coverage using a Redis 7 service and the cross-store-instance persistence test.
 
-These gaps do not change the protocol boundary. They identify the work required
-to make the target behavior reliable in production.
+Remaining work is outside this SmartGate Warm MVP hardening scope: Zene client
+fallback state, Prometheus/OpenTelemetry export, capacity quotas per Project/API
+Key, and inference-engine KV continuation. These are follow-up capabilities,
+not prerequisites for Redis-backed prefix persistence.
 
 ## 13. SmartGate Warm configuration
 
@@ -592,13 +619,55 @@ Warm operational counters are available from the authenticated
 IDs, API keys, or arbitrary model names. Redis binding cleanup uses cursor-based
 `SCAN`, not blocking `KEYS`. Prefix publish and Virtual Model binding publication
 use one Redis Lua operation, so an accepted Redis publish cannot expose a new
-prefix with an old binding.
+prefix with an old binding. Redis keys are tenant-qualified and can be isolated
+between environments with `SMARTGATE_WARM_REDIS_KEY_PREFIX`.
 SmartGate does not trim or rewrite oversized messages; it rejects them so Zene
 can compact and publish a new epoch.
 
+### 13.1 Recommended production configuration
+
+For a shared Railway deployment, configure Redis on the SmartGate service and
+keep the same values across replicas and redeploys:
+
+```text
+REDIS_URL=${{Redis.REDIS_URL}}
+SMARTGATE_WARM_REDIS_KEY_PREFIX=smartgate:production:warm:
+SMARTGATE_WARM_IDLE_TTL_SECS=3600
+SMARTGATE_WARM_MAX_LIFETIME_SECS=86400
+SMARTGATE_WARM_CLEANUP_INTERVAL_SECS=60
+```
+
+Use a different key prefix for staging. Do not delete or recreate the Redis
+service when redeploying SmartGate. Size limits should be selected from the
+client's expected prefix and delta sizes rather than copied blindly.
+
+### 13.2 Redeploy acceptance test
+
+The persistence test must use a new session and the same authenticated namespace
+before and after a SmartGate-only redeploy:
+
+1. Publish a complete prefix with `virtual_model` and record `prefix_hash`.
+2. Optionally verify one delta before redeploy.
+3. Redeploy only SmartGate; keep the Redis service and key prefix unchanged.
+4. Send a real delta using the same `session_id`, `context_epoch`, `prefix_hash`,
+   `tail_start`, API key, and Virtual Model.
+5. Expect a successful upstream response, then delete the test session.
+
+A successful post-redeploy delta proves that both the prefix and the Virtual
+Model binding were recovered from Redis by the new SmartGate process. A `400`
+from a malformed context or a `404` for a session created by an old deployment
+is not sufficient evidence; record the publish result and request fields before
+classifying a persistence failure.
+
+The current production verification completed this sequence with Virtual Model
+`fusion`: publish returned `200`, SmartGate was redeployed, the real delta
+returned `200` with a normal model response, and cleanup returned `204`. The
+local Redis integration test also verified recovery by constructing a new
+`WarmStore` instance against the same Redis data.
+
 ## 14. Implementation order and acceptance criteria
 
-### Phase 1: Warm protocol MVP
+### Phase 1: Warm protocol MVP — implemented
 
 - publish and delete endpoints;
 - in-memory or shared prefix store;
@@ -610,7 +679,7 @@ can compact and publish a new epoch.
 - no upstream call on context validation errors;
 - Zene full fallback after publish or delta context failure.
 
-### Phase 2: Reliability and isolation
+### Phase 2: Reliability and isolation — implemented for SmartGate
 
 - atomic monotonic publish;
 - idempotent retries;
@@ -620,7 +689,7 @@ can compact and publish a new epoch.
 - shared store or documented single-replica affinity;
 - stable structured errors.
 
-### Phase 3: Cache and KV enhancements
+### Phase 3: Cache and KV enhancements — future work
 
 - cached and uncached token reporting;
 - cache-aware pricing and routing;
@@ -629,8 +698,7 @@ can compact and publish a new epoch.
 - inference-engine KV continuation;
 - epoch invalidation and session close propagation.
 
-The implementation is complete for the Warm MVP only when all of the following
-are true:
+SmartGate's implemented Warm MVP satisfies the following acceptance criteria:
 
 1. A successful publish is immediately usable by delta chat.
 2. A failed publish causes Zene to use full delivery.

@@ -1,5 +1,5 @@
 # Integrations
 
 - [Harness & OpenAI-compatible clients](./harness.md)
-- [Zene Warm inference gateway protocol](./zene-warm-protocol.md) (optional Redis persistence via `unigateway-session-redis` 2.14)
+- [Zene Warm inference gateway protocol](./zene-warm-protocol.md) (implemented Redis persistence, atomic binding, TTL/limits, metrics, and redeploy verification)
 - [Codex + XGate setup](./codex.md)
