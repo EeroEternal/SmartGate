@@ -15,5 +15,6 @@ pub mod saas;
 pub mod server;
 pub mod sync;
 pub mod usage;
+pub mod warm;
 
 pub use config::Config;

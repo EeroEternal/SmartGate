@@ -107,6 +107,7 @@ pub async fn sync_all_pools(
                     },
                     enabled: r.enabled,
                     max_concurrency: None,
+                    forward_metadata_as_headers: None,
                     capabilities: EndpointCapabilities::default(),
                     metadata: HashMap::from([
                         ("account_id".to_string(), r.account_id.clone()),
@@ -125,6 +126,7 @@ pub async fn sync_all_pools(
             endpoints: unigateway_endpoints,
             load_balancing,
             retry_policy: RetryPolicy::default(),
+            forward_metadata_as_headers: None,
             metadata: HashMap::from([("strategy".to_string(), pool.strategy.clone())]),
         };
 

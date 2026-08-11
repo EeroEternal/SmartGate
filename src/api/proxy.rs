@@ -1,8 +1,9 @@
 //! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
 
-use crate::auth::AuthContext;
+use crate::api::warm::warm_error;
+use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
-use crate::models::{ModelPool, VirtualModel};
+use crate::models::ModelPool;
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
     extract_openai_prompt_text, heuristic_difficulty, request_has_tools, set_hint,
@@ -11,6 +12,10 @@ use crate::policy::{
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
+use crate::warm::{
+    install_session_gateway_context, parse_context_with_headers, strip_context, Delivery,
+    SessionKey, WarmError,
+};
 use axum::{
     extract::{Json, State},
     http::{HeaderMap, HeaderValue, StatusCode},
@@ -18,6 +23,7 @@ use axum::{
 };
 use std::sync::Arc;
 use unigateway_sdk::core::pool::ExecutionTarget;
+use unigateway_sdk::host::{HostError, HostFuture, PoolHost, PoolLookupOutcome, PoolLookupResult};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ChatProtocol {
@@ -28,22 +34,25 @@ enum ChatProtocol {
 pub async fn chat_completions(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
-    chat_proxy(state, auth, payload, ChatProtocol::OpenAi).await
+    chat_proxy(state, auth, headers, payload, ChatProtocol::OpenAi).await
 }
 
 pub async fn anthropic_messages(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
-    chat_proxy(state, auth, payload, ChatProtocol::Anthropic).await
+    chat_proxy(state, auth, headers, payload, ChatProtocol::Anthropic).await
 }
 
 async fn chat_proxy(
     state: Arc<AppState>,
     auth: AuthContext,
+    headers: HeaderMap,
     mut payload: serde_json::Value,
     protocol: ChatProtocol,
 ) -> Response {
@@ -53,25 +62,12 @@ async fn chat_proxy(
         .unwrap_or("")
         .to_string();
 
-    let virtual_model = match sqlx::query_as::<_, VirtualModel>(
-        "SELECT vm.* FROM virtual_models vm
-         JOIN model_pools mp ON mp.id = vm.pool_id
-         JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE (vm.name = $1 OR mp.name = $1) AND pmg.project_id = $2 AND vm.enabled = TRUE
-           AND (EXISTS (
-                SELECT 1 FROM api_key_model_grants akmg
-                WHERE akmg.api_key_id = $3 AND akmg.virtual_model_id = vm.id
-           ) OR NOT EXISTS (
-                SELECT 1 FROM api_key_model_grants akmg
-                WHERE akmg.api_key_id = $3
-           ))
-         ORDER BY CASE WHEN vm.name = $1 THEN 0 ELSE 1 END, vm.id
-         LIMIT 1",
+    let virtual_model = match resolve_authorized_virtual_model(
+        &state.db,
+        &requested_model,
+        &auth.project.id,
+        &auth.api_key.id,
     )
-    .bind(&requested_model)
-    .bind(&auth.project.id)
-    .bind(&auth.api_key.id)
-    .fetch_optional(&state.db)
     .await
     {
         Ok(Some(vm)) => vm,
@@ -82,8 +78,8 @@ async fn chat_proxy(
             )
                 .into_response()
         }
-        Err(e) => {
-            tracing::error!("Database error: {}", e);
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
         }
     };
@@ -99,6 +95,18 @@ async fn chat_proxy(
         .as_ref()
         .map(|p| canonicalize_strategy(&p.strategy).to_string())
         .unwrap_or_else(|| "round_robin".to_string());
+
+    let warm_context = match parse_context_with_headers(&payload, Some(&headers)) {
+        Ok(context) => context,
+        Err(error) => return warm_error(warm_status(&error), error),
+    };
+
+    if let Some(context) = warm_context.as_ref() {
+        state.warm_store.record_delta_attempt(context.delivery);
+        if context.delivery == Delivery::Full {
+            strip_context(&mut payload);
+        }
+    }
 
     // --- Control: progressive spend budget ---
     let limit = effective_daily_limit(
@@ -120,33 +128,35 @@ async fn chat_proxy(
     }
     let downshift = budget.should_downshift();
 
-    // --- Cost: context slim (message-structure tool aging; no session_id) ---
+    // --- Cost: context slim (disabled for Zene Warm snapshots) ---
     let tool_chars_before = tool_message_chars(&payload);
     let mut slimmed_chars = 0usize;
     let mut tools_touched = 0usize;
     let mut slim_dry_run = true;
-    if let Some(ref p) = pool {
-        if p.tool_trim_enabled != 0 {
-            let cfg = SlimConfig {
-                keep_recent_full: 1,
-                max_newest_chars: p.max_tool_chars.max(256) as usize,
-                max_recent_chars: (p.max_tool_chars.max(256) as usize).min(4_000),
-            };
-            let result = slim_tool_messages(payload.clone(), &cfg);
-            slimmed_chars = result.slimmed_chars;
-            tools_touched = result.tools_touched;
-            slim_dry_run = p.tool_trim_dry_run != 0;
-            if !slim_dry_run && result.modified {
-                payload = result.body;
-            } else if result.modified {
-                tracing::info!(
-                    target: "smartgate.slim",
-                    tool_chars_before,
-                    slimmed_chars,
-                    tools_touched,
-                    dry_run = true,
-                    "context slim dry-run"
-                );
+    if warm_context.is_none() {
+        if let Some(ref p) = pool {
+            if p.tool_trim_enabled != 0 {
+                let cfg = SlimConfig {
+                    keep_recent_full: 1,
+                    max_newest_chars: p.max_tool_chars.max(256) as usize,
+                    max_recent_chars: (p.max_tool_chars.max(256) as usize).min(4_000),
+                };
+                let result = slim_tool_messages(payload.clone(), &cfg);
+                slimmed_chars = result.slimmed_chars;
+                tools_touched = result.tools_touched;
+                slim_dry_run = p.tool_trim_dry_run != 0;
+                if !slim_dry_run && result.modified {
+                    payload = result.body;
+                } else if result.modified {
+                    tracing::info!(
+                        target: "smartgate.slim",
+                        tool_chars_before,
+                        slimmed_chars,
+                        tools_touched,
+                        dry_run = true,
+                        "context slim dry-run"
+                    );
+                }
             }
         }
     }
@@ -184,7 +194,7 @@ async fn chat_proxy(
             "slimmed_chars": slimmed_chars,
             "tools_touched": tools_touched,
             "dry_run": slim_dry_run,
-            "session_id_required": false,
+            "session_id_required": warm_context.is_some(),
         },
     });
 
@@ -235,22 +245,50 @@ async fn chat_proxy(
 
     proxy_request
         .metadata
-        .insert("org_id".to_string(), auth.project.org_id);
+        .insert("org_id".to_string(), auth.project.org_id.clone());
     proxy_request
         .metadata
-        .insert("project_id".to_string(), auth.project.id);
+        .insert("project_id".to_string(), auth.project.id.clone());
     proxy_request
         .metadata
-        .insert("key_id".to_string(), auth.api_key.id);
+        .insert("key_id".to_string(), auth.api_key.id.clone());
     proxy_request
         .metadata
-        .insert("virtual_model_id".to_string(), virtual_model.id);
+        .insert("virtual_model_id".to_string(), virtual_model.id.clone());
     proxy_request
         .metadata
         .insert("pool_id".to_string(), virtual_model.pool_id.clone());
     proxy_request
         .metadata
         .insert("routing_strategy".to_string(), strategy);
+    if let Some(context) = warm_context.as_ref() {
+        proxy_request.metadata.insert(
+            "zene_session_id".to_string(),
+            context.session_id.clone().unwrap_or_default(),
+        );
+        proxy_request.metadata.insert(
+            "zene_delivery".to_string(),
+            match context.delivery {
+                Delivery::Full => "full".to_string(),
+                Delivery::Delta => "delta".to_string(),
+            },
+        );
+        if let Some(epoch) = context.epoch {
+            proxy_request
+                .metadata
+                .insert("zene_context_epoch".to_string(), epoch.to_string());
+        }
+        if let Some(prefix_hash) = context.prefix_hash.clone() {
+            proxy_request
+                .metadata
+                .insert("zene_prefix_hash".to_string(), prefix_hash);
+        }
+        if let Some(request_id) = context.request_id.clone() {
+            proxy_request
+                .metadata
+                .insert("zene_request_id".to_string(), request_id);
+        }
+    }
     proxy_request
         .metadata
         .insert("routing_decision".to_string(), decision.to_string());
@@ -273,18 +311,54 @@ async fn chat_proxy(
             .insert("budget_downshift".to_string(), "1".to_string());
     }
 
-    let target = ExecutionTarget::Pool {
-        pool_id: virtual_model.pool_id,
+    let warm_key = warm_context.as_ref().and_then(|context| {
+        context.session_id.clone().map(|session_id| SessionKey {
+            project_id: auth.project.id.clone(),
+            api_key_id: auth.api_key.id.clone(),
+            session_id,
+        })
+    });
+    if let Err(error) = install_session_gateway_context(&mut proxy_request, warm_context.as_ref()) {
+        return warm_error(warm_status(&error), error);
+    }
+    if let Some(key) = warm_key.as_ref() {
+        if let Err(error) = state
+            .warm_store
+            .validate_virtual_model(key, Some(&virtual_model.id))
+        {
+            return warm_error(warm_status(&error), error);
+        }
+    }
+    let middleware = warm_key
+        .as_ref()
+        .map(|key| state.warm_store.host_middleware(key));
+    let pool_host = SmartGatePoolHost {
+        engine: state.engine.as_ref(),
     };
-
-    match state.engine.proxy_chat(proxy_request, target).await {
-        Ok(session) => {
+    let host_context =
+        unigateway_sdk::host::HostContext::from_parts(state.engine.as_ref(), &pool_host);
+    let request = unigateway_sdk::host::HostRequest::Chat(proxy_request);
+    let host_protocol = match protocol {
+        ChatProtocol::OpenAi => unigateway_sdk::host::HostProtocol::OpenAiChat,
+        ChatProtocol::Anthropic => unigateway_sdk::host::HostProtocol::AnthropicMessages,
+    };
+    let dispatch = unigateway_sdk::host::dispatch_request_with_middleware(
+        &host_context,
+        unigateway_sdk::host::HostDispatchTarget::Service(&virtual_model.pool_id),
+        host_protocol,
+        None,
+        request,
+        middleware.as_ref(),
+    )
+    .await;
+    match dispatch {
+        Ok(unigateway_sdk::host::HostDispatchOutcome::Response(response)) => {
             permit.disarm();
-            let response = if protocol == ChatProtocol::Anthropic {
-                unigateway_sdk::protocol::render_anthropic_chat_session(session)
-            } else {
-                unigateway_sdk::protocol::render_openai_chat_session(session)
-            };
+            if let Some(context) = warm_context.as_ref() {
+                if context.delivery == Delivery::Delta {
+                    state.warm_store.record_delta_result(true);
+                }
+            }
             let mut resp = protocol_response_to_axum(response);
             for (name, value) in budget_headers(&budget, spent, limit) {
                 if let Some(name) = name {
@@ -303,9 +377,19 @@ async fn chat_proxy(
             }
             resp
         }
+        Ok(unigateway_sdk::host::HostDispatchOutcome::PoolNotFound) => {
+            (StatusCode::NOT_FOUND, "Model pool not found").into_response()
+        }
+        Ok(_) => (StatusCode::BAD_GATEWAY, "Unsupported host dispatch outcome").into_response(),
         Err(e) => {
+            if warm_context
+                .as_ref()
+                .is_some_and(|context| context.delivery == Delivery::Delta)
+            {
+                state.warm_store.record_delta_result(false);
+            }
             tracing::error!("Proxy error: {}", e);
-            (StatusCode::BAD_GATEWAY, format!("Upstream error: {}", e)).into_response()
+            host_error_response(e)
         }
     }
 }
@@ -321,25 +405,12 @@ pub async fn responses(
         .unwrap_or("")
         .to_string();
 
-    let virtual_model = match sqlx::query_as::<_, VirtualModel>(
-        "SELECT vm.* FROM virtual_models vm
-         JOIN model_pools mp ON mp.id = vm.pool_id
-         JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE (vm.name = $1 OR mp.name = $1) AND pmg.project_id = $2 AND vm.enabled = TRUE
-           AND (EXISTS (
-                SELECT 1 FROM api_key_model_grants akmg
-                WHERE akmg.api_key_id = $3 AND akmg.virtual_model_id = vm.id
-           ) OR NOT EXISTS (
-                SELECT 1 FROM api_key_model_grants akmg
-                WHERE akmg.api_key_id = $3
-           ))
-         ORDER BY CASE WHEN vm.name = $1 THEN 0 ELSE 1 END, vm.id
-         LIMIT 1",
+    let virtual_model = match resolve_authorized_virtual_model(
+        &state.db,
+        &requested_model,
+        &auth.project.id,
+        &auth.api_key.id,
     )
-    .bind(&requested_model)
-    .bind(&auth.project.id)
-    .bind(&auth.api_key.id)
-    .fetch_optional(&state.db)
     .await
     {
         Ok(Some(model)) => model,
@@ -502,6 +573,98 @@ pub async fn responses(
             )
                 .into_response()
         }
+    }
+}
+
+struct SmartGatePoolHost<'a> {
+    engine: &'a unigateway_sdk::core::UniGatewayEngine,
+}
+
+impl PoolHost for SmartGatePoolHost<'_> {
+    fn pool_for_service<'a>(
+        &'a self,
+        service_id: &'a str,
+    ) -> HostFuture<'a, PoolLookupResult<PoolLookupOutcome>> {
+        Box::pin(async move {
+            Ok(self
+                .engine
+                .get_pool(service_id)
+                .await
+                .map(PoolLookupOutcome::Found)
+                .unwrap_or(PoolLookupOutcome::NotFound))
+        })
+    }
+}
+
+fn host_error_response(error: HostError) -> Response {
+    match error {
+        HostError::CoreInvalidRequest(message) => {
+            if let Some(warm) = warm_error_from_message(&message) {
+                return warm_error(warm_status(&warm), warm);
+            }
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Invalid request: {message}"),
+            )
+                .into_response()
+        }
+        HostError::CorePoolNotFound(_) | HostError::CoreEndpointNotFound(_) => {
+            (StatusCode::NOT_FOUND, error.to_string()).into_response()
+        }
+        _ => (StatusCode::BAD_GATEWAY, format!("Upstream error: {error}")).into_response(),
+    }
+}
+
+fn warm_error_from_message(message: &str) -> Option<WarmError> {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("session not found") {
+        Some(WarmError::SessionNotFound)
+    } else if lower.contains("session expired") {
+        Some(WarmError::SessionExpired)
+    } else if lower.contains("epoch mismatch") {
+        Some(WarmError::EpochMismatch)
+    } else if lower.contains("fingerprint mismatch") {
+        Some(WarmError::PrefixHashMismatch)
+    } else if lower.contains("tail_start mismatch") {
+        let expected = parse_error_number(&lower, "expected ").unwrap_or_default();
+        let actual = parse_error_number(&lower, "got ").unwrap_or_default();
+        Some(WarmError::TailStartMismatch { expected, actual })
+    } else if lower.contains("tail too large") {
+        Some(WarmError::TailTooLarge)
+    } else if lower.contains("assembled request too large") || lower.contains("assembled too large")
+    {
+        Some(WarmError::AssembledTooLarge)
+    } else {
+        None
+    }
+}
+
+fn parse_error_number(message: &str, marker: &str) -> Option<usize> {
+    let start = message.find(marker)? + marker.len();
+    let digits = message[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>();
+    digits.parse().ok()
+}
+
+fn warm_status(error: &WarmError) -> StatusCode {
+    match error {
+        WarmError::InvalidContext(_) | WarmError::InvalidPublish(_) => StatusCode::BAD_REQUEST,
+        WarmError::SessionNotFound | WarmError::SessionExpired => StatusCode::NOT_FOUND,
+        WarmError::StoreUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+        WarmError::PrefixTooLarge | WarmError::TailTooLarge | WarmError::AssembledTooLarge => {
+            StatusCode::PAYLOAD_TOO_LARGE
+        }
+        WarmError::VirtualModelUnauthorized | WarmError::VirtualModelRequired => {
+            StatusCode::FORBIDDEN
+        }
+        WarmError::EpochConflict
+        | WarmError::StaleEpoch
+        | WarmError::EpochMismatch
+        | WarmError::PrefixHashMismatch
+        | WarmError::TailStartMismatch { .. }
+        | WarmError::VirtualModelMismatch => StatusCode::CONFLICT,
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
 use crate::pricing::EndpointProfile;
 use crate::quota::QuotaLimiter;
+use crate::warm::{WarmConfig, WarmStore};
 use dashmap::DashMap;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -16,6 +17,7 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
     pub resend_api_key: Option<String>,
     pub resend_from_email: Option<String>,
+    pub warm: WarmConfig,
 }
 
 #[derive(Clone)]
@@ -28,6 +30,7 @@ pub struct AppState {
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
     pub quotas: Arc<QuotaLimiter>,
     pub engine: Arc<UniGatewayEngine>,
+    pub warm_store: Arc<WarmStore>,
 }
 
 impl Config {
@@ -63,6 +66,7 @@ impl Config {
             cors_allowed_origins,
             resend_api_key: std::env::var("RESEND_API_KEY").ok(),
             resend_from_email: std::env::var("RESEND_FROM_EMAIL").ok(),
+            warm: WarmConfig::from_env()?,
         })
     }
 }

@@ -16,6 +16,16 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -41,6 +51,11 @@ jobs:
 
       - name: Run Rust library tests
         run: cargo test --locked --lib
+
+      - name: Run Redis Warm integration test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/
+        run: cargo test --locked --lib redis_persists_virtual_model_binding_across_store_instances -- --ignored
 
   frontend:
     name: Frontend build

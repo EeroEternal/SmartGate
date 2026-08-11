@@ -1,3 +1,4 @@
+use crate::config::AppState;
 use axum::{
     extract::{Request, State},
     http::StatusCode,
@@ -5,7 +6,6 @@ use axum::{
     response::Response,
 };
 use std::sync::Arc;
-use crate::config::AppState;
 
 pub async fn admin_auth_middleware(
     State(state): State<Arc<AppState>>,

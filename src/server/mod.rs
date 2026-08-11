@@ -4,7 +4,7 @@ use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
 use crate::usage::SmartGateHooks;
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use dashmap::DashMap;
@@ -53,6 +53,29 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
     crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles).await?;
 
+    let warm_store = Arc::new(
+        crate::warm::WarmStore::try_with_config(&config.warm)
+            .map_err(|error| anyhow::anyhow!("failed to initialize Warm store: {error}"))?,
+    );
+    if let Some(interval) = config.warm.cleanup_interval() {
+        let cleanup_store = warm_store.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            loop {
+                ticker.tick().await;
+                match cleanup_store.purge_expired() {
+                    Ok(removed) if removed > 0 => {
+                        tracing::debug!(removed, "purged expired Warm sessions");
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        tracing::warn!(error = %error.message(), "failed to purge expired Warm sessions");
+                    }
+                }
+            }
+        });
+    }
+
     let app_state = Arc::new(AppState {
         config: config.clone(),
         db,
@@ -62,6 +85,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         profiles,
         quotas,
         engine,
+        warm_store,
     });
 
     let app = Router::new()
@@ -80,6 +104,15 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             "/v1/chat/completions",
             post(crate::api::proxy::chat_completions),
         )
+        .route(
+            "/v1/zene/sessions/:session_id/publish",
+            post(crate::api::warm::publish),
+        )
+        .route(
+            "/v1/zene/sessions/:session_id",
+            delete(crate::api::warm::delete_session),
+        )
+        .route("/v1/zene/metrics", get(crate::api::warm::metrics))
         .route("/v1/messages", post(crate::api::proxy::anthropic_messages))
         .route("/v1/responses", post(crate::api::proxy::responses))
         .layer(
@@ -104,6 +137,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     axum::http::header::AUTHORIZATION,
                     axum::http::header::CONTENT_TYPE,
                     axum::http::header::ORIGIN,
+                    "X-Zene-Session-Id".parse().unwrap(),
+                    "X-Zene-Context-Epoch".parse().unwrap(),
+                    "X-Zene-Context-Delivery".parse().unwrap(),
+                    "X-Zene-Prefix-Hash".parse().unwrap(),
+                    "X-Zene-Tail-Start".parse().unwrap(),
+                    "X-Zene-Request-Id".parse().unwrap(),
                 ]),
         )
         .layer(TraceLayer::new_for_http())
