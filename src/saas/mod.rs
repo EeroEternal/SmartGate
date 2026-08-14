@@ -20,6 +20,7 @@ use crate::{
     auth::hash_token,
     config::AppState,
     policy::{evaluate_budget, BudgetOutcome},
+    routing::canonicalize_strategy,
 };
 
 const SESSION_COOKIE: &str = "smartgate_session";
@@ -101,6 +102,11 @@ struct ModelServiceRequest {
     capability_score: Option<f64>,
     supports_tools: Option<bool>,
     context_length: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateModelServiceRequest {
+    strategy: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -215,7 +221,9 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/model-services/:id",
-            get(get_model_service).delete(delete_model_service),
+            get(get_model_service)
+                .patch(update_model_service)
+                .delete(delete_model_service),
         )
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
@@ -694,7 +702,13 @@ async fn create_model_service(
     let model_id = Uuid::new_v4().to_string();
     // The client-facing model is always the model service name.
     let public_model = service_name.clone();
-    let strategy = input.strategy.unwrap_or_else(|| "cost_aware".to_string());
+    let strategy = saas_strategy(
+        input
+            .strategy
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("cost_aware"),
+    )?;
     let mut tx = state.db.begin().await.map_err(db_error)?;
     let mut provider_types = Vec::with_capacity(endpoints.len());
 
@@ -871,6 +885,49 @@ async fn get_model_service(
         "endpoint_count": endpoint_count,
         "endpoints": endpoint_values,
         "status": if endpoint_count == 0 { "draft" } else { "active" },
+    }))))
+}
+
+async fn update_model_service(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Path(model_id): Path<String>,
+    Json(input): Json<UpdateModelServiceRequest>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let strategy = saas_strategy(&input.strategy)?;
+    let pool: Option<(String,)> = sqlx::query_as(
+        "SELECT mp.id FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
+             SELECT 1 FROM project_model_grants g
+             WHERE g.virtual_model_id = vm.id AND g.project_id = $3
+         )",
+    )
+    .bind(&model_id)
+    .bind(&ctx.org_id)
+    .bind(&ctx.project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    let Some((pool_id,)) = pool else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Model service not found")),
+        ));
+    };
+    sqlx::query(
+        "UPDATE model_pools SET strategy = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    )
+    .bind(&strategy)
+    .bind(&pool_id)
+    .execute(&state.db)
+    .await
+    .map_err(db_error)?;
+    sync(&state).await;
+    Ok(Json(ApiResponse::success(json!({
+        "id": model_id,
+        "strategy": strategy,
+        "updated": true
     }))))
 }
 
@@ -2007,9 +2064,30 @@ fn range_since(
     }
 }
 
+const SAAS_STRATEGIES: &[&str] = &[
+    "cost_aware",
+    "capability_aware",
+    "load_aware",
+    "round_robin",
+];
+
+fn saas_strategy(raw: &str) -> Result<String, (StatusCode, Json<ApiResponse<()>>)> {
+    let canonical = canonicalize_strategy(raw.trim());
+    if SAAS_STRATEGIES.contains(&canonical) {
+        Ok(canonical.to_string())
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Unsupported routing strategy")),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{calculate_savings, validate_verification_code, verification_code_hash};
+    use super::{
+        calculate_savings, saas_strategy, validate_verification_code, verification_code_hash,
+    };
 
     #[test]
     fn verification_code_hash_is_bound_to_email() {
@@ -2035,6 +2113,16 @@ mod tests {
         let (baseline, savings) = calculate_savings(1_000_000, 100_000, 4_000, 1.0, 2.0, 3.0);
         assert!((baseline - 2.302).abs() < 1e-9);
         assert!((savings - 1.302).abs() < 1e-9);
+    }
+
+    #[test]
+    fn saas_strategy_accepts_canonical_and_alias_names() {
+        assert_eq!(saas_strategy("cost_aware").unwrap(), "cost_aware");
+        assert_eq!(saas_strategy("capability").unwrap(), "capability_aware");
+        assert_eq!(saas_strategy("lowest_price").unwrap(), "cost_aware");
+        assert_eq!(saas_strategy("round_robin").unwrap(), "round_robin");
+        assert!(saas_strategy("priority").is_err());
+        assert!(saas_strategy("").is_err());
     }
 }
 
