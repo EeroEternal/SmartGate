@@ -15,6 +15,8 @@ interface Pool {
   id: string
   name: string
   strategy: string
+  session_affinity_enabled: number
+  session_affinity_ttl_secs: number
 }
 
 interface PoolEndpoint {
@@ -43,6 +45,9 @@ export default function PoolDetails() {
   const [priority, setPriority] = useState('1')
   const [weight, setWeight] = useState('1')
   const [binding, setBinding] = useState(false)
+  const [affinityEnabled, setAffinityEnabled] = useState(true)
+  const [affinityTtl, setAffinityTtl] = useState('3600')
+  const [savingAffinity, setSavingAffinity] = useState(false)
 
   useEffect(() => {
     fetchPool()
@@ -53,7 +58,29 @@ export default function PoolDetails() {
   const fetchPool = async () => {
     const data = await adminFetch('/api/admin/pools')
     if (data.success) {
-      setPool(data.data.find((p: Pool) => p.id === id) || null)
+      const found = data.data.find((p: Pool) => p.id === id) || null
+      setPool(found)
+      if (found) {
+        setAffinityEnabled(found.session_affinity_enabled !== 0)
+        setAffinityTtl(String(found.session_affinity_ttl_secs ?? 3600))
+      }
+    }
+  }
+
+  const saveAffinity = async () => {
+    if (!id) return
+    setSavingAffinity(true)
+    try {
+      const data = await adminFetch(`/api/admin/pools/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          session_affinity_enabled: affinityEnabled,
+          session_affinity_ttl_secs: parseInt(affinityTtl, 10) || 3600,
+        }),
+      })
+      if (data.success) await fetchPool()
+    } finally {
+      setSavingAffinity(false)
     }
   }
 
@@ -131,6 +158,43 @@ export default function PoolDetails() {
             <Plus className="w-4 h-4" /> Bind Endpoint
           </button>
         </div>
+      </div>
+
+      <div className="bg-white border border-zinc-200 rounded-lg shadow-sm p-6 space-y-4">
+        <div>
+          <h3 className="font-bold text-zinc-900">Session affinity (warming)</h3>
+          <p className="text-sm text-zinc-500 mt-1">
+            Sticky-route requests with the same session ID to one endpoint so provider prompt cache can warm up.
+            Requires at least two endpoints and client headers such as X-SmartGate-Session-Id.
+          </p>
+        </div>
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={affinityEnabled}
+            onChange={(e) => setAffinityEnabled(e.target.checked)}
+            className="rounded border-zinc-300"
+          />
+          Enable session affinity
+        </label>
+        <div className="max-w-xs">
+          <label className="block text-sm font-medium text-zinc-700 mb-1">TTL (seconds)</label>
+          <input
+            type="number"
+            min={60}
+            className="w-full bg-white border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+            value={affinityTtl}
+            onChange={(e) => setAffinityTtl(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={saveAffinity}
+          disabled={savingAffinity}
+          className="px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800 disabled:opacity-50"
+        >
+          {savingAffinity ? 'Saving…' : 'Save affinity settings'}
+        </button>
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">

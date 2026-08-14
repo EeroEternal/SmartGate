@@ -119,7 +119,7 @@ pub async fn sync_all_pools(
             })
             .collect();
 
-        let load_balancing = map_strategy(&pool.strategy);
+        let load_balancing = map_strategy(&pool.strategy, pool.session_affinity_enabled != 0);
 
         let provider_pool = ProviderPool {
             pool_id: pool.id.clone(),
@@ -148,10 +148,10 @@ pub async fn sync_all_pools_from_state(
     sync_all_pools(engine.as_ref(), db, pools, pool_members, profiles).await
 }
 
-fn map_strategy(strategy: &str) -> LoadBalancingStrategy {
+fn map_strategy(strategy: &str, session_affinity_enabled: bool) -> LoadBalancingStrategy {
     use crate::routing::{canonicalize_strategy, uses_score_order};
     let s = canonicalize_strategy(strategy);
-    if uses_score_order(s) {
+    if session_affinity_enabled || uses_score_order(s) {
         return LoadBalancingStrategy::ScoreOrdered;
     }
     match s {

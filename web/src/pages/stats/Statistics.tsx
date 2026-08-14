@@ -21,6 +21,26 @@ interface BreakdownRow {
   metrics: Metrics
 }
 
+interface WarmingStats {
+  window_days: number
+  sessions_with_id: number
+  requests_with_session: number
+  affinity: { applied_count: number; hit_count: number; hit_rate: number }
+  latency: {
+    turn1_avg_ms: number
+    turn1_avg_ttft_ms: number
+    turn1_count: number
+    turn2plus_avg_ms: number
+    turn2plus_avg_ttft_ms: number
+    turn2plus_count: number
+    lift_pct: number
+  }
+  cache: {
+    turn2plus_avg_cached_tokens: number
+    cached_token_rate: number
+  }
+}
+
 interface Stats {
   total_tokens: number
   avg_latency: number
@@ -100,17 +120,29 @@ function BreakdownTable({ title, rows, value }: { title: string; rows: Breakdown
 export default function Statistics() {
   const [range, setRange] = useState<{ id: string | number; name: string }>(RANGE_OPTIONS[1])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [warming, setWarming] = useState<WarmingStats | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const warmingDays = range.id === '24h' ? 1 : range.id === '7d' ? 7 : range.id === '30d' ? 30 : 90
 
   useEffect(() => {
     setLoading(true)
-    adminFetch(`/api/admin/stats?range=${range.id}`)
-      .then((data) => {
-        if (data.success) setStats(data.data)
+    Promise.all([
+      adminFetch(`/api/admin/stats?range=${range.id}`),
+      adminFetch(`/api/admin/stats/warming?days=${warmingDays}`),
+    ])
+      .then(([statsData, warmingData]) => {
+        if (statsData.success) setStats(statsData.data)
+        else setStats(null)
+        if (warmingData.success) setWarming(warmingData.data)
+        else setWarming(null)
       })
-      .catch(() => setStats(null))
+      .catch(() => {
+        setStats(null)
+        setWarming(null)
+      })
       .finally(() => setLoading(false))
-  }, [range.id])
+  }, [range.id, warmingDays])
 
   const summary = stats?.summary
   const trendMax = useMemo(
@@ -141,6 +173,23 @@ export default function Statistics() {
           <MetricCard label="Total tokens" value={number(summary?.total_tokens)} detail={<><span className="block">{number(summary?.prompt_tokens)} input</span><span className="block">{number(summary?.completion_tokens)} output</span></>} />
           <MetricCard label="Average latency" value={`${Math.round(summary?.average_latency_ms ?? 0)} ms`} detail={`P95 ${Math.round(stats.latency?.p95_ms ?? 0)} ms`} />
         </div>
+
+        {warming && (
+          <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4">
+            <div>
+              <h3 className="font-bold">Gateway warming</h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Session affinity and prompt-cache signals over the last {warming.window_days} day(s).
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <MetricCard label="Sessions with ID" value={number(warming.sessions_with_id)} detail={`${number(warming.requests_with_session)} requests`} />
+              <MetricCard label="Affinity hit rate" value={percent(warming.affinity.hit_rate)} detail={`${number(warming.affinity.hit_count)} / ${number(warming.affinity.applied_count)} applied`} />
+              <MetricCard label="Turn 2+ latency lift" value={`${warming.latency.lift_pct.toFixed(1)}%`} detail={`Turn1 ${Math.round(warming.latency.turn1_avg_ms)} ms → Turn2+ ${Math.round(warming.latency.turn2plus_avg_ms)} ms`} />
+              <MetricCard label="Cached token rate" value={percent(warming.cache.cached_token_rate)} detail={`Avg ${Math.round(warming.cache.turn2plus_avg_cached_tokens)} cached tokens (turn 2+)`} />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <MetricCard label="P50 latency" value={`${Math.round(stats.latency?.p50_ms ?? 0)} ms`} />

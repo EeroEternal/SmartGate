@@ -13,6 +13,9 @@ pub struct RouteHint {
     /// When true, prefer cheapest endpoints only (budget soft gate).
     pub downshift: bool,
     pub pool_id: String,
+    /// Session affinity: boost this endpoint when healthy.
+    pub affinity_enabled: bool,
+    pub sticky_endpoint_id: Option<String>,
 }
 
 static CURRENT: Lazy<RwLock<Option<RouteHint>>> = Lazy::new(|| RwLock::new(None));

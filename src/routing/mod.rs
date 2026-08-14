@@ -35,6 +35,9 @@ pub struct SmartGateFeedbackProvider {
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
 }
 
+/// Score boost so sticky endpoint wins ScoreOrdered when healthy.
+pub const AFFINITY_BOOST: f64 = 1_000_000.0;
+
 impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
     fn feedback(&self, pool_id: &str) -> RoutingFeedback {
         let mut feedback = RoutingFeedback::default();
@@ -63,6 +66,10 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
         let difficulty = hint.as_ref().map(|h| h.difficulty).unwrap_or(0.2);
         let has_tools = hint.as_ref().map(|h| h.has_tools).unwrap_or(false);
         let downshift = hint.as_ref().map(|h| h.downshift).unwrap_or(false);
+        let affinity_enabled = hint.as_ref().map(|h| h.affinity_enabled).unwrap_or(false);
+        let sticky_endpoint_id = hint
+            .as_ref()
+            .and_then(|h| h.sticky_endpoint_id.clone());
 
         let top_mu = if strategy == "capability_aware" {
             members
@@ -148,7 +155,7 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                 excluded = true;
             }
 
-            let endpoint_score = score_endpoint(
+            let mut endpoint_score = score_endpoint(
                 &strategy,
                 ScoreInput {
                     member,
@@ -164,6 +171,10 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                 },
             );
 
+            if affinity_enabled && endpoint_score.is_none() {
+                endpoint_score = Some(1.0);
+            }
+
             feedback.endpoint_signals.insert(
                 member.endpoint_id.clone(),
                 EndpointSignal {
@@ -173,6 +184,18 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                     recent_error_rate,
                 },
             );
+        }
+
+        if affinity_enabled {
+            if let Some(sticky) = sticky_endpoint_id {
+                if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
+                    if !signal.excluded {
+                        signal.score = Some(
+                            signal.score.unwrap_or(0.0) + AFFINITY_BOOST,
+                        );
+                    }
+                }
+            }
         }
 
         feedback

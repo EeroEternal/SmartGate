@@ -87,6 +87,8 @@ pub struct ModelPool {
     pub tool_trim_enabled: i32,
     pub tool_trim_dry_run: i32,
     pub max_tool_chars: i32,
+    pub session_affinity_enabled: i32,
+    pub session_affinity_ttl_secs: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -1,4 +1,5 @@
 use crate::models::EndpointMetric;
+use crate::policy::record_success;
 use crate::pricing::EndpointProfile;
 use crate::quota::QuotaLimiter;
 use crate::routing::{COOLDOWN_SECS, FAILURE_THRESHOLD};
@@ -126,6 +127,7 @@ impl GatewayHooks for SmartGateHooks {
                 .get("endpoint_id")
                 .cloned()
                 .unwrap_or_else(|| report.selected_endpoint_id.clone());
+            let selected_endpoint_id = report.selected_endpoint_id.clone();
 
             let estimated_input_tokens = report
                 .metadata
@@ -198,6 +200,39 @@ impl GatewayHooks for SmartGateHooks {
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(0);
 
+            let session_id = report.metadata.get("session_id").cloned();
+            let turn_index = report
+                .metadata
+                .get("turn_index")
+                .and_then(|s| s.parse::<i32>().ok());
+            let prefix_hash = report.metadata.get("prefix_hash").cloned();
+            let context_epoch = report
+                .metadata
+                .get("context_epoch")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(0);
+            let affinity_enabled = report.metadata.get("affinity_enabled") == Some(&"1".to_string());
+            let affinity_applied = report.metadata.get("affinity_applied") == Some(&"1".to_string());
+            let sticky_endpoint_id = report.metadata.get("sticky_endpoint_id").cloned();
+            let affinity_ttl_secs = report
+                .metadata
+                .get("affinity_ttl_secs")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(3600);
+            let affinity_hit = sticky_endpoint_id
+                .as_ref()
+                .map(|sticky| sticky == &selected_endpoint_id)
+                .unwrap_or(false);
+            let prefix_hash_u64 = prefix_hash
+                .as_ref()
+                .and_then(|h| u64::from_str_radix(h, 16).ok());
+            let ttft_ms = report
+                .stream
+                .as_ref()
+                .and_then(|s| s.ttft_ms)
+                .map(|v| v as i32);
+            let cached_input_tokens = cache_hit_tokens.unwrap_or(0) as i32;
+
             let mut metadata_values = report.metadata.clone();
             metadata_values.insert("usage_source".to_string(), usage_source.to_string());
             metadata_values.insert("usage_confidence".to_string(), usage_confidence.to_string());
@@ -211,6 +246,25 @@ impl GatewayHooks for SmartGateHooks {
             };
             let error_message = report.error_kind.map(|k| format!("{k:?}"));
 
+            if status_code == 200 {
+                if let (Some(sid), Some(pool_id)) = (
+                    session_id.as_deref(),
+                    report.metadata.get("pool_id").map(|s| s.as_str()),
+                ) {
+                    if affinity_enabled {
+                        record_success(
+                            pool_id,
+                            sid,
+                            context_epoch as u32,
+                            &selected_endpoint_id,
+                            prefix_hash_u64,
+                            affinity_hit,
+                            affinity_ttl_secs,
+                        );
+                    }
+                }
+            }
+
             let res = sqlx::query(
                 "INSERT INTO usage_logs (
                     id, org_id, project_id, key_id, virtual_model_id,
@@ -220,8 +274,10 @@ impl GatewayHooks for SmartGateHooks {
                     estimated_cost, routing_strategy, routing_decision,
                     tool_message_chars, trimmed_chars,
                     usage_source, usage_confidence, pricing_source,
-                    input_price_snapshot, output_price_snapshot, pricing_version
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)",
+                    input_price_snapshot, output_price_snapshot, pricing_version,
+                    session_id, turn_index, ttft_ms, cached_input_tokens,
+                    affinity_applied, affinity_hit, prefix_hash, context_epoch
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)",
             )
             .bind(uuid::Uuid::new_v4().to_string())
             .bind(report.metadata.get("org_id"))
@@ -255,6 +311,14 @@ impl GatewayHooks for SmartGateHooks {
             } else {
                 None
             })
+            .bind(session_id)
+            .bind(turn_index)
+            .bind(ttft_ms)
+            .bind(cached_input_tokens)
+            .bind(if affinity_applied { 1 } else { 0 })
+            .bind(if affinity_hit { 1 } else { 0 })
+            .bind(prefix_hash)
+            .bind(context_epoch)
             .execute(&db)
             .await;
 

@@ -6,9 +6,10 @@ use crate::config::AppState;
 use crate::models::ModelPool;
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
-    extract_openai_prompt_text, heuristic_difficulty, request_has_tools, set_hint,
-    slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome, HintGuard,
-    RouteHint, SlimConfig,
+    extract_context_epoch, extract_openai_prompt_text, extract_session_id, format_prefix_hash,
+    get_sticky_endpoint, heuristic_difficulty, next_turn_index, prefix_stable, request_has_tools,
+    resolve_prefix_hash, set_hint, slim_tool_messages, spent_today_for_key, tool_message_chars,
+    BudgetOutcome, HintGuard, RouteHint, SlimConfig,
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
@@ -168,6 +169,52 @@ async fn chat_proxy(
     let difficulty = heuristic_difficulty(&payload);
     let has_tools = request_has_tools(&payload);
 
+    let session_id = warm_context
+        .as_ref()
+        .and_then(|c| c.session_id.clone())
+        .or_else(|| extract_session_id(&headers, &payload));
+    let context_epoch = warm_context
+        .as_ref()
+        .and_then(|c| c.epoch)
+        .map(|e| e.max(0) as u32)
+        .unwrap_or_else(|| extract_context_epoch(&headers, &payload));
+    let pfx_hash = warm_context
+        .as_ref()
+        .and_then(|c| c.prefix_hash.as_ref())
+        .and_then(|h| u64::from_str_radix(h.trim_start_matches("0x"), 16).ok())
+        .or_else(|| resolve_prefix_hash(&headers, &payload));
+    let affinity_ttl = pool
+        .as_ref()
+        .map(|p| p.session_affinity_ttl_secs)
+        .unwrap_or(3600);
+    let member_count = state
+        .pool_members
+        .get(&virtual_model.pool_id)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let affinity_enabled = pool
+        .as_ref()
+        .map(|p| p.session_affinity_enabled != 0)
+        .unwrap_or(false)
+        && session_id.is_some()
+        && member_count > 1;
+    let sticky_endpoint_id = session_id.as_ref().and_then(|sid| {
+        get_sticky_endpoint(&virtual_model.pool_id, sid, context_epoch, affinity_ttl)
+    });
+    let affinity_applied = affinity_enabled && sticky_endpoint_id.is_some();
+    let turn_index = session_id.as_ref().map(|sid| {
+        next_turn_index(
+            &virtual_model.pool_id,
+            sid,
+            context_epoch,
+            pfx_hash,
+            affinity_ttl,
+        )
+    });
+    let is_prefix_stable = session_id.as_ref().and_then(|sid| {
+        prefix_stable(&virtual_model.pool_id, sid, context_epoch, pfx_hash)
+    });
+
     set_hint(RouteHint {
         input_tokens,
         output_tokens,
@@ -175,6 +222,8 @@ async fn chat_proxy(
         difficulty,
         downshift,
         pool_id: virtual_model.pool_id.clone(),
+        affinity_enabled,
+        sticky_endpoint_id: sticky_endpoint_id.clone(),
     });
     let _hint_guard = HintGuard;
 
@@ -195,6 +244,18 @@ async fn chat_proxy(
             "tools_touched": tools_touched,
             "dry_run": slim_dry_run,
             "session_id_required": warm_context.is_some(),
+        },
+        "warming": {
+            "session_id": session_id,
+            "context_epoch": context_epoch,
+            "turn_index": turn_index,
+            "prefix_hash": pfx_hash.map(format_prefix_hash),
+            "affinity_enabled": affinity_enabled,
+            "affinity_applied": affinity_applied,
+            "affinity_hit": false,
+            "sticky_endpoint_id": sticky_endpoint_id,
+            "member_count": member_count,
+            "prefix_stable": is_prefix_stable,
         },
     });
 
@@ -305,6 +366,40 @@ async fn chat_proxy(
     proxy_request
         .metadata
         .insert("output_tokens_est".to_string(), output_tokens.to_string());
+    if let Some(ref sid) = session_id {
+        proxy_request
+            .metadata
+            .insert("session_id".to_string(), sid.clone());
+    }
+    if let Some(turn) = turn_index {
+        proxy_request
+            .metadata
+            .insert("turn_index".to_string(), turn.to_string());
+    }
+    if let Some(hash) = pfx_hash {
+        proxy_request
+            .metadata
+            .insert("prefix_hash".to_string(), format_prefix_hash(hash));
+    }
+    proxy_request
+        .metadata
+        .insert("context_epoch".to_string(), context_epoch.to_string());
+    proxy_request.metadata.insert(
+        "affinity_enabled".to_string(),
+        if affinity_enabled { "1" } else { "0" }.to_string(),
+    );
+    proxy_request.metadata.insert(
+        "affinity_applied".to_string(),
+        if affinity_applied { "1" } else { "0" }.to_string(),
+    );
+    if let Some(ref sticky) = sticky_endpoint_id {
+        proxy_request
+            .metadata
+            .insert("sticky_endpoint_id".to_string(), sticky.clone());
+    }
+    proxy_request
+        .metadata
+        .insert("affinity_ttl_secs".to_string(), affinity_ttl.to_string());
     if downshift {
         proxy_request
             .metadata
@@ -466,6 +561,8 @@ pub async fn responses(
         difficulty,
         downshift,
         pool_id: virtual_model.pool_id.clone(),
+        affinity_enabled: false,
+        sticky_endpoint_id: None,
     });
     let _hint_guard = HintGuard;
 

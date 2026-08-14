@@ -12,9 +12,10 @@ use crate::api::models::{
     ApiResponse, CreateProviderReq, CreatePoolReq, CreateEndpointReq, CreateVirtualModelReq,
     CreateOrgReq, CreateProjectReq, CreateApiKeyReq, ApiKeyResponse,
     BindEndpointToPoolReq, GrantModelToProjectReq, UpdateProjectQuotaReq, UpdateApiKeyQuotaReq,
-    PoolEndpointView, EndpointView, VirtualModelView, ProjectGrantView, RevokeModelFromProjectReq,
+    UpdatePoolReq, PoolEndpointView, EndpointView, VirtualModelView, ProjectGrantView, RevokeModelFromProjectReq,
 };
 pub use crate::api::stats_handler::get_stats;
+pub use crate::api::warming_stats::get_warming_stats;
 
 pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
@@ -23,6 +24,7 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/endpoints", get(list_endpoints).post(create_endpoint))
         // Orchestration
         .route("/pools", get(list_pools).post(create_pool))
+        .route("/pools/:id", patch(update_pool))
         .route("/pools/bind", post(bind_endpoint_to_pool))
         .route("/pools/:id/endpoints", get(list_pool_endpoints))
         .route("/virtual-models", get(list_virtual_models).post(create_virtual_model))
@@ -37,6 +39,7 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/api-keys/:id", patch(update_api_key_quota))
         // Statistics
         .route("/stats", get(get_stats))
+        .route("/stats/warming", get(get_warming_stats))
         .route_layer(axum::middleware::from_fn_with_state(state, crate::auth::admin::admin_auth_middleware))
 }
 
@@ -117,8 +120,9 @@ async fn create_pool(
     let id = uuid::Uuid::new_v4().to_string();
     
     sqlx::query(
-        "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars)
-         VALUES ($1, $2, $3, $4, $5, $6)"
+        "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars,
+         session_affinity_enabled, session_affinity_ttl_secs)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(&id)
     .bind(&payload.name)
@@ -126,6 +130,8 @@ async fn create_pool(
     .bind(if payload.tool_trim_enabled.unwrap_or(false) { 1 } else { 0 })
     .bind(if payload.tool_trim_dry_run.unwrap_or(true) { 1 } else { 0 })
     .bind(payload.max_tool_chars.unwrap_or(8000))
+    .bind(if payload.session_affinity_enabled.unwrap_or(true) { 1 } else { 0 })
+    .bind(payload.session_affinity_ttl_secs.unwrap_or(3600))
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -149,6 +155,71 @@ async fn create_pool(
     .await;
 
     Ok(Json(ApiResponse::success(pool)))
+}
+
+async fn update_pool(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdatePoolReq>,
+) -> Result<Json<ApiResponse<ModelPool>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let existing = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+        .bind(&id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    let Some(pool) = existing else {
+        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("Pool not found"))));
+    };
+
+    let session_affinity_enabled = payload
+        .session_affinity_enabled
+        .map(|v| if v { 1 } else { 0 })
+        .unwrap_or(pool.session_affinity_enabled);
+    let session_affinity_ttl_secs = payload
+        .session_affinity_ttl_secs
+        .unwrap_or(pool.session_affinity_ttl_secs);
+    let tool_trim_enabled = payload
+        .tool_trim_enabled
+        .map(|v| if v { 1 } else { 0 })
+        .unwrap_or(pool.tool_trim_enabled);
+    let tool_trim_dry_run = payload
+        .tool_trim_dry_run
+        .map(|v| if v { 1 } else { 0 })
+        .unwrap_or(pool.tool_trim_dry_run);
+    let max_tool_chars = payload.max_tool_chars.unwrap_or(pool.max_tool_chars);
+
+    sqlx::query(
+        "UPDATE model_pools SET session_affinity_enabled = $1, session_affinity_ttl_secs = $2,
+         tool_trim_enabled = $3, tool_trim_dry_run = $4, max_tool_chars = $5,
+         updated_at = CURRENT_TIMESTAMP WHERE id = $6",
+    )
+    .bind(session_affinity_enabled)
+    .bind(session_affinity_ttl_secs)
+    .bind(tool_trim_enabled)
+    .bind(tool_trim_dry_run)
+    .bind(max_tool_chars)
+    .bind(&id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    let updated = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+        .bind(&id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+
+    let _ = crate::sync::sync_all_pools(
+        &state.engine,
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+        &state.profiles,
+    )
+    .await;
+
+    Ok(Json(ApiResponse::success(updated)))
 }
 
 // Endpoints

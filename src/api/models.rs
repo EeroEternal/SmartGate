@@ -40,6 +40,17 @@ pub struct CreatePoolReq {
     pub tool_trim_enabled: Option<bool>,
     pub tool_trim_dry_run: Option<bool>,
     pub max_tool_chars: Option<i32>,
+    pub session_affinity_enabled: Option<bool>,
+    pub session_affinity_ttl_secs: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePoolReq {
+    pub session_affinity_enabled: Option<bool>,
+    pub session_affinity_ttl_secs: Option<i32>,
+    pub tool_trim_enabled: Option<bool>,
+    pub tool_trim_dry_run: Option<bool>,
+    pub max_tool_chars: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
