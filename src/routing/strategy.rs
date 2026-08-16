@@ -6,9 +6,10 @@ use crate::pricing::EndpointProfile;
 pub const COST_RANK_INPUT_TOKENS: u32 = 1_000;
 pub const COST_RANK_OUTPUT_TOKENS: u32 = 512;
 pub const UNPRICED_SCORE: f64 = 1e-12;
-pub const CAPABILITY_THRESHOLD: f64 = 0.65;
+pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000.0;
+pub const CAPABILITY_THRESHOLD: f64 = 0.60;
 pub const CAPABILITY_MARGIN: f64 = 0.05;
-pub const HEURISTIC_DIFFICULTY_WEIGHT: f64 = 0.25;
+pub const HEURISTIC_DIFFICULTY_WEIGHT: f64 = 0.30;
 
 /// Canonical strategy names accepted on model pools.
 pub fn canonicalize(name: &str) -> &str {
@@ -105,8 +106,8 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             let mu = capability_mu(&input.profile, input.difficulty);
             let capable = mu >= CAPABILITY_THRESHOLD;
             let in_margin = mu >= (input.top_mu - CAPABILITY_MARGIN);
-            let cost_score = if input.profile.price.is_priced() {
-                1.0 / (base_cost + 1e-12)
+            let normalized_cost = if input.profile.price.is_priced() {
+                (1.0 / (base_cost + 1e-6)).clamp(0.0, 100_000.0)
             } else {
                 UNPRICED_SCORE
             };
@@ -117,7 +118,7 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             } else {
                 0.0
             };
-            Some(tier * 1_000.0 + cost_score + mu * 0.01)
+            Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + mu * 100.0)
         }
         // round_robin / random / fallback: data plane owns ordering
         _ => None,
@@ -195,5 +196,104 @@ mod tests {
     fn canonicalize_aliases() {
         assert_eq!(canonicalize("latency_based"), "load_aware");
         assert_eq!(canonicalize("lowest_price"), "cost_aware");
+    }
+
+    #[test]
+    fn capability_aware_routes_pro_on_complex_and_flash_on_simple() {
+        let m = member();
+        let flash = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 0.14,
+                output_per_1m: 0.28,
+                ..Default::default()
+            },
+            capability_score: 0.65,
+            ..Default::default()
+        };
+        let pro = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 2.5,
+                output_per_1m: 10.0,
+                ..Default::default()
+            },
+            capability_score: 0.95,
+            ..Default::default()
+        };
+
+        // 1. Complex task (difficulty = 0.70)
+        let diff_complex = 0.70;
+        let top_mu_complex = capability_mu(&pro, diff_complex);
+        let s_flash_complex = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: flash,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 2000,
+                output_tokens: 1000,
+                difficulty: diff_complex,
+                top_mu: top_mu_complex,
+            },
+        )
+        .unwrap();
+        let s_pro_complex = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: pro,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 2000,
+                output_tokens: 1000,
+                difficulty: diff_complex,
+                top_mu: top_mu_complex,
+            },
+        )
+        .unwrap();
+        // Pro wins on complex task despite being ~30x more expensive
+        assert!(s_pro_complex > s_flash_complex);
+
+        // 2. Simple task (difficulty = 0.15)
+        let diff_simple = 0.15;
+        let top_mu_simple = capability_mu(&pro, diff_simple);
+        let s_flash_simple = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: flash,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 500,
+                output_tokens: 200,
+                difficulty: diff_simple,
+                top_mu: top_mu_simple,
+            },
+        )
+        .unwrap();
+        let s_pro_simple = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: pro,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 500,
+                output_tokens: 200,
+                difficulty: diff_simple,
+                top_mu: top_mu_simple,
+            },
+        )
+        .unwrap();
+        // Flash wins on simple task because both meet capability threshold but flash is much cheaper
+        assert!(s_flash_simple > s_pro_simple);
     }
 }

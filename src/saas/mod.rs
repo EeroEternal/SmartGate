@@ -20,6 +20,7 @@ use crate::{
     auth::hash_token,
     config::AppState,
     policy::{evaluate_budget, BudgetOutcome},
+    pricing::default_capability_score,
     routing::canonicalize_strategy,
 };
 
@@ -746,7 +747,7 @@ async fn create_model_service(
             .bind(&endpoint.upstream_model_id)
             .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
             .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-            .bind(endpoint.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
+            .bind(endpoint.capability_score.unwrap_or_else(|| default_capability_score(&endpoint.upstream_model_id, None)).clamp(0.0, 1.0))
             .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
             .bind(endpoint.context_length)
             .execute(&mut *tx)
@@ -1010,7 +1011,7 @@ async fn add_model_service_endpoint(
         .bind(&endpoint.upstream_model_id)
         .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
         .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-        .bind(endpoint.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
+        .bind(endpoint.capability_score.unwrap_or_else(|| default_capability_score(&endpoint.upstream_model_id, None)).clamp(0.0, 1.0))
         .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
         .bind(endpoint.context_length)
         .execute(&mut *tx)
@@ -1188,7 +1189,7 @@ async fn update_model_service_endpoint(
         .execute(&state.db).await.map_err(db_error)?;
     sqlx::query("UPDATE endpoints SET upstream_model_id = $1, input_price_per_1m = $2, output_price_per_1m = $3, capability_score = $4, supports_tools = COALESCE($5, supports_tools), context_length = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7")
         .bind(model).bind(input.input_price_per_1m.unwrap_or(0.0)).bind(input.output_price_per_1m.unwrap_or(0.0))
-        .bind(input.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
+        .bind(input.capability_score.unwrap_or_else(|| default_capability_score(model, None)).clamp(0.0, 1.0))
         .bind(input.supports_tools.map(|value| if value { 1 } else { 0 })).bind(input.context_length).bind(&endpoint_id)
         .execute(&state.db).await.map_err(db_error)?;
     sync(&state).await;

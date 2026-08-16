@@ -1,6 +1,9 @@
 /target
 /dist
 /.env
+/web/.env
+*.env
+*.env.*
 /*.log
 /web/node_modules
 /web/dist

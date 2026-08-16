@@ -65,6 +65,45 @@ impl Default for EndpointProfile {
     }
 }
 
+/// Heuristic default capability score (0.0 - 1.0) derived from upstream model name.
+pub fn default_capability_score(model_id: &str, supports_reasoning: Option<bool>) -> f64 {
+    let lower = model_id.to_ascii_lowercase();
+    if lower.contains("r1")
+        || lower.contains("reasoner")
+        || lower.contains("o1")
+        || lower.contains("o3")
+        || lower.contains("claude-3-5-sonnet")
+        || lower.contains("claude-3-7-sonnet")
+        || lower.contains("opus")
+        || lower.contains("gpt-4.5")
+    {
+        0.96
+    } else if lower.contains("pro")
+        || lower.contains("gpt-4o")
+        || lower.contains("max")
+        || lower.contains("70b")
+        || lower.contains("72b")
+        || lower.contains("405b")
+    {
+        0.92
+    } else if supports_reasoning == Some(true) {
+        0.85
+    } else if lower.contains("flash")
+        || lower.contains("mini")
+        || lower.contains("nano")
+        || lower.contains("lite")
+        || lower.contains("8b")
+        || lower.contains("7b")
+        || lower.contains("3b")
+        || lower.contains("1.5b")
+        || lower.contains("0.5b")
+    {
+        0.65
+    } else {
+        0.70
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,5 +138,12 @@ mod tests {
         // total: 0.75
         let cost = price.calculate_cost(1_000_000, 100_000, Some(500_000));
         assert!((cost - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_default_capability_score() {
+        assert!(default_capability_score("deepseek-v4-pro", None) > default_capability_score("deepseek-v4-flash", None));
+        assert!(default_capability_score("deepseek-reasoner", None) >= 0.95);
+        assert_eq!(default_capability_score("qwen3.6-flash", None), 0.65);
     }
 }

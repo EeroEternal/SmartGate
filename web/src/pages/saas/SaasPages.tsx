@@ -200,6 +200,15 @@ function hasCatalogDetails(model: CatalogOffering | undefined) {
   return Boolean(model && (model.input_price_per_1m > 0 || model.output_price_per_1m > 0 || model.context_length || model.supports_tools || model.supports_vision || model.supports_reasoning))
 }
 
+function inferDefaultCapability(model?: CatalogOffering, modelId?: string): string {
+  const name = (model?.model || modelId || '').toLowerCase()
+  if (/r1|reasoner|o1|o3|claude-3-5-sonnet|claude-3-7-sonnet|opus|gpt-4\.5/i.test(name)) return '0.96'
+  if (/pro|gpt-4o|max|70b|72b|405b/i.test(name)) return '0.92'
+  if (model?.supports_reasoning) return '0.85'
+  if (/flash|mini|nano|lite|8b|7b|3b|1\.5b|0\.5b/i.test(name)) return '0.65'
+  return '0.70'
+}
+
 const STRATEGIES = [
   { id: 'cost_aware', name: 'Cost-first routing' },
   { id: 'capability_aware', name: 'Capability-first routing' },
@@ -422,16 +431,35 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
   const [baseUrl, setBaseUrl] = useState(endpoint.base_url)
   const [model, setModel] = useState(endpoint.model)
   const [apiKey, setApiKey] = useState('')
+  const [inputPrice, setInputPrice] = useState(endpoint.input_price_per_1m ? String(endpoint.input_price_per_1m) : '')
+  const [outputPrice, setOutputPrice] = useState(endpoint.output_price_per_1m ? String(endpoint.output_price_per_1m) : '')
+  const [capabilityScore, setCapabilityScore] = useState(String(endpoint.capability_score ?? '0.70'))
+  const [contextLength, setContextLength] = useState(endpoint.context_length ? String(endpoint.context_length) : '')
+  const [advanced, setAdvanced] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      await saasFetch(`/api/saas/model-services/${serviceId}/endpoints/${endpoint.id}`, { method: 'PATCH', body: JSON.stringify({ provider_name: providerName.trim(), provider_type: providerType, protocol, base_url: baseUrl.trim(), api_key: apiKey || undefined, upstream_model_id: model.trim(), input_price_per_1m: endpoint.input_price_per_1m, output_price_per_1m: endpoint.output_price_per_1m, capability_score: endpoint.capability_score, context_length: endpoint.context_length }) })
+      await saasFetch(`/api/saas/model-services/${serviceId}/endpoints/${endpoint.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          provider_name: providerName.trim(),
+          provider_type: providerType,
+          protocol,
+          base_url: baseUrl.trim(),
+          api_key: apiKey || undefined,
+          upstream_model_id: model.trim(),
+          input_price_per_1m: inputPrice ? Number(inputPrice) : undefined,
+          output_price_per_1m: outputPrice ? Number(outputPrice) : undefined,
+          capability_score: capabilityScore ? Number(capabilityScore) : undefined,
+          context_length: contextLength ? Number(contextLength) : undefined,
+        }),
+      })
       onSaved()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Edit provider</h2></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Field label="Provider name" value={providerName} onChange={setProviderName} placeholder="DeepSeek" /><label className="block text-sm font-medium text-zinc-700">Provider ID<input readOnly value={endpoint.provider_id} className="mt-2 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-zinc-500 outline-none" /></label></div><div className="grid gap-5 sm:grid-cols-2"><Field label="Model" value={model} onChange={setModel} placeholder="deepseek-chat" /><Select label="Protocol" options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => setProtocol(String(option.id))} /></div><Field label="Provider API base URL" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.example.com/v1" /><Field label="New Provider API key (optional)" value={apiKey} onChange={setApiKey} placeholder="Leave blank to keep the current key" type="password" /></div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Edit provider</h2></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Field label="Provider name" value={providerName} onChange={setProviderName} placeholder="DeepSeek" /><label className="block text-sm font-medium text-zinc-700">Provider ID<input readOnly value={endpoint.provider_id} className="mt-2 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-zinc-500 outline-none" /></label></div><div className="grid gap-5 sm:grid-cols-2"><Field label="Model" value={model} onChange={setModel} placeholder="deepseek-chat" /><Select label="Protocol" options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => setProtocol(String(option.id))} /></div><Field label="Provider API base URL" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.example.com/v1" /><Field required={false} label="New Provider API key (optional)" value={apiKey} onChange={setApiKey} placeholder="Leave blank to keep the current key" type="password" /><button type="button" onClick={() => setAdvanced((value) => !value)} className="text-sm text-zinc-700 hover:text-zinc-950">{advanced ? 'Hide advanced settings' : 'Price and capability settings'}</button>{advanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3 text-zinc-900"><Field required={false} label="Input $/1M" value={inputPrice} onChange={setInputPrice} placeholder="0.14" /><Field required={false} label="Output $/1M" value={outputPrice} onChange={setOutputPrice} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" /><Field required={false} label="Context length" value={contextLength} onChange={setContextLength} placeholder="128000" /></div>}</div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>
 }
 
 function AddModelModal({ catalog, providers, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
@@ -451,12 +479,12 @@ function AddModelModal({ catalog, providers, serviceId, onClose, onSaved }: { ca
   function chooseProvider(option: { id: string | number; name: string }) {
     const provider = String(option.id); const first = catalog.find((item) => item.provider_id === provider)
     const protocol = /anthropic|claude/i.test(provider) ? 'anthropic' : 'openai'
-    setDraft({ ...emptyEndpoint(), provider_type: provider, protocol, upstream_model_id: first?.model || '', base_url: first?.base_url || '', input_price_per_1m: first ? String(first.input_price_per_1m) : '', output_price_per_1m: first ? String(first.output_price_per_1m) : '', capability_score: first ? String(first.supports_reasoning ? 0.8 : 0.5) : '0.5', context_length: first?.context_length ? String(first.context_length) : '' })
+    setDraft({ ...emptyEndpoint(), provider_type: provider, protocol, upstream_model_id: first?.model || '', base_url: first?.base_url || '', input_price_per_1m: first ? String(first.input_price_per_1m) : '', output_price_per_1m: first ? String(first.output_price_per_1m) : '', capability_score: first ? inferDefaultCapability(first) : '0.70', context_length: first?.context_length ? String(first.context_length) : '' })
     setAdvanced(hasCatalogDetails(first))
   }
   function chooseModel(option: { id: string | number; name: string }) {
     const model = models.find((item) => item.model === String(option.id)); if (!model) return
-    patch({ upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: String(model.supports_reasoning ? 0.8 : 0.5), context_length: model.context_length ? String(model.context_length) : '' })
+    patch({ upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: inferDefaultCapability(model), context_length: model.context_length ? String(model.context_length) : '' })
     if (model.input_price_per_1m || model.output_price_per_1m || model.context_length || model.supports_reasoning) setAdvanced(true)
   }
   async function submit(event: FormEvent) {
@@ -513,7 +541,7 @@ function LegacyNewServicePage() {
       base_url: firstModel?.base_url || '',
       input_price_per_1m: firstModel ? String(firstModel.input_price_per_1m) : '',
       output_price_per_1m: firstModel ? String(firstModel.output_price_per_1m) : '',
-      capability_score: firstModel ? String(firstModel.supports_reasoning ? 0.8 : 0.5) : '0.5',
+      capability_score: firstModel ? inferDefaultCapability(firstModel) : '0.70',
       context_length: firstModel?.context_length ? String(firstModel.context_length) : '',
     })
     if (hasCatalogDetails(firstModel)) setAdvanced((items) => items.includes(index) ? items : [...items, index])
@@ -522,7 +550,7 @@ function LegacyNewServicePage() {
   function selectModel(index: number, option: { id: string | number; name: string }) {
     const model = catalog.find((item) => item.provider_id === endpoints[index].provider_type && item.model === String(option.id))
     if (!model) return
-    updateEndpoint(index, { upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: String(model.supports_reasoning ? 0.8 : 0.5), context_length: model.context_length ? String(model.context_length) : '' })
+    updateEndpoint(index, { upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: inferDefaultCapability(model), context_length: model.context_length ? String(model.context_length) : '' })
     if (hasCatalogDetails(model)) setAdvanced((items) => items.includes(index) ? items : [...items, index])
   }
 
