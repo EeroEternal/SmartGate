@@ -770,6 +770,13 @@ type SavingsData = {
 
 const money = (value: number | undefined) => `$${(value || 0).toFixed(4)}`
 const compactNumber = (value: number | undefined) => (value || 0).toLocaleString()
+const compactTokens = (value: number | undefined) => {
+  const v = value || 0
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(2)}B`
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 10_000) return `${(v / 1_000).toFixed(1)}k`
+  return v.toLocaleString()
+}
 
 export function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null)
@@ -819,12 +826,12 @@ export function UsagePage() {
     <div className="mb-5 flex items-end justify-between gap-4"><div><h1 className="text-xl font-semibold tracking-tight">Usage</h1><p className="mt-1 text-sm text-zinc-500">Automatic statistics from your last 30 days of model calls.</p></div><span className="text-xs text-zinc-400">Provider-reported usage when available</span></div>
     <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Stat label="Requests" value={compactNumber(data?.requests)} />
-      <Stat label="Total tokens" value={compactNumber(data?.total_tokens)} />
+      <Stat label="Total tokens" value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
       <Stat label="Estimated spend" value={money(data?.estimated_spend)} />
       <Stat label="Success rate" value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
     </div>
 
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div><h2 className="font-semibold">Prompt cache</h2><p className="mt-1 text-sm text-zinc-500">Provider-reported input tokens served from cache. This is separate from context trimming.</p></div><div className="mt-5 grid grid-cols-2 items-start gap-x-6 gap-y-5 md:grid-cols-3 xl:grid-cols-5"><Metric label="Cache hit tokens" value={compactNumber(data?.cache?.hit_tokens)} /><Metric label="Requests with hits" value={compactNumber(data?.cache?.hit_requests)} /><Metric label="Input token hit rate" value={coveragePercent(data?.cache?.hit_rate)} /><Metric label="Cache write tokens" value={compactNumber(data?.cache?.write_tokens)} /><Metric label="Input token write rate" value={coveragePercent(data?.cache?.write_rate)} /></div>{data?.cache?.reported_requests === 0 && <p className="mt-4 text-xs text-zinc-500">No provider-reported cache metrics are available for this period.</p>}</section>
+    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div><h2 className="font-semibold">Prompt cache</h2><p className="mt-1 text-sm text-zinc-500">Provider-reported input tokens served from cache. This is separate from context trimming.</p></div><div className="mt-5 grid grid-cols-2 items-stretch gap-4 md:grid-cols-3 xl:grid-cols-5"><Stat label="Cache hit tokens" value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} /><Stat label="Requests with hits" value={compactNumber(data?.cache?.hit_requests)} /><Stat label="Input token hit rate" value={coveragePercent(data?.cache?.hit_rate)} /><Stat label="Cache write tokens" value={compactTokens(data?.cache?.write_tokens)} fullValue={compactNumber(data?.cache?.write_tokens)} /><Stat label="Input token write rate" value={coveragePercent(data?.cache?.write_rate)} /></div>{data?.cache?.reported_requests === 0 && <p className="mt-4 text-xs text-zinc-500">No provider-reported cache metrics are available for this period.</p>}</section>
 
     <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Usage by provider and model</h2><p className="mt-1 text-sm text-zinc-500">Each provider includes the models used through it.</p>{providers.length ? <div className="mt-5 divide-y divide-zinc-100">{providers.map((item) => { const providerModels = modelsByProvider.get(item.provider || '') || []; return <div key={item.provider} className="py-5 first:pt-0 last:pb-0"><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{item.provider}</span><span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} /></div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div>{item.cache_hit_tokens ? <div>{compactNumber(item.cache_hit_tokens)} cache hit tokens</div> : null}{item.cache_write_tokens ? <div>{compactNumber(item.cache_write_tokens)} cache write tokens</div> : null}</div>{providerModels.length ? <div className="mt-5 border-l-2 border-zinc-100 pl-4"><div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">Models</div><div className="space-y-3">{providerModels.slice(0, 10).map((model) => <div key={`${model.provider}-${model.model}`} className="flex items-center justify-between gap-4"><div className="min-w-0"><div className="truncate text-sm">{model.model}</div><div className="mt-1 text-xs text-zinc-500">{compactNumber(model.requests)} requests <span className="mx-1">/</span> {compactNumber(model.total_tokens)} tokens{model.cache_hit_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_hit_tokens)} cached</> : null}{model.cache_write_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_write_tokens)} written</> : null}</div></div><span className="shrink-0 font-mono text-sm text-zinc-600">{money(model.estimated_spend)}</span></div>)}</div></div> : null}</div> })}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section>
 
@@ -901,18 +908,18 @@ function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: ()
 function errorText(error: unknown) { return error instanceof globalThis.Error ? error.message : 'Something went wrong' }
 function Page({ action, children }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) { return <div>{action && <div className="flex justify-end">{action}</div>}<div className={action ? 'mt-6' : ''}>{children}</div></div> }
 function Field({ label, value, onChange, placeholder, type = 'text', required = true, alignWithSelect = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; required?: boolean; alignWithSelect?: boolean }) { return <label className="block text-sm font-medium text-zinc-700">{label}<input required={required} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`${alignWithSelect ? 'mt-1 rounded-md py-2' : 'mt-2 rounded-lg py-2.5'} w-full border border-zinc-300 px-3 outline-none focus:border-zinc-950`} /></label> }
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, fullValue }: { label: string; value: string; fullValue?: string }) {
   return (
     <div className="min-w-0">
       <div className="h-8 text-xs leading-4 text-zinc-500">{label}</div>
-      <div className="mt-1 truncate text-xl font-semibold leading-7 tabular-nums tracking-tight" title={value}>{value}</div>
+      <div className="mt-1 truncate text-lg sm:text-xl font-semibold leading-7 tabular-nums tracking-tight" title={fullValue || value}>{value}</div>
     </div>
   )
 }
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, fullValue }: { label: string; value: string; fullValue?: string }) {
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-4">
-      <Metric label={label} value={value} />
+      <Metric label={label} value={value} fullValue={fullValue} />
     </div>
   )
 }

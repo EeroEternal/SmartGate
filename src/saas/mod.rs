@@ -584,6 +584,8 @@ async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Value>> {
             "description": offering.model.description,
             "input_price_per_1m": offering.model.input_price,
             "output_price_per_1m": offering.model.output_price,
+            "cache_read_price_per_1m": offering.model.cache_read_price,
+            "cache_write_price_per_1m": offering.model.cache_write_price,
             "supports_tools": offering.model.supports_tools,
             "supports_vision": offering.model.supports_vision,
             "supports_reasoning": offering.model.supports_reasoning,

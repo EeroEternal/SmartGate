@@ -73,6 +73,7 @@ pub async fn sync_all_pools(
                         price: UnitPrice {
                             input_per_1m: r.input_price_per_1m,
                             output_per_1m: r.output_price_per_1m,
+                            cache_read_per_1m: None,
                         },
                         capability_score: r.capability_score.clamp(0.0, 1.0),
                         supports_tools: r.supports_tools.map(|v| v != 0),

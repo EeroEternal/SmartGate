@@ -144,6 +144,7 @@ mod tests {
             price: UnitPrice {
                 input_per_1m: 1.0,
                 output_per_1m: 2.0,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -151,6 +152,7 @@ mod tests {
             price: UnitPrice {
                 input_per_1m: 10.0,
                 output_per_1m: 20.0,
+                ..Default::default()
             },
             ..Default::default()
         };

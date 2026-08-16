@@ -169,7 +169,7 @@ impl GatewayHooks for SmartGateHooks {
             let cache_hit_tokens = provider_usage.and_then(|usage| usage.cache_hit_tokens);
             let cache_write_tokens = provider_usage.and_then(|usage| usage.cache_write_tokens);
 
-            let (input_price, output_price, pricing_source) = profiles
+            let (unit_price, pricing_source) = profiles
                 .get(&endpoint_id)
                 .map(|profile| {
                     let source = if profile.price.is_priced() {
@@ -177,15 +177,14 @@ impl GatewayHooks for SmartGateHooks {
                     } else {
                         "unpriced"
                     };
-                    (
-                        profile.price.input_per_1m,
-                        profile.price.output_per_1m,
-                        source,
-                    )
+                    (profile.price, source)
                 })
-                .unwrap_or((0.0, 0.0, "unpriced"));
-            let estimated_cost = (prompt_tokens as f64 / 1_000_000.0) * input_price
-                + (completion_tokens as f64 / 1_000_000.0) * output_price;
+                .unwrap_or((crate::pricing::UnitPrice::default(), "unpriced"));
+            let estimated_cost = unit_price.calculate_cost(
+                prompt_tokens as u32,
+                completion_tokens as u32,
+                cache_hit_tokens.map(|v| v as u32),
+            );
 
             let routing_strategy = report.metadata.get("routing_strategy").cloned();
             let routing_decision = report.metadata.get("routing_decision").cloned();
@@ -304,8 +303,8 @@ impl GatewayHooks for SmartGateHooks {
             .bind(usage_source)
             .bind(usage_confidence)
             .bind(pricing_source)
-            .bind(input_price)
-            .bind(output_price)
+            .bind(unit_price.input_per_1m)
+            .bind(unit_price.output_per_1m)
             .bind(if pricing_source == "configured_endpoint" {
                 Some(eero_llm_providers::registry_version())
             } else {
