@@ -15,6 +15,6 @@ pub use session::{
     resolve_prefix_hash,
 };
 pub use tokens::{
-    estimate_tokens_from_text, expected_output_tokens, extract_openai_prompt_text,
-    heuristic_difficulty, request_has_tools, tool_message_chars,
+    estimate_tokens_from_text, expected_output_tokens, extract_complexity_signals,
+    extract_openai_prompt_text, heuristic_difficulty, request_has_tools, tool_message_chars,
 };

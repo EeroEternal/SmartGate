@@ -40,6 +40,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
     ['Model services', '/app/services'],
     ['API keys', '/app/keys'],
     ['Codex', '/app/codex'],
+    ['Analytics', '/app/analytics'],
     ['Usage', '/app/usage'],
   ]
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
@@ -914,6 +915,262 @@ function SavingsBaselineModal({ services, baseline, onClose, onSaved }: { servic
   }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Savings comparison baseline</h2><p className="mt-1 text-sm text-zinc-500">Choose one model from a Model Service as the comparison price.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>{services.length ? <div className="mt-6 space-y-5"><Select label="Model service" options={services.map((item) => ({ id: item.id, name: item.name }))} selected={service ? { id: service.id, name: service.name } : { id: '', name: 'Select a model service' }} onChange={(option) => setServiceId(String(option.id))} /><Select label="Model / provider endpoint" options={(service?.endpoints || []).map((item) => ({ id: item.id, name: `${item.model} — ${item.provider_name}` }))} selected={endpoint ? { id: endpoint.id, name: `${endpoint.model} — ${endpoint.provider_name}` } : { id: '', name: 'Select a model' }} onChange={(option) => setEndpointId(String(option.id))} />{endpoint && <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Input ${endpoint.input_price_per_1m}/1M · Output ${endpoint.output_price_per_1m}/1M</div>}<p className="text-xs text-zinc-500">The estimate uses this endpoint’s configured prices. A single model is supported in the first version.</p></div> : <div className="mt-6 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800">Create a Model Service with at least one endpoint before configuring a baseline.</div>}{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save baseline'}</button></div></form></div>
+}
+
+type QueryAnalyticsItem = {
+  id: string
+  timestamp: string
+  service_name: string
+  model: string
+  provider_name: string
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  latency_ms: number
+  status_code: number
+  cost: number
+  strategy: string
+  difficulty: number
+  difficulty_tier: 'high' | 'medium' | 'low'
+  prompt_preview: string
+  signals: string[]
+}
+
+type RoutingAnalyticsData = {
+  range: string
+  summary: {
+    total_queries: number
+    high_tier_count: number
+    medium_tier_count: number
+    low_tier_count: number
+    pro_count: number
+    flash_count: number
+    total_cost: number
+    estimated_savings: number
+    avg_latency_ms: number
+    total_tokens: number
+  }
+  queries: QueryAnalyticsItem[]
+}
+
+export function AnalyticsPage() {
+  const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
+  const [tierFilter, setTierFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
+  const [data, setData] = useState<RoutingAnalyticsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    saasFetch<RoutingAnalyticsData>(`/api/saas/analytics/routing?range=${range}`)
+      .then((res) => {
+        setData(res.data || null)
+        setError('')
+      })
+      .catch((e) => setError(errorText(e)))
+      .finally(() => setLoading(false))
+  }, [range])
+
+  const filteredQueries = (data?.queries || []).filter((q) => {
+    if (tierFilter === 'all') return true
+    return q.difficulty_tier === tierFilter
+  })
+
+  const total = data?.summary.total_queries || 0
+  const highPct = total ? Math.round(((data?.summary.high_tier_count || 0) / total) * 100) : 0
+  const medPct = total ? Math.round(((data?.summary.medium_tier_count || 0) / total) * 100) : 0
+  const lowPct = total ? Math.max(0, 100 - highPct - medPct) : 0
+
+  return (
+    <Page>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Routing Analytics & Complexity Insights</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Inspect how incoming queries match complexity signals and route across Pro and Flash models.
+            </p>
+          </div>
+          <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
+            {(['24h', '7d', '30d', 'all'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  range === r ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-950'
+                }`}
+              >
+                {r === '24h' ? 'Last 24h' : r === '7d' ? 'Last 7 days' : r === '30d' ? 'Last 30 days' : 'All time'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <ErrorMessage text={error} />}
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Analyzed queries</div>
+            <div className="mt-2 text-2xl font-semibold text-zinc-950">{total.toLocaleString()}</div>
+            <div className="mt-1 text-xs text-zinc-500">Intelligent complexity scored</div>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Complexity breakdown</div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-semibold text-purple-700">{data?.summary.high_tier_count || 0}</span>
+              <span className="text-xs text-zinc-400">High</span>
+              <span className="text-lg font-semibold text-amber-600 ml-1">{data?.summary.medium_tier_count || 0}</span>
+              <span className="text-xs text-zinc-400">Med</span>
+              <span className="text-lg font-semibold text-emerald-600 ml-1">{data?.summary.low_tier_count || 0}</span>
+              <span className="text-xs text-zinc-400">Low</span>
+            </div>
+            <div className="mt-1 text-xs text-zinc-500">{highPct}% complex reasoning & code</div>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Model tier routing</div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-semibold text-zinc-950">{data?.summary.pro_count || 0}</span>
+              <span className="text-xs text-purple-700 font-medium">Pro</span>
+              <span className="text-2xl font-semibold text-zinc-950 ml-2">{data?.summary.flash_count || 0}</span>
+              <span className="text-xs text-emerald-700 font-medium">Flash</span>
+            </div>
+            <div className="mt-1 text-xs text-zinc-500">Dynamic capability dispatch</div>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Estimated savings</div>
+            <div className="mt-2 text-2xl font-semibold text-emerald-600">
+              ${(data?.summary.estimated_savings || 0).toFixed(4)}
+            </div>
+            <div className="mt-1 text-xs text-zinc-500">
+              Total spend: ${(data?.summary.total_cost || 0).toFixed(4)}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-zinc-950">Complexity Spectrum & Signal Distribution</h2>
+            <span className="text-xs text-zinc-400">Higher score routes to Pro models</span>
+          </div>
+          <div className="mt-4">
+            <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-zinc-100">
+              <div style={{ width: `${highPct}%` }} className="bg-purple-600 transition-all" title={`High complexity: ${highPct}%`} />
+              <div style={{ width: `${medPct}%` }} className="bg-amber-500 transition-all" title={`Medium complexity: ${medPct}%`} />
+              <div style={{ width: `${lowPct}%` }} className="bg-emerald-500 transition-all" title={`Low complexity: ${lowPct}%`} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-6 text-xs text-zinc-600">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
+                <span>High Complexity (&ge; 0.60): <strong>{data?.summary.high_tier_count || 0}</strong> ({highPct}%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <span>Medium Complexity (0.35–0.60): <strong>{data?.summary.medium_tier_count || 0}</strong> ({medPct}%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span>Low Complexity (&lt; 0.35): <strong>{data?.summary.low_tier_count || 0}</strong> ({lowPct}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-zinc-950">Query Logs & Signal Hits</h2>
+              <p className="mt-1 text-xs text-zinc-500">Live inspection of prompt intents and routed models.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {(['all', 'high', 'medium', 'low'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTierFilter(t)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                    tierFilter === t
+                      ? 'bg-zinc-100 text-zinc-950 font-semibold'
+                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+                  }`}
+                >
+                  {t === 'all' ? 'All tiers' : t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            {!filteredQueries.length ? (
+              <div className="py-12 text-center text-sm text-zinc-500">
+                {loading ? 'Loading queries…' : 'No query records found for this period.'}
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-100 text-zinc-400">
+                    <th className="pb-3 font-medium">Time / Service</th>
+                    <th className="pb-3 font-medium">Prompt Preview & Intent</th>
+                    <th className="pb-3 font-medium">Complexity</th>
+                    <th className="pb-3 font-medium">Matched Signals</th>
+                    <th className="pb-3 font-medium">Routed Model</th>
+                    <th className="pb-3 text-right font-medium">Tokens / Latency</th>
+                    <th className="pb-3 text-right font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {filteredQueries.map((q) => (
+                    <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
+                      <td className="py-3 pr-3 align-top whitespace-nowrap">
+                        <div className="font-medium text-zinc-900">{q.service_name}</div>
+                        <div className="mt-0.5 text-[11px] text-zinc-400">{q.timestamp}</div>
+                      </td>
+                      <td className="py-3 pr-3 align-top max-w-xs sm:max-w-sm md:max-w-md">
+                        <div className="truncate font-mono text-zinc-800" title={q.prompt_preview}>
+                          {q.prompt_preview}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3 align-top whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            q.difficulty_tier === 'high'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : q.difficulty_tier === 'medium'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
+                        </span>
+                      </td>
+                      <td className="py-3 pr-3 align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {q.signals.map((sig, i) => (
+                            <span key={i} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600">
+                              {sig}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3 align-top whitespace-nowrap">
+                        <div className="font-medium text-zinc-900">{q.model}</div>
+                        <div className="text-[11px] text-zinc-400">{q.provider_name}</div>
+                      </td>
+                      <td className="py-3 pr-3 align-top text-right whitespace-nowrap">
+                        <div className="text-zinc-900">{q.total_tokens.toLocaleString()} tok</div>
+                        <div className="text-[11px] text-zinc-400">{q.latency_ms}ms</div>
+                      </td>
+                      <td className="py-3 align-top text-right whitespace-nowrap font-medium text-zinc-900">
+                        ${q.cost.toFixed(4)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </Page>
+  )
 }
 
 function Coverage({ label, value, detail }: { label: string; value: number; detail: string }) { return <div><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono">{Math.round(value * 100)}%</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(value * 100, value > 0 ? 2 : 0)}%` }} /></div><div className="mt-1 text-xs text-zinc-500">{detail}</div></div> }

@@ -146,6 +146,69 @@ pub fn expected_output_tokens(body: &serde_json::Value, default: u32) -> u32 {
         .max(1)
 }
 
+/// Extract human-readable matched complexity signals for inspection and analytics.
+pub fn extract_complexity_signals(body: &serde_json::Value) -> Vec<String> {
+    let mut signals = Vec::new();
+    let text = extract_openai_prompt_text(body);
+    let lower = text.to_ascii_lowercase();
+    let tokens = estimate_tokens_from_text(&text);
+    if request_has_tools(body) {
+        signals.push("Tools / Functions".to_string());
+    }
+    if text.contains("```")
+        || text.contains("def ")
+        || text.contains("fn ")
+        || text.contains("class ")
+        || text.contains("SELECT ")
+        || text.contains("CREATE TABLE")
+    {
+        signals.push("Code & Schema".to_string());
+    }
+    if tokens > 6000 {
+        signals.push("Long context".to_string());
+    }
+    if lower.contains("step by step")
+        || lower.contains("step-by-step")
+        || lower.contains("root cause")
+        || lower.contains("deadlock")
+        || lower.contains("benchmark")
+        || lower.contains("architecture")
+        || text.contains("逐步")
+        || text.contains("推导")
+        || text.contains("证明")
+        || text.contains("根因")
+        || text.contains("死锁")
+        || text.contains("架构")
+        || text.contains("算法")
+    {
+        signals.push("Complex reasoning".to_string());
+    }
+    if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
+        if msgs.len() >= 6 {
+            signals.push("Deep multi-turn".to_string());
+        }
+        if let Some(last_user) = msgs.iter().rev().find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user")) {
+            let last_text = last_user.get("content").map(content_to_text).unwrap_or_default();
+            let last_lower = last_text.to_ascii_lowercase();
+            if last_lower.contains("wrong")
+                || last_lower.contains("error")
+                || last_lower.contains("failed")
+                || last_lower.contains("still failing")
+                || last_text.contains("不对")
+                || last_text.contains("还是报错")
+                || last_text.contains("理解错了")
+                || last_text.contains("遗漏")
+            {
+                signals.push("Correction feedback".to_string());
+            }
+        }
+    }
+    if signals.is_empty() {
+        signals.push("General query".to_string());
+    }
+    signals
+}
+
 /// Count characters in tool-role messages (OpenAI shape).
 pub fn tool_message_chars(body: &serde_json::Value) -> usize {
     let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) else {

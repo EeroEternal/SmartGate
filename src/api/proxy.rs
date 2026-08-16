@@ -6,10 +6,11 @@ use crate::config::AppState;
 use crate::models::ModelPool;
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
-    extract_context_epoch, extract_openai_prompt_text, extract_session_id, format_prefix_hash,
-    get_sticky_endpoint, heuristic_difficulty, next_turn_index, prefix_stable, request_has_tools,
-    resolve_prefix_hash, set_hint, slim_tool_messages, spent_today_for_key, tool_message_chars,
-    BudgetOutcome, HintGuard, RouteHint, SlimConfig,
+    extract_complexity_signals, extract_context_epoch, extract_openai_prompt_text,
+    extract_session_id, format_prefix_hash, get_sticky_endpoint, heuristic_difficulty,
+    next_turn_index, prefix_stable, request_has_tools, resolve_prefix_hash, set_hint,
+    slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome, HintGuard,
+    RouteHint, SlimConfig,
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
@@ -227,6 +228,16 @@ async fn chat_proxy(
     });
     let _hint_guard = HintGuard;
 
+    let signals = extract_complexity_signals(&payload);
+    let prompt_preview = prompt_text.chars().take(200).collect::<String>();
+    let difficulty_tier = if difficulty >= 0.60 {
+        "high"
+    } else if difficulty >= 0.35 {
+        "medium"
+    } else {
+        "low"
+    };
+
     let decision = serde_json::json!({
         "product": "smartgate",
         "protocol": if protocol == ChatProtocol::Anthropic { "anthropic_messages" } else { "openai_chat" },
@@ -234,6 +245,9 @@ async fn chat_proxy(
         "input_tokens_est": input_tokens,
         "output_tokens_est": output_tokens,
         "difficulty": difficulty,
+        "difficulty_tier": difficulty_tier,
+        "prompt_preview": prompt_preview,
+        "signals": signals,
         "has_tools": has_tools,
         "downshift": downshift,
         "spent_today": spent,
@@ -631,6 +645,15 @@ pub async fn responses(
     proxy_request
         .metadata
         .insert("output_tokens_est".to_string(), output_tokens.to_string());
+    let signals = extract_complexity_signals(&payload);
+    let prompt_preview = prompt_text.chars().take(200).collect::<String>();
+    let difficulty_tier = if difficulty >= 0.60 {
+        "high"
+    } else if difficulty >= 0.35 {
+        "medium"
+    } else {
+        "low"
+    };
     proxy_request.metadata.insert(
         "routing_decision".to_string(),
         serde_json::json!({
@@ -639,6 +662,9 @@ pub async fn responses(
             "input_tokens_est": input_tokens,
             "output_tokens_est": output_tokens,
             "difficulty": difficulty,
+            "difficulty_tier": difficulty_tier,
+            "prompt_preview": prompt_preview,
+            "signals": signals,
             "has_tools": has_tools,
             "downshift": downshift,
             "spent_today": spent,

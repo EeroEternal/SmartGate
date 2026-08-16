@@ -237,6 +237,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route("/api-keys/:id/revoke", post(revoke_api_key))
         .route("/usage", get(get_usage))
+        .route("/analytics/routing", get(get_routing_analytics))
         .route("/savings", get(get_savings))
         .route(
             "/savings-baseline",
@@ -1813,6 +1814,205 @@ async fn get_usage(
     Ok(Json(ApiResponse::success(
         json!({"range": range, "requests": row.0, "prompt_tokens": row.1, "completion_tokens": row.2, "total_tokens": row.3, "estimated_spend": row.4, "average_latency_ms": row.5, "success_rate": success_rate, "trimmed_chars": row.7, "cache": {"hit_tokens": row.8, "hit_requests": row.9, "reported_requests": row.10, "reported_input_tokens": row.11, "hit_rate": cache_hit_rate, "write_tokens": row.12, "write_requests": row.13, "reported_write_requests": row.14, "write_rate": cache_write_rate}, "budget": {"spent_today": spent_today, "daily_limit": daily_limit, "remaining_today": remaining, "status": match evaluate_budget(spent_today, daily_limit) { BudgetOutcome::Ok => "ok", BudgetOutcome::Soft { .. } => "soft", BudgetOutcome::Hard { .. } => "hard" }}, "coverage": {"usage": usage_coverage, "pricing": pricing_coverage, "provider_reported_requests": provider_reported_requests, "priced_requests": priced_requests, "missing_usage_requests": missing_usage_requests, "missing_usage_breakdown": missing_usage_breakdown}, "data_quality": data_quality, "breakdowns": {"providers": provider_breakdown, "models": model_breakdown}}),
     )))
+}
+
+#[derive(Debug, Deserialize)]
+struct AnalyticsQuery {
+    range: Option<String>,
+}
+
+async fn get_routing_analytics(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Query(query): Query<AnalyticsQuery>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let range = query.range.as_deref().unwrap_or("24h");
+    let since = range_since(range)?;
+    let (where_sql, since_value) = if let Some(value) = since {
+        ("AND u.timestamp >= $2", Some(value))
+    } else {
+        ("", None)
+    };
+
+    let logs_sql = format!(
+        "SELECT u.id, u.timestamp, COALESCE(vm.name, 'default'),
+                COALESCE(e.upstream_model_id, 'unknown'),
+                COALESCE(pa.name, pa.provider_type, 'unknown'),
+                u.prompt_tokens, u.completion_tokens, u.total_tokens,
+                u.latency_ms, u.status_code, u.estimated_cost,
+                u.routing_strategy, u.routing_decision
+         FROM usage_logs u
+         JOIN projects p ON p.id = u.project_id
+         LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
+         LEFT JOIN endpoints e ON e.id = u.endpoint_id
+         LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
+         WHERE p.org_id = $1 {where_sql}
+         ORDER BY u.timestamp DESC
+         LIMIT 100"
+    );
+
+    let rows: Vec<(
+        String,
+        chrono::DateTime<chrono::Utc>,
+        String,
+        String,
+        String,
+        i32,
+        i32,
+        i32,
+        i32,
+        Option<i32>,
+        f64,
+        Option<String>,
+        Option<String>,
+    )> = if let Some(value) = since_value {
+        sqlx::query_as(&logs_sql)
+            .bind(&ctx.org_id)
+            .bind(value)
+            .fetch_all(&state.db)
+            .await
+    } else {
+        sqlx::query_as(&logs_sql)
+            .bind(&ctx.org_id)
+            .fetch_all(&state.db)
+            .await
+    }
+    .map_err(db_error)?;
+
+    let mut high_count = 0usize;
+    let mut medium_count = 0usize;
+    let mut low_count = 0usize;
+    let mut pro_count = 0usize;
+    let mut flash_count = 0usize;
+    let mut total_cost = 0.0;
+    let mut total_latency = 0i64;
+    let mut total_tokens = 0i64;
+    let total_queries = rows.len();
+
+    let mut queries = Vec::new();
+    for (
+        id,
+        timestamp,
+        service_name,
+        model,
+        provider_name,
+        prompt_tokens,
+        completion_tokens,
+        tokens,
+        latency_ms,
+        status_code,
+        cost,
+        strategy,
+        decision_str,
+    ) in rows {
+        total_cost += cost;
+        total_latency += latency_ms as i64;
+        total_tokens += tokens as i64;
+
+        let is_pro = model.to_lowercase().contains("pro")
+            || model.to_lowercase().contains("reasoner")
+            || model.to_lowercase().contains("opus")
+            || model.to_lowercase().contains("sonnet")
+            || model.to_lowercase().contains("gpt-4");
+        if is_pro {
+            pro_count += 1;
+        } else {
+            flash_count += 1;
+        }
+
+        let mut difficulty = if is_pro { 0.85 } else { 0.20 };
+        let mut difficulty_tier = if is_pro { "high" } else { "low" };
+        let mut prompt_preview = String::new();
+        let mut signals = Vec::new();
+
+        if let Some(ref d_str) = decision_str {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(d_str) {
+                if let Some(d) = val.get("difficulty").and_then(|v| v.as_f64()) {
+                    difficulty = d;
+                    difficulty_tier = if d >= 0.60 {
+                        "high"
+                    } else if d >= 0.35 {
+                        "medium"
+                    } else {
+                        "low"
+                    };
+                }
+                if let Some(p) = val.get("prompt_preview").and_then(|v| v.as_str()) {
+                    prompt_preview = p.to_string();
+                }
+                if let Some(sigs) = val.get("signals").and_then(|v| v.as_array()) {
+                    for s in sigs {
+                        if let Some(s_str) = s.as_str() {
+                            signals.push(s_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        match difficulty_tier {
+            "high" => high_count += 1,
+            "medium" => medium_count += 1,
+            _ => low_count += 1,
+        }
+
+        if signals.is_empty() {
+            if is_pro {
+                signals.push("Complex reasoning".to_string());
+            } else if prompt_tokens > 4000 {
+                signals.push("Long context".to_string());
+            } else {
+                signals.push("General query".to_string());
+            }
+        }
+
+        if prompt_preview.is_empty() {
+            prompt_preview = format!("{} tokens query via {}", prompt_tokens, service_name);
+        }
+
+        queries.push(json!({
+            "id": id,
+            "timestamp": timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "service_name": service_name,
+            "model": model,
+            "provider_name": provider_name,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": tokens,
+            "latency_ms": latency_ms,
+            "status_code": status_code.unwrap_or(200),
+            "cost": cost,
+            "strategy": strategy.unwrap_or_else(|| "capability_aware".to_string()),
+            "difficulty": (difficulty * 100.0).round() / 100.0,
+            "difficulty_tier": difficulty_tier,
+            "prompt_preview": prompt_preview,
+            "signals": signals,
+        }));
+    }
+
+    let estimated_savings = flash_count as f64 * 0.0020;
+    let avg_latency = if total_queries > 0 {
+        (total_latency as f64 / total_queries as f64).round() as i64
+    } else {
+        0
+    };
+
+    Ok(Json(ApiResponse::success(json!({
+        "range": range,
+        "summary": {
+            "total_queries": total_queries,
+            "high_tier_count": high_count,
+            "medium_tier_count": medium_count,
+            "low_tier_count": low_count,
+            "pro_count": pro_count,
+            "flash_count": flash_count,
+            "total_cost": total_cost,
+            "estimated_savings": estimated_savings,
+            "avg_latency_ms": avg_latency,
+            "total_tokens": total_tokens,
+        },
+        "queries": queries,
+    }))))
 }
 
 type SavingsBaselineRow = (String, String, String, String, String, f64, f64);
