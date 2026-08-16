@@ -108,6 +108,10 @@ struct ModelServiceRequest {
 #[derive(Debug, Deserialize)]
 struct UpdateModelServiceRequest {
     strategy: String,
+    #[serde(default)]
+    judge_enabled: Option<bool>,
+    #[serde(default)]
+    judge_endpoint_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -793,8 +797,8 @@ async fn get_model_service(
     ctx: SaasContext,
     Path(model_id): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let service: Option<(String, String, String, String)> = sqlx::query_as(
-        "SELECT vm.id, vm.name, mp.name, mp.strategy
+    let service: Option<(String, String, String, String, i32, Option<String>)> = sqlx::query_as(
+        "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id
          FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
@@ -808,7 +812,7 @@ async fn get_model_service(
     .fetch_optional(&state.db)
     .await
     .map_err(db_error)?;
-    let Some((id, _legacy_model, name, strategy)) = service else {
+    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id)) = service else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model service not found")),
@@ -888,6 +892,8 @@ async fn get_model_service(
         "endpoint_count": endpoint_count,
         "endpoints": endpoint_values,
         "status": if endpoint_count == 0 { "draft" } else { "active" },
+        "judge_enabled": judge_enabled != 0,
+        "judge_endpoint_id": judge_endpoint_id,
     }))))
 }
 
@@ -918,10 +924,13 @@ async fn update_model_service(
             Json(ApiResponse::error("Model service not found")),
         ));
     };
+    let judge_enabled = input.judge_enabled.map(|v| if v { 1 } else { 0 });
     sqlx::query(
-        "UPDATE model_pools SET strategy = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+        "UPDATE model_pools SET strategy = $1, judge_enabled = COALESCE($2, judge_enabled), judge_endpoint_id = CASE WHEN $2 IS NOT NULL THEN $3 ELSE judge_endpoint_id END, updated_at = CURRENT_TIMESTAMP WHERE id = $4",
     )
     .bind(&strategy)
+    .bind(judge_enabled)
+    .bind(input.judge_endpoint_id.as_deref().filter(|s| !s.trim().is_empty()))
     .bind(&pool_id)
     .execute(&state.db)
     .await

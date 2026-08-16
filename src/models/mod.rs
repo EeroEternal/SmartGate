@@ -89,6 +89,8 @@ pub struct ModelPool {
     pub max_tool_chars: i32,
     pub session_affinity_enabled: i32,
     pub session_affinity_ttl_secs: i32,
+    pub judge_enabled: i32,
+    pub judge_endpoint_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
