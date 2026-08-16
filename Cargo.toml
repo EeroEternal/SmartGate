@@ -1,6 +1,6 @@
 [package]
 name = "smartgate"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["SmartGate Contributors"]
 description = "Open-source AI gateway with control/data plane separation — cut spend with smart routing"
