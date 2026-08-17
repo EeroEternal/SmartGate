@@ -35,8 +35,8 @@ pub struct SmartGateFeedbackProvider {
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
 }
 
-/// Score boost so sticky endpoint wins ScoreOrdered when healthy.
-pub const AFFINITY_BOOST: f64 = 1_000_000.0;
+/// Score boost so sticky endpoint wins within its tier when healthy.
+pub const AFFINITY_BOOST: f64 = 10_000.0;
 
 impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
     fn feedback(&self, pool_id: &str) -> RoutingFeedback {
@@ -188,11 +188,25 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
 
         if affinity_enabled {
             if let Some(sticky) = sticky_endpoint_id {
-                if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
-                    if !signal.excluded {
-                        signal.score = Some(
-                            signal.score.unwrap_or(0.0) + AFFINITY_BOOST,
-                        );
+                let sticky_is_capable = if strategy == "capability_aware" {
+                    let req = strategy::required_capability(difficulty);
+                    let sticky_cap = self
+                        .profiles
+                        .get(&sticky)
+                        .map(|p| p.capability_score)
+                        .unwrap_or(0.0);
+                    sticky_cap >= req
+                } else {
+                    true
+                };
+
+                if sticky_is_capable {
+                    if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
+                        if !signal.excluded {
+                            signal.score = Some(
+                                signal.score.unwrap_or(0.0) + AFFINITY_BOOST,
+                            );
+                        }
                     }
                 }
             }
