@@ -1160,12 +1160,12 @@ export function AnalyticsPage() {
                             D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
                           </span>
                         </td>
-                        <td className="py-3 px-4 align-top min-w-[200px] max-w-md">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {q.signals.map((sig, i) => (
+                        <td className="py-3 px-4 align-top min-w-[240px] max-w-sm">
+                          <div className="flex flex-wrap items-center gap-1" title={q.signals.join(', ')}>
+                            {q.signals.slice(0, 3).map((sig, i) => (
                               <span
                                 key={i}
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium leading-tight whitespace-nowrap ${
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-tight whitespace-nowrap ${
                                   sig.includes('Judge')
                                     ? 'bg-purple-50 text-purple-700 border border-purple-200/80 font-semibold'
                                     : sig.includes('reasoning') || sig.includes('Correction')
@@ -1176,6 +1176,11 @@ export function AnalyticsPage() {
                                 {sig}
                               </span>
                             ))}
+                            {q.signals.length > 3 && (
+                              <span className="inline-flex items-center rounded-md bg-zinc-100 border border-zinc-200/70 px-1.5 py-0.5 text-[10px] text-zinc-500 font-medium">
+                                +{q.signals.length - 3}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4 align-top whitespace-nowrap">
