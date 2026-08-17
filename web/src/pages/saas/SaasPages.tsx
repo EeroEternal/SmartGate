@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -952,7 +952,6 @@ type RoutingAnalyticsData = {
   }
   queries: QueryAnalyticsItem[]
 }
-
 export function AnalyticsPage() {
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
   const [tierFilter, setTierFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
@@ -960,6 +959,8 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedSignals, setExpandedSignals] = useState<Record<string, boolean>>({})
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(15)
 
   const toggleSignals = (id: string) => {
     setExpandedSignals((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -976,10 +977,20 @@ export function AnalyticsPage() {
       .finally(() => setLoading(false))
   }, [range])
 
+  useEffect(() => {
+    setPage(1)
+  }, [range, tierFilter, pageSize])
+
   const filteredQueries = (data?.queries || []).filter((q) => {
     if (tierFilter === 'all') return true
     return q.difficulty_tier === tierFilter
   })
+
+  const totalFiltered = filteredQueries.length
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * pageSize
+  const paginatedQueries = filteredQueries.slice(startIndex, startIndex + pageSize)
 
   const total = data?.summary.total_queries || 0
   const highPct = total ? Math.round(((data?.summary.high_tier_count || 0) / total) * 100) : 0
@@ -1022,20 +1033,20 @@ export function AnalyticsPage() {
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Complexity breakdown</div>
-            <div className="mt-2 flex items-center justify-between gap-1">
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xl font-bold text-purple-700">{data?.summary.high_tier_count || 0}</span>
-                <span className="text-[11px] font-medium text-zinc-500">High</span>
+            <div className="mt-2 flex items-baseline gap-4">
+              <div>
+                <span className="text-2xl font-bold text-purple-700">{(data?.summary.high_tier_count || 0).toLocaleString()}</span>
+                <span className="ml-1 text-xs text-zinc-400">High</span>
               </div>
-              <div className="h-6 w-px bg-zinc-200" />
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xl font-bold text-amber-600">{data?.summary.medium_tier_count || 0}</span>
-                <span className="text-[11px] font-medium text-zinc-500">Med</span>
+              <div className="h-4 w-px bg-zinc-200" />
+              <div>
+                <span className="text-2xl font-bold text-amber-600">{(data?.summary.medium_tier_count || 0).toLocaleString()}</span>
+                <span className="ml-1 text-xs text-zinc-400">Med</span>
               </div>
-              <div className="h-6 w-px bg-zinc-200" />
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xl font-bold text-emerald-600">{data?.summary.low_tier_count || 0}</span>
-                <span className="text-[11px] font-medium text-zinc-500">Low</span>
+              <div className="h-4 w-px bg-zinc-200" />
+              <div>
+                <span className="text-2xl font-bold text-emerald-600">{(data?.summary.low_tier_count || 0).toLocaleString()}</span>
+                <span className="ml-1 text-xs text-zinc-400">Low</span>
               </div>
             </div>
             <div className="mt-2 text-xs text-zinc-400">{highPct}% complex reasoning & code</div>
@@ -1043,15 +1054,15 @@ export function AnalyticsPage() {
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Model tier routing</div>
-            <div className="mt-2 flex items-center justify-around gap-2">
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xl font-bold text-purple-900">{data?.summary.pro_count || 0}</span>
-                <span className="text-[11px] font-semibold text-purple-700">Pro model</span>
+            <div className="mt-2 flex items-baseline gap-4">
+              <div>
+                <span className="text-2xl font-bold text-purple-700">{(data?.summary.pro_count || 0).toLocaleString()}</span>
+                <span className="ml-1 text-xs text-zinc-400">Pro model</span>
               </div>
-              <div className="h-6 w-px bg-zinc-200" />
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xl font-bold text-emerald-900">{data?.summary.flash_count || 0}</span>
-                <span className="text-[11px] font-semibold text-emerald-700">Flash model</span>
+              <div className="h-4 w-px bg-zinc-200" />
+              <div>
+                <span className="text-2xl font-bold text-emerald-600">{(data?.summary.flash_count || 0).toLocaleString()}</span>
+                <span className="ml-1 text-xs text-zinc-400">Flash model</span>
               </div>
             </div>
             <div className="mt-2 text-xs text-zinc-400">Dynamic capability dispatch</div>
@@ -1070,57 +1081,55 @@ export function AnalyticsPage() {
 
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-zinc-950">Complexity Spectrum & Signal Distribution</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Complexity Spectrum & Signal Distribution</h2>
             <span className="text-xs text-zinc-400">Higher score routes to Pro models</span>
           </div>
-          <div className="mt-4">
-            <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-zinc-100">
-              <div style={{ width: `${highPct}%` }} className="bg-purple-600 transition-all" title={`High complexity: ${highPct}%`} />
-              <div style={{ width: `${medPct}%` }} className="bg-amber-500 transition-all" title={`Medium complexity: ${medPct}%`} />
-              <div style={{ width: `${lowPct}%` }} className="bg-emerald-500 transition-all" title={`Low complexity: ${lowPct}%`} />
+
+          <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100">
+            {highPct > 0 && <div style={{ width: `${highPct}%` }} className="bg-purple-600 transition-all" title={`High: ${highPct}%`} />}
+            {medPct > 0 && <div style={{ width: `${medPct}%` }} className="bg-amber-500 transition-all" title={`Medium: ${medPct}%`} />}
+            {lowPct > 0 && <div style={{ width: `${lowPct}%` }} className="bg-emerald-500 transition-all" title={`Low: ${lowPct}%`} />}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
+              <span>High Complexity (≥ 0.60): <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-6 text-xs text-zinc-600">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
-                <span>High Complexity (&ge; 0.60): <strong>{data?.summary.high_tier_count || 0}</strong> ({highPct}%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                <span>Medium Complexity (0.35–0.60): <strong>{data?.summary.medium_tier_count || 0}</strong> ({medPct}%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                <span>Low Complexity (&lt; 0.35): <strong>{data?.summary.low_tier_count || 0}</strong> ({lowPct}%)</span>
-              </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+              <span>Medium Complexity (0.35–0.60): <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <span>Low Complexity (&lt; 0.35): <strong>{(data?.summary.low_tier_count || 0).toLocaleString()}</strong> ({lowPct}%)</span>
             </div>
           </div>
         </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-semibold text-zinc-950">Query Logs & Signal Hits</h2>
-              <p className="mt-1 text-xs text-zinc-500">Live inspection of prompt intents and routed models.</p>
+              <h2 className="text-sm font-semibold text-zinc-900">Query Logs & Signal Hits</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">Live inspection of prompt intents and routed models.</p>
             </div>
-            <div className="flex items-center gap-2">
-              {(['all', 'high', 'medium', 'low'] as const).map((t) => (
+            <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
+              {(['all', 'high', 'medium', 'low'] as const).map((tier) => (
                 <button
-                  key={t}
-                  onClick={() => setTierFilter(t)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                    tierFilter === t
-                      ? 'bg-zinc-100 text-zinc-950 font-semibold'
-                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+                  key={tier}
+                  onClick={() => setTierFilter(tier)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                    tierFilter === tier ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
-                  {t === 'all' ? 'All tiers' : t.charAt(0).toUpperCase() + t.slice(1)}
+                  {tier === 'all' ? 'All tiers' : tier}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="mt-4 -mx-5 -mb-5 overflow-x-auto border-t border-zinc-100">
-            {!filteredQueries.length ? (
+            {!paginatedQueries.length ? (
               <div className="py-12 text-center text-sm text-zinc-500">
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
               </div>
@@ -1138,7 +1147,7 @@ export function AnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
-                  {filteredQueries.map((q) => {
+                  {paginatedQueries.map((q) => {
                     const cleanService = q.service_name.replace(/^[0-9a-fA-F-]{36,37}-/, '')
                     const cleanProvider = q.provider_name.replace(/^saas-[0-9a-fA-F-]{36}/, 'DeepSeek').replace(/^saas-/, '')
                     return (
@@ -1227,6 +1236,82 @@ export function AnalyticsPage() {
               </table>
             )}
           </div>
+
+          {totalFiltered > 0 && (
+            <div className="mt-4 -mx-5 -mb-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/50 px-5 py-3 text-xs text-zinc-500">
+              <div className="flex items-center gap-3">
+                <span>
+                  Showing <strong className="font-semibold text-zinc-900">{startIndex + 1}</strong>–<strong className="font-semibold text-zinc-900">{Math.min(startIndex + pageSize, totalFiltered)}</strong> of <strong className="font-semibold text-zinc-900">{totalFiltered}</strong> queries
+                </span>
+                <div className="w-28">
+                  <Select
+                    options={[
+                      { id: '10', name: '10 / page' },
+                      { id: '15', name: '15 / page' },
+                      { id: '25', name: '25 / page' },
+                      { id: '50', name: '50 / page' },
+                    ]}
+                    selected={{ id: String(pageSize), name: `${pageSize} / page` }}
+                    onChange={(opt) => setPageSize(Number(opt.id))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                        acc.push('…')
+                      }
+                      acc.push(p)
+                      return acc
+                    }, [])
+                    .map((item, idx) =>
+                      typeof item === 'number' ? (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setPage(item)}
+                          className={`min-w-[28px] h-7 rounded-md px-2 text-xs font-medium transition-colors ${
+                            currentPage === item
+                              ? 'bg-zinc-900 text-white'
+                              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ) : (
+                        <span key={idx} className="px-1 text-zinc-400">
+                          {item}
+                        </span>
+                      )
+                    )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Page>
