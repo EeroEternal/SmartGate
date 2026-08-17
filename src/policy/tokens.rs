@@ -135,7 +135,7 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
         || text.contains("架构")
         || text.contains("算法")
     {
-        d += 0.25;
+        d += 0.50;
     }
     // Multi-turn context & correction cues
     if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
