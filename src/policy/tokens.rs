@@ -80,9 +80,9 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
     let lower = text.to_ascii_lowercase();
     let tokens = estimate_tokens_from_text(&text) as f64;
     let mut d = 0.15;
-    d += (tokens / 8000.0).min(0.35);
+    d += (tokens / 16000.0).min(0.20);
     if request_has_tools(body) {
-        d += 0.2;
+        d += 0.08;
     }
     if text.contains("```")
         || text.contains("def ")
@@ -91,10 +91,10 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
         || text.contains("SELECT ")
         || text.contains("CREATE TABLE")
     {
-        d += 0.15;
+        d += 0.12;
     }
     if tokens > 12000.0 {
-        d += 0.15;
+        d += 0.10;
     }
     // High reasoning keywords / intent patterns
     if lower.contains("step by step")
@@ -111,12 +111,12 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
         || text.contains("架构")
         || text.contains("算法")
     {
-        d += 0.20;
+        d += 0.25;
     }
     // Multi-turn context & correction cues
     if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
-        if msgs.len() >= 6 {
-            d += 0.15;
+        if msgs.len() >= 8 {
+            d += 0.10;
         }
         if let Some(last_user) = msgs.iter().rev().find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user")) {
             let last_text = last_user.get("content").map(content_to_text).unwrap_or_default();
@@ -130,7 +130,7 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
                 || last_text.contains("理解错了")
                 || last_text.contains("遗漏")
             {
-                d += 0.25;
+                d += 0.30;
             }
         }
     }

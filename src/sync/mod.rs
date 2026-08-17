@@ -67,6 +67,11 @@ pub async fn sync_all_pools(
         let members: Vec<PoolEndpointMember> = rows
             .iter()
             .map(|r| {
+                let capability = if (r.capability_score - 0.70).abs() < 1e-5 || r.capability_score <= 0.0 {
+                    crate::pricing::default_capability_score(&r.upstream_model_id, None)
+                } else {
+                    r.capability_score.clamp(0.0, 1.0)
+                };
                 profiles.insert(
                     r.id.clone(),
                     EndpointProfile {
@@ -75,7 +80,7 @@ pub async fn sync_all_pools(
                             output_per_1m: r.output_price_per_1m,
                             cache_read_per_1m: None,
                         },
-                        capability_score: r.capability_score.clamp(0.0, 1.0),
+                        capability_score: capability,
                         supports_tools: r.supports_tools.map(|v| v != 0),
                         context_length: r.context_length,
                     },

@@ -6,10 +6,6 @@ use crate::pricing::EndpointProfile;
 pub const COST_RANK_INPUT_TOKENS: u32 = 1_000;
 pub const COST_RANK_OUTPUT_TOKENS: u32 = 512;
 pub const UNPRICED_SCORE: f64 = 1e-12;
-pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000.0;
-pub const CAPABILITY_THRESHOLD: f64 = 0.60;
-pub const CAPABILITY_MARGIN: f64 = 0.05;
-pub const HEURISTIC_DIFFICULTY_WEIGHT: f64 = 0.30;
 
 /// Canonical strategy names accepted on model pools.
 pub fn canonicalize(name: &str) -> &str {
@@ -59,8 +55,16 @@ pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_r
     }
 }
 
+pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000.0;
+
+/// Required capability score for a given difficulty D in [0, 1].
+pub fn required_capability(difficulty: f64) -> f64 {
+    0.35 + 0.55 * difficulty.clamp(0.0, 1.0)
+}
+
 pub fn capability_mu(profile: &EndpointProfile, difficulty: f64) -> f64 {
-    (profile.capability_score - HEURISTIC_DIFFICULTY_WEIGHT * difficulty).clamp(0.0, 1.0)
+    let req = required_capability(difficulty);
+    (profile.capability_score - req).clamp(-1.0, 1.0)
 }
 
 /// Higher score = preferred.
@@ -103,9 +107,9 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             }
         }
         "capability_aware" => {
-            let mu = capability_mu(&input.profile, input.difficulty);
-            let capable = mu >= CAPABILITY_THRESHOLD;
-            let in_margin = mu >= (input.top_mu - CAPABILITY_MARGIN);
+            let req = required_capability(input.difficulty);
+            let capable = input.profile.capability_score >= req;
+            let near_capable = input.profile.capability_score >= (req - 0.10);
             let normalized_cost = if input.profile.price.is_priced() {
                 (1.0 / (base_cost + 1e-6)).clamp(0.0, 100_000.0)
             } else {
@@ -113,12 +117,13 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             };
             let tier = if capable {
                 2.0
-            } else if in_margin {
+            } else if near_capable {
                 1.0
             } else {
                 0.0
             };
-            Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + mu * 100.0)
+            let capability_bonus = (input.profile.capability_score - req) * 100.0;
+            Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + capability_bonus)
         }
         // round_robin / random / fallback: data plane owns ordering
         _ => None,

@@ -8,8 +8,8 @@
 mod strategy;
 
 pub use strategy::{
-    canonicalize as canonicalize_strategy, uses_score_order, CAPABILITY_MARGIN,
-    CAPABILITY_THRESHOLD, COST_RANK_INPUT_TOKENS, COST_RANK_OUTPUT_TOKENS,
+    canonicalize as canonicalize_strategy, uses_score_order, CAPABILITY_TIER_SCALE,
+    COST_RANK_INPUT_TOKENS, COST_RANK_OUTPUT_TOKENS,
 };
 
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
