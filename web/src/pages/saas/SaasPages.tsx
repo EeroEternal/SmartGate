@@ -1009,39 +1009,55 @@ export function AnalyticsPage() {
         {error && <ErrorMessage text={error} />}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Analyzed queries</div>
-            <div className="mt-2 text-2xl font-semibold text-zinc-950">{total.toLocaleString()}</div>
-            <div className="mt-1 text-xs text-zinc-500">Intelligent complexity scored</div>
+            <div className="mt-2 text-2xl font-bold text-zinc-950">{total.toLocaleString()}</div>
+            <div className="mt-2 text-xs text-zinc-400">Intelligent complexity scored</div>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Complexity breakdown</div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-semibold text-purple-700">{data?.summary.high_tier_count || 0}</span>
-              <span className="text-xs text-zinc-400">High</span>
-              <span className="text-lg font-semibold text-amber-600 ml-1">{data?.summary.medium_tier_count || 0}</span>
-              <span className="text-xs text-zinc-400">Med</span>
-              <span className="text-lg font-semibold text-emerald-600 ml-1">{data?.summary.low_tier_count || 0}</span>
-              <span className="text-xs text-zinc-400">Low</span>
+            <div className="mt-2 flex items-center justify-between gap-1">
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-xl font-bold text-purple-700">{data?.summary.high_tier_count || 0}</span>
+                <span className="text-[11px] font-medium text-zinc-500">High</span>
+              </div>
+              <div className="h-6 w-px bg-zinc-200" />
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-xl font-bold text-amber-600">{data?.summary.medium_tier_count || 0}</span>
+                <span className="text-[11px] font-medium text-zinc-500">Med</span>
+              </div>
+              <div className="h-6 w-px bg-zinc-200" />
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-xl font-bold text-emerald-600">{data?.summary.low_tier_count || 0}</span>
+                <span className="text-[11px] font-medium text-zinc-500">Low</span>
+              </div>
             </div>
-            <div className="mt-1 text-xs text-zinc-500">{highPct}% complex reasoning & code</div>
+            <div className="mt-2 text-xs text-zinc-400">{highPct}% complex reasoning & code</div>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Model tier routing</div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-semibold text-zinc-950">{data?.summary.pro_count || 0}</span>
-              <span className="text-xs text-purple-700 font-medium">Pro</span>
-              <span className="text-2xl font-semibold text-zinc-950 ml-2">{data?.summary.flash_count || 0}</span>
-              <span className="text-xs text-emerald-700 font-medium">Flash</span>
+            <div className="mt-2 flex items-center justify-around gap-2">
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-xl font-bold text-purple-900">{data?.summary.pro_count || 0}</span>
+                <span className="text-[11px] font-semibold text-purple-700">Pro model</span>
+              </div>
+              <div className="h-6 w-px bg-zinc-200" />
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-xl font-bold text-emerald-900">{data?.summary.flash_count || 0}</span>
+                <span className="text-[11px] font-semibold text-emerald-700">Flash model</span>
+              </div>
             </div>
-            <div className="mt-1 text-xs text-zinc-500">Dynamic capability dispatch</div>
+            <div className="mt-2 text-xs text-zinc-400">Dynamic capability dispatch</div>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Estimated savings</div>
-            <div className="mt-2 text-2xl font-semibold text-emerald-600">
+            <div className="mt-2 text-2xl font-bold text-emerald-600">
               ${(data?.summary.estimated_savings || 0).toFixed(4)}
             </div>
-            <div className="mt-1 text-xs text-zinc-500">
+            <div className="mt-2 text-xs text-zinc-400">
               Total spend: ${(data?.summary.total_cost || 0).toFixed(4)}
             </div>
           </div>
