@@ -204,7 +204,7 @@ function hasCatalogDetails(model: CatalogOffering | undefined) {
 function inferDefaultCapability(model?: CatalogOffering, modelId?: string): string {
   const name = (model?.model || modelId || '').toLowerCase()
   if (/r1|reasoner|o1|o3|claude-3-5-sonnet|claude-3-7-sonnet|opus|gpt-4\.5/i.test(name)) return '0.96'
-  if (/pro|gpt-4o|max|70b|72b|405b/i.test(name)) return '0.92'
+  if (/pro|gpt-4o|max|70b|72b|405b|deepseek-chat|deepseek-v3|deepseek-coder/i.test(name)) return '0.92'
   if (model?.supports_reasoning) return '0.85'
   if (/flash|mini|nano|lite|8b|7b|3b|1\.5b|0\.5b/i.test(name)) return '0.65'
   return '0.70'
@@ -245,7 +245,7 @@ type DraftEndpoint = {
   context_length: string
 }
 
-const emptyEndpoint = (): DraftEndpoint => ({ provider_type: 'custom', custom_provider_id: '', protocol: 'openai', base_url: '', api_key: '', upstream_model_id: '', input_price_per_1m: '', output_price_per_1m: '', capability_score: '0.5', context_length: '' })
+const emptyEndpoint = (): DraftEndpoint => ({ provider_type: 'custom', custom_provider_id: '', protocol: 'openai', base_url: '', api_key: '', upstream_model_id: '', input_price_per_1m: '', output_price_per_1m: '', capability_score: '', context_length: '' })
 
 function endpointComplete(endpoint: DraftEndpoint) {
   return Boolean(

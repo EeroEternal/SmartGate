@@ -752,7 +752,14 @@ async fn create_model_service(
             .bind(&endpoint.upstream_model_id)
             .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
             .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-            .bind(endpoint.capability_score.unwrap_or_else(|| default_capability_score(&endpoint.upstream_model_id, None)).clamp(0.0, 1.0))
+            .bind({
+                let cap = endpoint.capability_score.unwrap_or(0.0);
+                if cap <= 0.0 || (cap - 0.5).abs() < 1e-5 || (cap - 0.7).abs() < 1e-5 {
+                    default_capability_score(&endpoint.upstream_model_id, None)
+                } else {
+                    cap.clamp(0.0, 1.0)
+                }
+            })
             .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
             .bind(endpoint.context_length)
             .execute(&mut *tx)
@@ -1021,7 +1028,14 @@ async fn add_model_service_endpoint(
         .bind(&endpoint.upstream_model_id)
         .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
         .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-        .bind(endpoint.capability_score.unwrap_or_else(|| default_capability_score(&endpoint.upstream_model_id, None)).clamp(0.0, 1.0))
+        .bind({
+            let cap = endpoint.capability_score.unwrap_or(0.0);
+            if cap <= 0.0 || (cap - 0.5).abs() < 1e-5 || (cap - 0.7).abs() < 1e-5 {
+                default_capability_score(&endpoint.upstream_model_id, None)
+            } else {
+                cap.clamp(0.0, 1.0)
+            }
+        })
         .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
         .bind(endpoint.context_length)
         .execute(&mut *tx)
