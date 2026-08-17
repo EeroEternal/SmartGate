@@ -43,7 +43,7 @@ pub struct ScoreInput<'a> {
     pub input_tokens: u32,
     pub output_tokens: u32,
     pub difficulty: f64,
-    pub top_mu: f64,
+    pub max_pool_capability: f64,
 }
 
 pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_rate: f64) -> f64 {
@@ -108,7 +108,12 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
         }
         "capability_aware" => {
             let req = required_capability(input.difficulty);
-            let capable = input.profile.capability_score >= req;
+            let is_top_in_pool = input.profile.capability_score >= (input.max_pool_capability - 0.04);
+            let capable = if input.difficulty >= 0.55 {
+                is_top_in_pool
+            } else {
+                input.profile.capability_score >= req
+            };
             let near_capable = input.profile.capability_score >= (req - 0.10);
             let normalized_cost = if input.profile.price.is_priced() {
                 (1.0 / (base_cost + 1e-6)).clamp(0.0, 100_000.0)
@@ -174,7 +179,7 @@ mod tests {
                 input_tokens: 1000,
                 output_tokens: 500,
                 difficulty: 0.2,
-                top_mu: 0.0,
+                max_pool_capability: 1.0,
             },
         )
         .unwrap();
@@ -190,7 +195,7 @@ mod tests {
                 input_tokens: 1000,
                 output_tokens: 500,
                 difficulty: 0.2,
-                top_mu: 0.0,
+                max_pool_capability: 1.0,
             },
         )
         .unwrap();
@@ -227,7 +232,6 @@ mod tests {
 
         // 1. Complex task (difficulty = 0.70)
         let diff_complex = 0.70;
-        let top_mu_complex = capability_mu(&pro, diff_complex);
         let s_flash_complex = score(
             "capability_aware",
             ScoreInput {
@@ -240,7 +244,7 @@ mod tests {
                 input_tokens: 2000,
                 output_tokens: 1000,
                 difficulty: diff_complex,
-                top_mu: top_mu_complex,
+                max_pool_capability: 0.95,
             },
         )
         .unwrap();
@@ -256,7 +260,7 @@ mod tests {
                 input_tokens: 2000,
                 output_tokens: 1000,
                 difficulty: diff_complex,
-                top_mu: top_mu_complex,
+                max_pool_capability: 0.95,
             },
         )
         .unwrap();
@@ -265,7 +269,6 @@ mod tests {
 
         // 2. Simple task (difficulty = 0.15)
         let diff_simple = 0.15;
-        let top_mu_simple = capability_mu(&pro, diff_simple);
         let s_flash_simple = score(
             "capability_aware",
             ScoreInput {
@@ -278,7 +281,7 @@ mod tests {
                 input_tokens: 500,
                 output_tokens: 200,
                 difficulty: diff_simple,
-                top_mu: top_mu_simple,
+                max_pool_capability: 0.95,
             },
         )
         .unwrap();
@@ -294,7 +297,7 @@ mod tests {
                 input_tokens: 500,
                 output_tokens: 200,
                 difficulty: diff_simple,
-                top_mu: top_mu_simple,
+                max_pool_capability: 0.95,
             },
         )
         .unwrap();

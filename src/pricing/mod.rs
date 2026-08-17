@@ -84,6 +84,9 @@ pub fn default_capability_score(model_id: &str, supports_reasoning: Option<bool>
         || lower.contains("70b")
         || lower.contains("72b")
         || lower.contains("405b")
+        || lower.contains("deepseek-chat")
+        || lower.contains("deepseek-v3")
+        || lower.contains("deepseek-coder")
     {
         0.92
     } else if supports_reasoning == Some(true) {

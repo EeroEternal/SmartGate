@@ -19,7 +19,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
-use strategy::{capability_mu, expected_cost, score as score_endpoint, ScoreInput};
+use strategy::{expected_cost, score as score_endpoint, ScoreInput};
 use unigateway_sdk::core::feedback::{EndpointSignal, RoutingFeedback, RoutingFeedbackProvider};
 
 /// Failure streak before an endpoint is marked unavailable and cooled down.
@@ -71,20 +71,18 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             .as_ref()
             .and_then(|h| h.sticky_endpoint_id.clone());
 
-        let top_mu = if strategy == "capability_aware" {
+        let max_pool_capability = if strategy == "capability_aware" {
             members
                 .iter()
                 .map(|m| {
-                    let p = self
-                        .profiles
+                    self.profiles
                         .get(&m.endpoint_id)
-                        .map(|x| *x)
-                        .unwrap_or_default();
-                    capability_mu(&p, difficulty)
+                        .map(|p| p.capability_score)
+                        .unwrap_or(0.5)
                 })
                 .fold(0.0_f64, f64::max)
         } else {
-            0.0
+            1.0
         };
 
         let median_cost = {
@@ -167,7 +165,7 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                     input_tokens: input_tok,
                     output_tokens: output_tok,
                     difficulty,
-                    top_mu,
+                    max_pool_capability,
                 },
             );
 
