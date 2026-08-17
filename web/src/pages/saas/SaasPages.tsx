@@ -1120,16 +1120,16 @@ export function AnalyticsPage() {
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
               </div>
             ) : (
-              <table className="min-w-[1040px] w-full text-left text-xs divide-y divide-zinc-100">
+              <table className="min-w-[840px] w-full text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-3 px-5 font-medium w-36">Time / Service</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px] max-w-xs">Prompt / User Intent</th>
-                    <th className="py-3 px-4 font-medium w-28">Complexity</th>
-                    <th className="py-3 px-4 font-medium min-w-[260px] max-w-sm">Matched Signals</th>
-                    <th className="py-3 px-4 font-medium w-36">Routed Model</th>
-                    <th className="py-3 px-4 text-right font-medium w-28">Tokens / Latency</th>
-                    <th className="py-3 px-5 text-right font-medium w-24">Cost</th>
+                    <th className="py-3 px-4 font-medium w-32">Time / Service</th>
+                    <th className="py-3 px-3 font-medium min-w-[160px] max-w-xs">Prompt / User Intent</th>
+                    <th className="py-3 px-3 font-medium w-28">Complexity</th>
+                    <th className="py-3 px-3 font-medium min-w-[160px] max-w-[220px]">Matched Signals</th>
+                    <th className="py-3 px-3 font-medium w-32">Routed Model</th>
+                    <th className="py-3 px-3 text-right font-medium w-24">Tokens / Latency</th>
+                    <th className="py-3 px-4 text-right font-medium w-20">Cost</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -1137,16 +1137,16 @@ export function AnalyticsPage() {
                     const cleanService = q.service_name.replace(/^[0-9a-fA-F-]{36,37}-/, '')
                     return (
                       <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
-                        <td className="py-3 px-5 align-top whitespace-nowrap">
+                        <td className="py-3 px-4 align-top whitespace-nowrap">
                           <div className="font-semibold text-zinc-900">{cleanService}</div>
                           <div className="mt-0.5 text-[11px] text-zinc-400">{q.timestamp}</div>
                         </td>
-                        <td className="py-3 px-4 align-top">
+                        <td className="py-3 px-3 align-top">
                           <div className="font-mono text-zinc-800 text-[11px] line-clamp-2 leading-relaxed break-words" title={q.prompt_preview}>
                             {q.prompt_preview}
                           </div>
                         </td>
-                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                        <td className="py-3 px-3 align-top whitespace-nowrap">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               q.difficulty_tier === 'high'
@@ -1159,12 +1159,12 @@ export function AnalyticsPage() {
                             D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
                           </span>
                         </td>
-                        <td className="py-3 px-4 align-top min-w-[260px] max-w-sm">
-                          <div className="flex flex-wrap items-center gap-1.5">
+                        <td className="py-3 px-3 align-top min-w-[160px] max-w-[220px]">
+                          <div className="flex flex-wrap items-center gap-1">
                             {q.signals.map((sig, i) => (
                               <span
                                 key={i}
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium leading-tight whitespace-nowrap ${
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-tight whitespace-nowrap ${
                                   sig.includes('Judge')
                                     ? 'bg-purple-50 text-purple-700 border border-purple-200/80 font-semibold'
                                     : sig.includes('reasoning') || sig.includes('Correction')
@@ -1177,15 +1177,15 @@ export function AnalyticsPage() {
                             ))}
                           </div>
                         </td>
-                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                        <td className="py-3 px-3 align-top whitespace-nowrap">
                           <div className="font-semibold text-zinc-900">{q.model}</div>
                           <div className="text-[11px] text-zinc-400">{q.provider_name}</div>
                         </td>
-                        <td className="py-3 px-4 align-top text-right whitespace-nowrap">
+                        <td className="py-3 px-3 align-top text-right whitespace-nowrap">
                           <div className="font-medium text-zinc-900">{q.total_tokens.toLocaleString()} tok</div>
                           <div className="text-[11px] text-zinc-400">{q.latency_ms}ms</div>
                         </td>
-                        <td className="py-3 px-5 align-top text-right whitespace-nowrap font-semibold text-zinc-900">
+                        <td className="py-3 px-4 align-top text-right whitespace-nowrap font-semibold text-zinc-900">
                           ${q.cost.toFixed(4)}
                         </td>
                       </tr>
