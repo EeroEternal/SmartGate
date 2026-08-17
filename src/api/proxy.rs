@@ -27,6 +27,81 @@ use std::sync::Arc;
 use unigateway_sdk::core::pool::ExecutionTarget;
 use unigateway_sdk::host::{HostError, HostFuture, PoolHost, PoolLookupOutcome, PoolLookupResult};
 
+async fn classify_with_judge(
+    db: &sqlx::PgPool,
+    judge_endpoint_id: &str,
+    prompt_text: &str,
+) -> Option<bool> {
+    let row: Option<(String, String, String, String)> = sqlx::query_as(
+        "SELECT e.upstream_model_id, pa.base_url, pa.api_key, pa.protocol
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE e.id = $1",
+    )
+    .bind(judge_endpoint_id)
+    .fetch_optional(db)
+    .await
+    .ok()?;
+
+    let (model, base_url, api_key, _protocol) = row?;
+    let preview: String = prompt_text.chars().take(400).collect();
+    let client = reqwest::Client::new();
+    let url = if base_url.ends_with("/chat/completions") {
+        base_url
+    } else {
+        format!("{}/chat/completions", base_url.trim_end_matches('/'))
+    };
+
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": 10,
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a prompt complexity classifier. If the user's prompt requires complex reasoning, advanced math/proofs, complex architecture/algorithms, or deep debugging, answer ONLY 'COMPLEX'. Otherwise answer ONLY 'SIMPLE'."
+            },
+            {
+                "role": "user",
+                "content": preview
+            }
+        ]
+    });
+
+    let resp = tokio::time::timeout(
+        std::time::Duration::from_millis(1200),
+        client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+
+    if !resp.status().is_success() {
+        return None;
+    }
+    let res_json: serde_json::Value = resp.json().await.ok()?;
+    let content = res_json
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c0| c0.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|s| s.as_str())?;
+
+    let upper = content.to_ascii_uppercase();
+    if upper.contains("COMPLEX") {
+        Some(true)
+    } else if upper.contains("SIMPLE") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ChatProtocol {
     OpenAi,
@@ -167,8 +242,28 @@ async fn chat_proxy(
     let prompt_text = extract_openai_prompt_text(&payload);
     let input_tokens = estimate_tokens_from_text(&prompt_text);
     let output_tokens = expected_output_tokens(&payload, 512);
-    let difficulty = heuristic_difficulty(&payload);
+    let mut difficulty = heuristic_difficulty(&payload);
+    let mut signals = extract_complexity_signals(&payload);
     let has_tools = request_has_tools(&payload);
+
+    // If auxiliary judge model is enabled on this pool and complexity is in ambiguous zone (0.30..=0.65)
+    if let Some(ref p) = pool {
+        if p.judge_enabled != 0 {
+            if let Some(ref judge_ep_id) = p.judge_endpoint_id {
+                if difficulty >= 0.30 && difficulty <= 0.65 {
+                    if let Some(is_complex) = classify_with_judge(&state.db, judge_ep_id, &prompt_text).await {
+                        if is_complex {
+                            difficulty = 0.85;
+                            signals.push("Auxiliary Judge: COMPLEX".to_string());
+                        } else {
+                            difficulty = 0.20;
+                            signals.push("Auxiliary Judge: SIMPLE".to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let session_id = warm_context
         .as_ref()
@@ -228,7 +323,6 @@ async fn chat_proxy(
     });
     let _hint_guard = HintGuard;
 
-    let signals = extract_complexity_signals(&payload);
     let prompt_preview = prompt_text.chars().take(200).collect::<String>();
     let difficulty_tier = if difficulty >= 0.60 {
         "high"
