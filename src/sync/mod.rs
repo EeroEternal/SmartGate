@@ -194,6 +194,12 @@ fn normalize_base_url(url: &str) -> String {
     if normalized.is_empty() {
         return normalized;
     }
+    let trimmed = normalized.trim_end_matches('/');
+    if let Some(stripped) = trimmed.strip_suffix("/v1") {
+        normalized = stripped.to_string();
+    } else {
+        normalized = trimmed.to_string();
+    }
     if !normalized.ends_with('/') {
         normalized.push('/');
     }

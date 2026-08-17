@@ -739,7 +739,7 @@ async fn create_model_service(
             .bind(endpoint.provider_name.clone().unwrap_or_else(|| endpoint.provider_type.clone()))
             .bind(&endpoint.provider_type)
             .bind(protocol)
-            .bind(&endpoint.base_url)
+            .bind(&clean_base_url(&endpoint.base_url))
             .bind(&endpoint.api_key)
             .execute(&mut *tx)
             .await
@@ -1015,7 +1015,7 @@ async fn add_model_service_endpoint(
         .bind(endpoint.provider_name.clone().unwrap_or_else(|| endpoint.provider_type.clone()))
         .bind(&endpoint.provider_type)
         .bind(endpoint.protocol.as_deref().unwrap_or("openai"))
-        .bind(&endpoint.base_url)
+        .bind(&clean_base_url(&endpoint.base_url))
         .bind(&endpoint.api_key)
         .execute(&mut *tx)
         .await
@@ -1206,8 +1206,9 @@ async fn update_model_service_endpoint(
             Json(ApiResponse::error("Model endpoint not found")),
         ));
     };
+    let cleaned_base_url = clean_base_url(base_url);
     sqlx::query("UPDATE provider_accounts SET name = $1, provider_type = $2, protocol = $3, base_url = $4, api_key = COALESCE($5, api_key), updated_at = CURRENT_TIMESTAMP WHERE id = $6")
-        .bind(provider_name).bind(provider_type).bind(&protocol).bind(base_url)
+        .bind(provider_name).bind(provider_type).bind(&protocol).bind(&cleaned_base_url)
         .bind(input.api_key.as_deref().filter(|key| !key.trim().is_empty())).bind(&account_id)
         .execute(&state.db).await.map_err(db_error)?;
     sqlx::query("UPDATE endpoints SET upstream_model_id = $1, input_price_per_1m = $2, output_price_per_1m = $3, capability_score = $4, supports_tools = COALESCE($5, supports_tools), context_length = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7")
@@ -2421,6 +2422,15 @@ fn cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
             let (key, value) = part.trim().split_once('=')?;
             (key == name).then(|| value.to_string())
         })
+}
+
+fn clean_base_url(url: &str) -> String {
+    let trimmed = url.trim().trim_end_matches('/');
+    if let Some(stripped) = trimmed.strip_suffix("/v1") {
+        stripped.to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 fn normalize_email(email: &str) -> String {
