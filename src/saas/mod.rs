@@ -12,7 +12,6 @@ use serde_json::{json, Value};
 use sqlx::{FromRow, PgPool};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use unigateway_sdk::core::{EndpointRef, ExecutionPlan, ExecutionTarget, RetryPolicy};
 use uuid::Uuid;
 
 use crate::{
@@ -1227,8 +1226,8 @@ async fn test_model_service_endpoint(
     ctx: SaasContext,
     Path((model_id, endpoint_id)): Path<(String, String)>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let target: Option<(String, String, String)> = sqlx::query_as(
-        "SELECT mp.id, pa.protocol, e.upstream_model_id FROM endpoints e
+    let target: Option<(String, String, String, String, String)> = sqlx::query_as(
+        "SELECT mp.id, pa.protocol, pa.base_url, pa.api_key, e.upstream_model_id FROM endpoints e
          JOIN model_pool_endpoints mpe ON mpe.endpoint_id = e.id
          JOIN model_pools mp ON mp.id = mpe.pool_id
          JOIN provider_accounts pa ON pa.id = e.account_id
@@ -1245,40 +1244,94 @@ async fn test_model_service_endpoint(
     .fetch_optional(&state.db)
     .await
     .map_err(db_error)?;
-    let Some((pool_id, protocol, upstream_model_id)) = target else {
+    let Some((_pool_id, protocol, base_url, api_key, upstream_model_id)) = target else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model endpoint not found")),
         ));
     };
-    let payload = json!({"model": upstream_model_id, "max_tokens": 8, "messages": [{"role": "user", "content": "Say OK"}]});
-    let request = if protocol.eq_ignore_ascii_case("anthropic") {
-        unigateway_sdk::protocol::anthropic_payload_to_chat_request(&payload, &upstream_model_id)
-    } else {
-        unigateway_sdk::protocol::openai_payload_to_chat_request(&payload, &upstream_model_id)
-    }
-    .map_err(|_| {
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string()))))?;
+
+    let is_anthropic = protocol.eq_ignore_ascii_case("anthropic");
+    let (url, body) = if is_anthropic {
+        let trimmed = base_url.trim_end_matches('/');
+        let url = if trimmed.ends_with("/messages") {
+            trimmed.to_string()
+        } else {
+            format!("{}/messages", trimmed)
+        };
         (
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Could not build provider test request")),
+            url,
+            json!({
+                "model": upstream_model_id,
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Hi"}]
+            }),
         )
-    })?;
-    let target = ExecutionTarget::Plan(ExecutionPlan {
-        pool_id: Some(pool_id),
-        candidates: vec![EndpointRef { endpoint_id }],
-        load_balancing_override: None,
-        retry_policy_override: Some(RetryPolicy::default()),
-        metadata: HashMap::new(),
-    });
-    match state.engine.proxy_chat(request, target).await {
-        Ok(_) => Ok(Json(ApiResponse::success(
-            json!({"passed": true, "message": "Connection successful"}),
-        ))),
-        Err(_) => Err((
+    } else {
+        let trimmed = base_url.trim_end_matches('/');
+        let url = if trimmed.ends_with("/chat/completions") {
+            trimmed.to_string()
+        } else {
+            format!("{}/chat/completions", trimmed)
+        };
+        (
+            url,
+            json!({
+                "model": upstream_model_id,
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Hi"}]
+            }),
+        )
+    };
+
+    let mut req_builder = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&body);
+
+    if is_anthropic {
+        req_builder = req_builder
+            .header("x-api-key", &api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+        req_builder = req_builder.header("Authorization", format!("Bearer {}", api_key));
+    }
+
+    match req_builder.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                Ok(Json(ApiResponse::success(
+                    json!({"passed": true, "message": "Connection verified successfully"}),
+                )))
+            } else {
+                let err_text = resp.text().await.unwrap_or_default();
+                let err_msg = serde_json::from_str::<serde_json::Value>(&err_text)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("error")
+                            .and_then(|e| e.get("message").or(Some(e)))
+                            .map(|m| m.as_str().map(String::from).unwrap_or_else(|| m.to_string()))
+                    })
+                    .unwrap_or_else(|| err_text.chars().take(200).collect());
+                Err((
+                    StatusCode::BAD_GATEWAY,
+                    Json(ApiResponse::error(format!(
+                        "Upstream returned HTTP {}: {}",
+                        status.as_u16(),
+                        if err_msg.is_empty() { "Request failed" } else { &err_msg }
+                    ))),
+                ))
+            }
+        }
+        Err(e) => Err((
             StatusCode::BAD_GATEWAY,
-            Json(ApiResponse::error(
-                "Connection failed. Check the provider URL, model, and API key.",
-            )),
+            Json(ApiResponse::error(format!("Connection error: {}", e))),
         )),
     }
 }
