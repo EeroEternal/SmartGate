@@ -18,6 +18,10 @@ pub struct RouteHint {
     pub sticky_endpoint_id: Option<String>,
 }
 
+tokio::task_local! {
+    pub static TASK_ROUTE_HINT: RouteHint;
+}
+
 static CURRENT: Lazy<RwLock<Option<RouteHint>>> = Lazy::new(|| RwLock::new(None));
 
 pub fn set_hint(hint: RouteHint) {
@@ -33,7 +37,10 @@ pub fn clear_hint() {
 }
 
 pub fn get_hint() -> Option<RouteHint> {
-    CURRENT.read().ok().and_then(|g| g.clone())
+    TASK_ROUTE_HINT
+        .try_with(|h| h.clone())
+        .ok()
+        .or_else(|| CURRENT.read().ok().and_then(|g| g.clone()))
 }
 
 /// RAII clear on drop.

@@ -545,15 +545,29 @@ async fn chat_proxy(
         ChatProtocol::OpenAi => unigateway_sdk::host::HostProtocol::OpenAiChat,
         ChatProtocol::Anthropic => unigateway_sdk::host::HostProtocol::AnthropicMessages,
     };
-    let dispatch = unigateway_sdk::host::dispatch_request_with_middleware(
-        &host_context,
-        unigateway_sdk::host::HostDispatchTarget::Service(&virtual_model.pool_id),
-        host_protocol,
-        None,
-        request,
-        middleware.as_ref(),
-    )
-    .await;
+    let route_hint = RouteHint {
+        input_tokens,
+        output_tokens,
+        has_tools,
+        difficulty,
+        downshift,
+        pool_id: virtual_model.pool_id.clone(),
+        affinity_enabled,
+        sticky_endpoint_id: sticky_endpoint_id.clone(),
+    };
+    let dispatch = crate::policy::TASK_ROUTE_HINT
+        .scope(
+            route_hint,
+            unigateway_sdk::host::dispatch_request_with_middleware(
+                &host_context,
+                unigateway_sdk::host::HostDispatchTarget::Service(&virtual_model.pool_id),
+                host_protocol,
+                None,
+                request,
+                middleware.as_ref(),
+            ),
+        )
+        .await;
     match dispatch {
         Ok(unigateway_sdk::host::HostDispatchOutcome::Response(response)) => {
             permit.disarm();
