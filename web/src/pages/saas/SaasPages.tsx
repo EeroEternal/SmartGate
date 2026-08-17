@@ -1098,71 +1098,81 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 -mx-5 -mb-5 overflow-x-auto border-t border-zinc-100">
             {!filteredQueries.length ? (
               <div className="py-12 text-center text-sm text-zinc-500">
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
               </div>
             ) : (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-100 text-zinc-400">
-                    <th className="pb-3 font-medium">Time / Service</th>
-                    <th className="pb-3 font-medium">Prompt Preview & Intent</th>
-                    <th className="pb-3 font-medium">Complexity</th>
-                    <th className="pb-3 font-medium">Matched Signals</th>
-                    <th className="pb-3 font-medium">Routed Model</th>
-                    <th className="pb-3 text-right font-medium">Tokens / Latency</th>
-                    <th className="pb-3 text-right font-medium">Cost</th>
+              <table className="min-w-[980px] w-full text-left text-xs divide-y divide-zinc-100">
+                <thead className="bg-zinc-50/50">
+                  <tr className="text-zinc-500">
+                    <th className="py-3 px-5 font-medium w-40">Time / Service</th>
+                    <th className="py-3 px-4 font-medium min-w-[240px] max-w-sm">Prompt / User Intent</th>
+                    <th className="py-3 px-4 font-medium w-32">Complexity</th>
+                    <th className="py-3 px-4 font-medium w-48">Matched Signals</th>
+                    <th className="py-3 px-4 font-medium w-40">Routed Model</th>
+                    <th className="py-3 px-4 text-right font-medium w-28">Tokens / Latency</th>
+                    <th className="py-3 px-5 text-right font-medium w-24">Cost</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {filteredQueries.map((q) => (
-                    <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
-                      <td className="py-3 pr-3 align-top whitespace-nowrap">
-                        <div className="font-medium text-zinc-900">{q.service_name}</div>
-                        <div className="mt-0.5 text-[11px] text-zinc-400">{q.timestamp}</div>
-                      </td>
-                      <td className="py-3 pr-3 align-top max-w-xs sm:max-w-sm md:max-w-md">
-                        <div className="truncate font-mono text-zinc-800" title={q.prompt_preview}>
-                          {q.prompt_preview}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-3 align-top whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            q.difficulty_tier === 'high'
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : q.difficulty_tier === 'medium'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}
-                        >
-                          D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
-                        </span>
-                      </td>
-                      <td className="py-3 pr-3 align-top">
-                        <div className="flex flex-wrap gap-1">
-                          {q.signals.map((sig, i) => (
-                            <span key={i} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600">
-                              {sig}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-3 align-top whitespace-nowrap">
-                        <div className="font-medium text-zinc-900">{q.model}</div>
-                        <div className="text-[11px] text-zinc-400">{q.provider_name}</div>
-                      </td>
-                      <td className="py-3 pr-3 align-top text-right whitespace-nowrap">
-                        <div className="text-zinc-900">{q.total_tokens.toLocaleString()} tok</div>
-                        <div className="text-[11px] text-zinc-400">{q.latency_ms}ms</div>
-                      </td>
-                      <td className="py-3 align-top text-right whitespace-nowrap font-medium text-zinc-900">
-                        ${q.cost.toFixed(4)}
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-zinc-100 bg-white">
+                  {filteredQueries.map((q) => {
+                    const cleanService = q.service_name.replace(/^[0-9a-fA-F-]{36,37}-/, '')
+                    return (
+                      <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
+                        <td className="py-3 px-5 align-top whitespace-nowrap">
+                          <div className="font-semibold text-zinc-900">{cleanService}</div>
+                          <div className="mt-0.5 text-[11px] text-zinc-400">{q.timestamp}</div>
+                        </td>
+                        <td className="py-3 px-4 align-top">
+                          <div className="font-mono text-zinc-800 text-[11px] line-clamp-2 leading-relaxed break-words" title={q.prompt_preview}>
+                            {q.prompt_preview}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              q.difficulty_tier === 'high'
+                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : q.difficulty_tier === 'medium'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 align-top">
+                          <div className="flex flex-wrap gap-1">
+                            {q.signals.map((sig, i) => (
+                              <span
+                                key={i}
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  sig.includes('Judge')
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-zinc-100 text-zinc-600'
+                                }`}
+                              >
+                                {sig}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                          <div className="font-semibold text-zinc-900">{q.model}</div>
+                          <div className="text-[11px] text-zinc-400">{q.provider_name}</div>
+                        </td>
+                        <td className="py-3 px-4 align-top text-right whitespace-nowrap">
+                          <div className="font-medium text-zinc-900">{q.total_tokens.toLocaleString()} tok</div>
+                          <div className="text-[11px] text-zinc-400">{q.latency_ms}ms</div>
+                        </td>
+                        <td className="py-3 px-5 align-top text-right whitespace-nowrap font-semibold text-zinc-900">
+                          ${q.cost.toFixed(4)}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}

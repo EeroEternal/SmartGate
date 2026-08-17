@@ -1966,14 +1966,20 @@ async fn get_routing_analytics(
             }
         }
 
+        let clean_service_name = if service_name.len() > 37 && service_name.chars().nth(36) == Some('-') {
+            service_name[37..].to_string()
+        } else {
+            service_name.clone()
+        };
+
         if prompt_preview.is_empty() {
-            prompt_preview = format!("{} tokens query via {}", prompt_tokens, service_name);
+            prompt_preview = format!("{} tokens query via {}", prompt_tokens, clean_service_name);
         }
 
         queries.push(json!({
             "id": id,
             "timestamp": timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "service_name": service_name,
+            "service_name": clean_service_name,
             "model": model,
             "provider_name": provider_name,
             "prompt_tokens": prompt_tokens,

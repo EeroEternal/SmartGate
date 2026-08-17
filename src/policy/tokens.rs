@@ -29,6 +29,30 @@ fn is_wide(ch: char) -> bool {
     )
 }
 
+/// Extract the most recent user prompt text for intent preview.
+pub fn extract_user_prompt_preview(body: &serde_json::Value) -> String {
+    if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
+        if let Some(last_user) = msgs
+            .iter()
+            .rev()
+            .find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user"))
+        {
+            if let Some(content) = last_user.get("content") {
+                let text = content_to_text(content);
+                let cleaned = text.trim().replace(['\r', '\n', '\t'], " ");
+                let single_spaced = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+                return single_spaced.chars().take(250).collect();
+            }
+        }
+    }
+    extract_openai_prompt_text(body)
+        .trim()
+        .replace(['\r', '\n', '\t'], " ")
+        .chars()
+        .take(250)
+        .collect()
+}
+
 /// Flatten OpenAI-style chat body into text for estimation.
 pub fn extract_openai_prompt_text(body: &serde_json::Value) -> String {
     let mut parts = Vec::new();

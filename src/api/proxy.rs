@@ -7,10 +7,10 @@ use crate::models::ModelPool;
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
     extract_complexity_signals, extract_context_epoch, extract_openai_prompt_text,
-    extract_session_id, format_prefix_hash, get_sticky_endpoint, heuristic_difficulty,
-    next_turn_index, prefix_stable, request_has_tools, resolve_prefix_hash, set_hint,
-    slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome, HintGuard,
-    RouteHint, SlimConfig,
+    extract_session_id, extract_user_prompt_preview, format_prefix_hash, get_sticky_endpoint,
+    heuristic_difficulty, next_turn_index, prefix_stable, request_has_tools, resolve_prefix_hash,
+    set_hint, slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome,
+    HintGuard, RouteHint, SlimConfig,
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
@@ -323,7 +323,7 @@ async fn chat_proxy(
     });
     let _hint_guard = HintGuard;
 
-    let prompt_preview = prompt_text.chars().take(200).collect::<String>();
+    let prompt_preview = extract_user_prompt_preview(&payload);
     let difficulty_tier = if difficulty >= 0.60 {
         "high"
     } else if difficulty >= 0.35 {

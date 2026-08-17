@@ -16,5 +16,6 @@ pub use session::{
 };
 pub use tokens::{
     estimate_tokens_from_text, expected_output_tokens, extract_complexity_signals,
-    extract_openai_prompt_text, heuristic_difficulty, request_has_tools, tool_message_chars,
+    extract_openai_prompt_text, extract_user_prompt_preview, heuristic_difficulty,
+    request_has_tools, tool_message_chars,
 };
