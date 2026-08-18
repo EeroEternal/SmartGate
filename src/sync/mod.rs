@@ -64,27 +64,38 @@ pub async fn sync_all_pools(
         .fetch_all(db)
         .await?;
 
-        let members: Vec<PoolEndpointMember> = rows
+        let configured_capabilities: Vec<(String, f64)> = rows
             .iter()
             .map(|r| {
-                let default_cap = crate::pricing::default_capability_score(&r.upstream_model_id, None);
-                let capability = if r.capability_score <= 0.0
-                    || (r.capability_score - 0.50).abs() < 1e-5
-                    || (r.capability_score - 0.70).abs() < 1e-5
-                {
-                    default_cap
-                } else {
-                    r.capability_score.clamp(0.0, 1.0)
-                };
-                if default_cap - capability >= 0.20 {
+                (
+                    r.upstream_model_id.clone(),
+                    crate::pricing::effective_capability_score(
+                        &r.upstream_model_id,
+                        r.capability_score,
+                    ),
+                )
+            })
+            .collect();
+        let capabilities = crate::pricing::resolve_pool_capabilities(&configured_capabilities);
+
+        let members: Vec<PoolEndpointMember> = rows
+            .iter()
+            .zip(capabilities.iter())
+            .map(|(r, &capability)| {
+                let configured = configured_capabilities
+                    .iter()
+                    .position(|(model, _)| model == &r.upstream_model_id)
+                    .map(|index| configured_capabilities[index].1)
+                    .unwrap_or(capability);
+                if (capability - configured).abs() > 1e-6 {
                     tracing::warn!(
                         target: "smartgate.sync",
                         pool_id = %pool.id,
                         endpoint_id = %r.id,
                         model = %r.upstream_model_id,
-                        configured = capability,
-                        model_family_default = default_cap,
-                        "endpoint capability score is far below its model family default; capability-first routing may skip it"
+                        configured,
+                        applied = capability,
+                        "pool capability scores had no usable spread; using model family defaults so hard requests can reach the strongest endpoint"
                     );
                 }
                 profiles.insert(

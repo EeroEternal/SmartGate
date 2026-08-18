@@ -107,9 +107,81 @@ pub fn default_capability_score(model_id: &str, supports_reasoning: Option<bool>
     }
 }
 
+/// Capability spread below this leaves CapabilityAware with nothing to rank on.
+pub const CAPABILITY_SPREAD_MIN: f64 = 0.05;
+
+/// Capability actually used for routing: cold-start placeholders fall back to the
+/// model family profile, deliberate values are kept.
+pub fn effective_capability_score(model_id: &str, configured: f64) -> f64 {
+    if configured <= 0.0
+        || (configured - 0.50).abs() < 1e-5
+        || (configured - 0.70).abs() < 1e-5
+    {
+        default_capability_score(model_id, None)
+    } else {
+        configured.clamp(0.0, 1.0)
+    }
+}
+
+/// Resolve the capability scores of one pool from `(upstream_model_id, configured)` pairs.
+///
+/// Configured values win, except when a multi-endpoint pool has no usable spread
+/// while the model families clearly differ: ranking on price alone would then send
+/// every hard request to the cheapest endpoint.
+pub fn resolve_pool_capabilities(members: &[(String, f64)]) -> Vec<f64> {
+    let configured: Vec<f64> = members.iter().map(|(_, value)| *value).collect();
+    if members.len() < 2 {
+        return configured;
+    }
+    let defaults: Vec<f64> = members
+        .iter()
+        .map(|(model, _)| default_capability_score(model, None))
+        .collect();
+    let spread = |values: &[f64]| {
+        let max = values.iter().copied().fold(f64::MIN, f64::max);
+        let min = values.iter().copied().fold(f64::MAX, f64::min);
+        max - min
+    };
+    if spread(&configured) < CAPABILITY_SPREAD_MIN && spread(&defaults) >= CAPABILITY_SPREAD_MIN {
+        defaults
+    } else {
+        configured
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flat_capability_profiles_fall_back_to_model_families() {
+        let members = vec![
+            ("deepseek-v4-flash".to_string(), 0.65),
+            ("qwen3.6-flash".to_string(), 0.65),
+            ("deepseek-v4-pro".to_string(), 0.65),
+        ];
+        let resolved = resolve_pool_capabilities(&members);
+        assert_eq!(resolved[2], default_capability_score("deepseek-v4-pro", None));
+        assert!(resolved[2] > resolved[0]);
+    }
+
+    #[test]
+    fn deliberate_capability_profiles_are_preserved() {
+        let members = vec![
+            ("deepseek-v4-flash".to_string(), 0.60),
+            ("deepseek-v4-pro".to_string(), 0.80),
+        ];
+        assert_eq!(resolve_pool_capabilities(&members), vec![0.60, 0.80]);
+    }
+
+    #[test]
+    fn same_family_duplicates_keep_their_scores() {
+        let members = vec![
+            ("deepseek-v4-flash".to_string(), 0.66),
+            ("deepseek-v4-flash".to_string(), 0.66),
+        ];
+        assert_eq!(resolve_pool_capabilities(&members), vec![0.66, 0.66]);
+    }
 
     #[test]
     fn test_calculate_cost_with_cache_hit() {
