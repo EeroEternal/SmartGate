@@ -215,6 +215,16 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             }
         }
 
+        tracing::info!(
+            target: "smartgate.routing",
+            pool_id,
+            strategy = %strategy,
+            difficulty,
+            max_cap = max_pool_capability,
+            scores = ?feedback.endpoint_signals.iter().map(|(id, s)| (id.as_str(), s.score, s.excluded)).collect::<Vec<_>>(),
+            "routing feedback generated"
+        );
+
         feedback
     }
 }

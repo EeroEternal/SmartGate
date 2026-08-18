@@ -97,8 +97,8 @@ pub async fn sync_all_pools(
             })
             .collect();
 
-        let vm_names: Vec<(String,)> = sqlx::query_as(
-            "SELECT name FROM virtual_models WHERE pool_id = $1",
+        let vm_records: Vec<(String, String)> = sqlx::query_as(
+            "SELECT id, name FROM virtual_models WHERE pool_id = $1",
         )
         .bind(&pool.id)
         .fetch_all(db)
@@ -114,7 +114,7 @@ pub async fn sync_all_pools(
                 model_mapping.insert("*".to_string(), r.upstream_model_id.clone());
                 model_mapping.insert(pool.name.clone(), r.upstream_model_id.clone());
                 model_mapping.insert(r.upstream_model_id.clone(), r.upstream_model_id.clone());
-                for (vm_name,) in &vm_names {
+                for (_vm_id, vm_name) in &vm_records {
                     model_mapping.insert(vm_name.clone(), r.upstream_model_id.clone());
                 }
                 Endpoint {
@@ -155,9 +155,27 @@ pub async fn sync_all_pools(
             metadata: HashMap::from([("strategy".to_string(), pool.strategy.clone())]),
         };
 
-        engine.upsert_pool(provider_pool).await?;
-        pool_members.insert(pool.id.clone(), members);
-        pools.insert(pool.id.clone(), pool);
+        pools.insert(pool.id.clone(), pool.clone());
+        pools.insert(pool.name.clone(), pool.clone());
+        pool_members.insert(pool.id.clone(), members.clone());
+        pool_members.insert(pool.name.clone(), members.clone());
+        for (vm_id, vm_name) in &vm_records {
+            pools.insert(vm_id.clone(), pool.clone());
+            pools.insert(vm_name.clone(), pool.clone());
+            pool_members.insert(vm_id.clone(), members.clone());
+            pool_members.insert(vm_name.clone(), members.clone());
+        }
+
+        let mut pool_keys = vec![pool.id.clone(), pool.name.clone()];
+        for (vm_id, vm_name) in &vm_records {
+            pool_keys.push(vm_id.clone());
+            pool_keys.push(vm_name.clone());
+        }
+        for pkey in pool_keys {
+            let mut pp = provider_pool.clone();
+            pp.pool_id = pkey;
+            let _ = engine.upsert_pool(pp).await;
+        }
     }
 
     Ok(())
