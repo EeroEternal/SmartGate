@@ -55,11 +55,32 @@ pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_r
     }
 }
 
-pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000.0;
+pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000_000.0;
+/// One 0.01 capability step outranks any price difference on hard tasks.
+pub const CAPABILITY_RANK_SCALE: f64 = 100_000.0;
+/// Kept strictly below `CAPABILITY_RANK_SCALE` so price only breaks ties.
+pub const COST_TERM_MAX: f64 = 99_999.0;
+/// At or above this difficulty the pool must answer with its strongest endpoint.
+pub const HARD_TASK_DIFFICULTY: f64 = 0.55;
+/// Capability spread that still counts as "strongest in pool".
+pub const CAPABILITY_TOP_TOLERANCE: f64 = 0.04;
 
 /// Required capability score for a given difficulty D in [0, 1].
 pub fn required_capability(difficulty: f64) -> f64 {
     0.35 + 0.55 * difficulty.clamp(0.0, 1.0)
+}
+
+/// Whether this endpoint is capability-qualified for the requested difficulty.
+pub fn capability_qualified(
+    capability_score: f64,
+    difficulty: f64,
+    max_pool_capability: f64,
+) -> bool {
+    if difficulty >= HARD_TASK_DIFFICULTY {
+        capability_score >= (max_pool_capability - CAPABILITY_TOP_TOLERANCE)
+    } else {
+        capability_score >= required_capability(difficulty)
+    }
 }
 
 pub fn capability_mu(profile: &EndpointProfile, difficulty: f64) -> f64 {
@@ -107,16 +128,13 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             }
         }
         "capability_aware" => {
+            let capability = input.profile.capability_score;
             let req = required_capability(input.difficulty);
-            let is_top_in_pool = input.profile.capability_score >= (input.max_pool_capability - 0.04);
-            let capable = if input.difficulty >= 0.55 {
-                is_top_in_pool
-            } else {
-                input.profile.capability_score >= req
-            };
-            let near_capable = input.profile.capability_score >= (req - 0.10);
+            let capable =
+                capability_qualified(capability, input.difficulty, input.max_pool_capability);
+            let near_capable = capability >= (req - 0.10);
             let normalized_cost = if input.profile.price.is_priced() {
-                (1.0 / (base_cost + 1e-6)).clamp(0.0, 100_000.0)
+                (1.0 / (base_cost + 1e-6)).clamp(0.0, COST_TERM_MAX)
             } else {
                 UNPRICED_SCORE
             };
@@ -127,8 +145,20 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             } else {
                 0.0
             };
-            let capability_bonus = (input.profile.capability_score - req) * 100.0;
-            Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + capability_bonus)
+            if input.difficulty >= HARD_TASK_DIFFICULTY {
+                // Hard tasks rank on capability first; price only breaks ties
+                // between endpoints of equivalent strength.
+                let capability_rank = (capability.clamp(0.0, 1.0) * 100.0).round();
+                Some(
+                    tier * CAPABILITY_TIER_SCALE
+                        + capability_rank * CAPABILITY_RANK_SCALE
+                        + normalized_cost,
+                )
+            } else {
+                // Easy tasks: any qualified endpoint answers well, so spend less.
+                let capability_bonus = (capability - req) * 100.0;
+                Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + capability_bonus)
+            }
         }
         // round_robin / random / fallback: data plane owns ordering
         _ => None,

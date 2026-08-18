@@ -14,6 +14,8 @@ pub mod routing;
 pub mod saas;
 pub mod server;
 pub mod sync;
+#[cfg(test)]
+mod tests;
 pub mod usage;
 pub mod warm;
 

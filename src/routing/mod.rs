@@ -8,8 +8,8 @@
 mod strategy;
 
 pub use strategy::{
-    canonicalize as canonicalize_strategy, uses_score_order, CAPABILITY_TIER_SCALE,
-    COST_RANK_INPUT_TOKENS, COST_RANK_OUTPUT_TOKENS,
+    canonicalize as canonicalize_strategy, capability_qualified, uses_score_order,
+    CAPABILITY_TIER_SCALE, COST_RANK_INPUT_TOKENS, COST_RANK_OUTPUT_TOKENS, HARD_TASK_DIFFICULTY,
 };
 
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
@@ -90,6 +90,27 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             1.0
         };
 
+        // A hard task must keep its capability-qualified endpoints even when the
+        // budget soft gate wants cheaper ones, otherwise the pool silently
+        // downgrades complex requests to a weaker model.
+        let budget_protected: std::collections::HashSet<String> =
+            if strategy == "capability_aware" && difficulty >= HARD_TASK_DIFFICULTY {
+                members
+                    .iter()
+                    .filter(|m| {
+                        let capability = self
+                            .profiles
+                            .get(&m.endpoint_id)
+                            .map(|p| p.capability_score)
+                            .unwrap_or(0.5);
+                        capability_qualified(capability, difficulty, max_pool_capability)
+                    })
+                    .map(|m| m.endpoint_id.clone())
+                    .collect()
+            } else {
+                std::collections::HashSet::new()
+            };
+
         let median_cost = {
             let mut costs: Vec<f64> = members
                 .iter()
@@ -109,6 +130,8 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                 costs[costs.len() / 2]
             }
         };
+
+        let mut trace: Vec<CandidateTrace> = Vec::with_capacity(members.len());
 
         for member in members.iter() {
             let metric = self.metrics.get(&member.endpoint_id);
@@ -149,13 +172,20 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             let base_cost = expected_cost(&profile, input_tok, output_tok, err);
 
             let mut excluded = excluded_health;
+            let mut exclusion_reason = if excluded_health { "health" } else { "" };
             // Control: tools required but endpoint declares no support.
             if has_tools && profile.supports_tools == Some(false) {
                 excluded = true;
+                exclusion_reason = "tools_unsupported";
             }
             // Control: budget soft gate → drop clearly expensive endpoints.
-            if downshift && profile.price.is_priced() && base_cost > median_cost * 1.05 {
+            if downshift
+                && profile.price.is_priced()
+                && base_cost > median_cost * 1.05
+                && !budget_protected.contains(&member.endpoint_id)
+            {
                 excluded = true;
+                exclusion_reason = "budget_downshift";
             }
 
             let mut endpoint_score = score_endpoint(
@@ -178,6 +208,15 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
                 endpoint_score = Some(1.0);
             }
 
+            trace.push(CandidateTrace {
+                endpoint_id: member.endpoint_id.clone(),
+                capability: profile.capability_score,
+                expected_cost: base_cost,
+                score: endpoint_score,
+                excluded,
+                exclusion_reason: exclusion_reason.to_string(),
+            });
+
             feedback.endpoint_signals.insert(
                 member.endpoint_id.clone(),
                 EndpointSignal {
@@ -192,13 +231,12 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
         if affinity_enabled {
             if let Some(sticky) = sticky_endpoint_id {
                 let sticky_is_capable = if strategy == "capability_aware" {
-                    let req = strategy::required_capability(difficulty);
                     let sticky_cap = self
                         .profiles
                         .get(&sticky)
                         .map(|p| p.capability_score)
                         .unwrap_or(0.0);
-                    sticky_cap >= req
+                    capability_qualified(sticky_cap, difficulty, max_pool_capability)
                 } else {
                     true
                 };
@@ -215,16 +253,42 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             }
         }
 
+        trace.sort_by(|left, right| {
+            left.excluded
+                .cmp(&right.excluded)
+                .then_with(|| {
+                    right
+                        .score
+                        .unwrap_or(f64::NEG_INFINITY)
+                        .total_cmp(&left.score.unwrap_or(f64::NEG_INFINITY))
+                })
+                .then_with(|| left.endpoint_id.cmp(&right.endpoint_id))
+        });
+
         tracing::info!(
             target: "smartgate.routing",
             pool_id,
             strategy = %strategy,
             difficulty,
+            required_capability = strategy::required_capability(difficulty),
             max_cap = max_pool_capability,
-            scores = ?feedback.endpoint_signals.iter().map(|(id, s)| (id.as_str(), s.score, s.excluded)).collect::<Vec<_>>(),
+            downshift,
+            has_tools,
+            candidates = ?trace,
             "routing feedback generated"
         );
 
         feedback
     }
+}
+
+/// Per-candidate routing explanation, ordered the way the data plane will try them.
+#[derive(Debug)]
+struct CandidateTrace {
+    endpoint_id: String,
+    capability: f64,
+    expected_cost: f64,
+    score: Option<f64>,
+    excluded: bool,
+    exclusion_reason: String,
 }
