@@ -819,22 +819,25 @@ async fn get_model_service(
     ctx: SaasContext,
     Path(model_id): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let service: Option<(String, String, String, String, i32, Option<String>)> = sqlx::query_as(
-        "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id
+    let service: Option<(String, String, String, String, i32, Option<String>, String)> =
+        sqlx::query_as(
+            "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id, mp.id
          FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
              SELECT 1 FROM project_model_grants g
              WHERE g.virtual_model_id = vm.id AND g.project_id = $3
          )",
-    )
-    .bind(&model_id)
-    .bind(&ctx.org_id)
-    .bind(&ctx.project_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(db_error)?;
-    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id)) = service else {
+        )
+        .bind(&model_id)
+        .bind(&ctx.org_id)
+        .bind(&ctx.project_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(db_error)?;
+    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id, pool_id)) =
+        service
+    else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model service not found")),
@@ -876,22 +879,55 @@ async fn get_model_service(
             })
             .collect::<Vec<_>>(),
     );
-    // Same ranking the router uses for hard requests: configured capability first,
-    // model family profile as the tie-break.
-    let hard_request_pick = endpoints
-        .iter()
-        .zip(effective_capabilities.iter())
-        .filter(|(endpoint, _)| endpoint.enabled)
-        .max_by(|(left, left_capability), (right, right_capability)| {
-            left_capability
-                .total_cmp(right_capability)
-                .then_with(|| {
-                    crate::pricing::default_capability_score(&left.upstream_model_id, None).total_cmp(
-                        &crate::pricing::default_capability_score(&right.upstream_model_id, None),
-                    )
-                })
+    // Ask the router itself which endpoint a hard request reaches right now, so the
+    // badge also reflects health, cooldown and tool-support exclusions rather than
+    // just the highest score.
+    let hard_request_pick = state
+        .feedback
+        .explain(
+            &pool_id,
+            crate::policy::RouteHint {
+                input_tokens: crate::routing::COST_RANK_INPUT_TOKENS,
+                output_tokens: crate::routing::COST_RANK_OUTPUT_TOKENS,
+                has_tools: true,
+                difficulty: 1.0,
+                downshift: false,
+                pool_id: pool_id.clone(),
+                affinity_enabled: false,
+                sticky_endpoint_id: None,
+            },
+        )
+        .into_iter()
+        .find(|candidate| {
+            candidate
+                .get("excluded")
+                .and_then(|value| value.as_bool())
+                .map(|excluded| !excluded)
+                .unwrap_or(false)
         })
-        .map(|(endpoint, _)| endpoint.id.clone());
+        .and_then(|candidate| {
+            candidate
+                .get("endpoint_id")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })
+        // A service whose pool has not been synced yet has no routing state.
+        .or_else(|| {
+            endpoints
+                .iter()
+                .zip(effective_capabilities.iter())
+                .filter(|(endpoint, _)| endpoint.enabled)
+                .max_by(|(left, left_capability), (right, right_capability)| {
+                    left_capability.total_cmp(right_capability).then_with(|| {
+                        crate::pricing::default_capability_score(&left.upstream_model_id, None)
+                            .total_cmp(&crate::pricing::default_capability_score(
+                                &right.upstream_model_id,
+                                None,
+                            ))
+                    })
+                })
+                .map(|(endpoint, _)| endpoint.id.clone())
+        });
     let endpoint_values = endpoints
         .into_iter()
         .zip(effective_capabilities)
