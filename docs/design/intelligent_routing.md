@@ -146,3 +146,34 @@ sequenceDiagram
    - 实现轻量截断 Prompt 判别与 $400\text{ ms}$ 熔断降级兜底机制。
 3. **阶段三（多维规则与多轮感知增强）**：
    - 完善 Prompt 意图关键词提取与多轮纠错信号检测（用户反驳/报错即刻升舱）。
+
+---
+
+## 7. 实施进展与补充根因
+
+阶段一已落地，并在排查「高复杂度请求仍 100% 命中 Flash」时定位到另外三条根因。
+
+### 7.1 打分公式：能力优先，价格只做同档破平（已修复）
+
+`capability_aware` 在 $D \ge 0.55$ 时改为分层排序：能力档（Tier）> 能力分（每 0.01 一档）> 单次成本；
+$D < 0.55$ 时保持成本优先（够用就选便宜）。成本项上限被压到严格小于一个能力档，避免 Flash 的低价再次淹没 Pro 的能力优势。
+
+此前即使有 Tier 加分，只要 Pro 与 Flash 落在同一 Tier（例如能力分被配成接近值，或都通过门槛），成本项仍会让 Flash 胜出。
+
+### 7.2 请求级 hint 串扰（已修复）
+
+控制面把 `RouteHint`（含 difficulty）同时写入 task-local 与共享 `DashMap`，而反馈打分**优先读共享 map**。
+并发场景下（Claude Code / Codex 会并行发起大量小请求），一个简单请求写入的低 difficulty 会决定同一 Pool 上复杂请求的路由，
+表现为「Analytics 记录 100% 高复杂度，实际 100% 命中 Flash」。现改为优先读取本请求的 task-local hint，共享 map 仅作兜底。
+
+### 7.3 预算 soft gate 会排除唯一强模型（已修复）
+
+日额度用满 80% 后进入 soft 降级，会排除成本高于中位数 5% 的 Endpoint。
+在高复杂度请求上，这会把唯一满足能力门槛的 Pro 排除，使复杂任务被静默降级。
+现在 $D \ge 0.55$ 时能力合格集合不受预算 soft gate 排除（hard 阻断仍然生效）。
+
+### 7.4 可观测性
+
+- `smartgate.routing` 日志输出每个候选的能力分、预估成本、得分、是否排除与排除原因（`health` / `tools_unsupported` / `budget_downshift`）；
+- `usage_logs.metadata` 记录 `attempts`、`attempt_count` 与 `fallback`，用于区分「未选中 Pro」与「选中 Pro 但上游失败后回退 Flash」；
+- Model Service 的 Provider 卡片显示能力分，便于发现能力画像配置错误。

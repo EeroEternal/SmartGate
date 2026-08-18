@@ -76,6 +76,17 @@ pub async fn sync_all_pools(
                 } else {
                     r.capability_score.clamp(0.0, 1.0)
                 };
+                if default_cap - capability >= 0.20 {
+                    tracing::warn!(
+                        target: "smartgate.sync",
+                        pool_id = %pool.id,
+                        endpoint_id = %r.id,
+                        model = %r.upstream_model_id,
+                        configured = capability,
+                        model_family_default = default_cap,
+                        "endpoint capability score is far below its model family default; capability-first routing may skip it"
+                    );
+                }
                 profiles.insert(
                     r.id.clone(),
                     EndpointProfile {

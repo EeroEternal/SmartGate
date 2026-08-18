@@ -83,11 +83,6 @@ pub fn capability_qualified(
     }
 }
 
-pub fn capability_mu(profile: &EndpointProfile, difficulty: f64) -> f64 {
-    let req = required_capability(difficulty);
-    (profile.capability_score - req).clamp(-1.0, 1.0)
-}
-
 /// Higher score = preferred.
 pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
     let strategy = canonicalize(strategy);

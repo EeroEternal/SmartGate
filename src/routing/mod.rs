@@ -284,7 +284,9 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
 }
 
 /// Per-candidate routing explanation, ordered the way the data plane will try them.
+/// Fields are consumed through `Debug` in the routing log.
 #[derive(Debug)]
+#[allow(dead_code)]
 struct CandidateTrace {
     endpoint_id: String,
     capability: f64,
