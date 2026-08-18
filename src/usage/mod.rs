@@ -11,6 +11,54 @@ use std::sync::Arc;
 use unigateway_sdk::core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
 use unigateway_sdk::core::response::RequestReport;
 
+impl EndpointMetric {
+    /// Fold one attempt into the metric. Returns whether health changed and must be
+    /// persisted; a success clears any state a previous process left behind.
+    fn record_attempt(&mut self, success: bool, latency_ms: f64) -> bool {
+        const ALPHA: f64 = 0.1;
+
+        if self.active_requests > 0 {
+            self.active_requests -= 1;
+        }
+        self.ema_latency_ms = if self.ema_latency_ms == 0.0 {
+            latency_ms
+        } else {
+            (1.0 - ALPHA) * self.ema_latency_ms + ALPHA * latency_ms
+        };
+        self.updated_at = Utc::now();
+
+        if success {
+            self.ema_success_latency_ms = if self.ema_success_latency_ms == 0.0 {
+                latency_ms
+            } else {
+                (1.0 - ALPHA) * self.ema_success_latency_ms + ALPHA * latency_ms
+            };
+            self.consecutive_failures = 0;
+            if self.health_status != "healthy" {
+                self.health_status = "healthy".to_string();
+                self.cooldown_until = None;
+                return true;
+            }
+            return false;
+        }
+
+        self.total_errors += 1;
+        self.consecutive_failures += 1;
+        self.last_error_at = Some(Utc::now());
+
+        if self.consecutive_failures >= FAILURE_THRESHOLD {
+            self.health_status = "unavailable".to_string();
+            self.cooldown_until = Some(Utc::now() + Duration::seconds(COOLDOWN_SECS));
+            true
+        } else if self.health_status == "healthy" {
+            self.health_status = "degraded".to_string();
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// Data-plane hooks: metrics, health, usage, quota release.
 pub struct SmartGateHooks {
     pub db: PgPool,
@@ -47,50 +95,7 @@ impl GatewayHooks for SmartGateHooks {
                 let mut metric = metrics
                     .entry(endpoint_id.clone())
                     .or_insert_with(|| EndpointMetric::new(endpoint_id.clone()));
-
-                if metric.active_requests > 0 {
-                    metric.active_requests -= 1;
-                }
-
-                let alpha = 0.1;
-                if metric.ema_latency_ms == 0.0 {
-                    metric.ema_latency_ms = latency;
-                } else {
-                    metric.ema_latency_ms = (1.0 - alpha) * metric.ema_latency_ms + alpha * latency;
-                }
-
-                let mut health_changed = false;
-
-                if success {
-                    if metric.ema_success_latency_ms == 0.0 {
-                        metric.ema_success_latency_ms = latency;
-                    } else {
-                        metric.ema_success_latency_ms =
-                            (1.0 - alpha) * metric.ema_success_latency_ms + alpha * latency;
-                    }
-                    metric.consecutive_failures = 0;
-                    if metric.health_status != "healthy" {
-                        metric.health_status = "healthy".to_string();
-                        metric.cooldown_until = None;
-                        health_changed = true;
-                    }
-                } else {
-                    metric.total_errors += 1;
-                    metric.consecutive_failures += 1;
-                    metric.last_error_at = Some(Utc::now());
-
-                    if metric.consecutive_failures >= FAILURE_THRESHOLD {
-                        let until = Utc::now() + Duration::seconds(COOLDOWN_SECS);
-                        metric.health_status = "unavailable".to_string();
-                        metric.cooldown_until = Some(until);
-                        health_changed = true;
-                    } else if metric.health_status == "healthy" {
-                        metric.health_status = "degraded".to_string();
-                        health_changed = true;
-                    }
-                }
-
-                metric.updated_at = Utc::now();
+                let health_changed = metric.record_attempt(success, latency);
                 (
                     metric.health_status.clone(),
                     metric.cooldown_until,
@@ -360,5 +365,32 @@ impl GatewayHooks for SmartGateHooks {
                 tracing::error!("Failed to log usage: {}", e);
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_success_clears_health_recorded_by_a_previous_process() {
+        let mut metric = EndpointMetric::new("ep".to_string());
+        metric.health_status = "degraded".to_string();
+
+        assert!(metric.record_attempt(true, 120.0));
+        assert_eq!(metric.health_status, "healthy");
+        assert!(metric.cooldown_until.is_none());
+    }
+
+    #[test]
+    fn repeated_failures_cool_the_endpoint_down() {
+        let mut metric = EndpointMetric::new("ep".to_string());
+
+        assert!(metric.record_attempt(false, 50.0));
+        assert_eq!(metric.health_status, "degraded");
+        metric.record_attempt(false, 50.0);
+        assert!(metric.record_attempt(false, 50.0));
+        assert_eq!(metric.health_status, "unavailable");
+        assert!(metric.cooldown_until.is_some());
     }
 }

@@ -92,6 +92,7 @@ async fn create_provider(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
@@ -151,6 +152,7 @@ async fn create_pool(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
@@ -216,6 +218,7 @@ async fn update_pool(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
@@ -337,6 +340,7 @@ async fn create_endpoint(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
@@ -416,6 +420,7 @@ async fn create_virtual_model(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
@@ -448,6 +453,7 @@ async fn bind_endpoint_to_pool(
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 
