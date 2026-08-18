@@ -27,6 +27,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let pool_members = Arc::new(DashMap::new());
     let profiles = Arc::new(DashMap::new());
     let quotas = Arc::new(QuotaLimiter::new());
+    let hints = Arc::new(DashMap::new());
 
     let hooks = Arc::new(SmartGateHooks {
         db: db.clone(),
@@ -40,6 +41,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         pools: pools.clone(),
         pool_members: pool_members.clone(),
         profiles: profiles.clone(),
+        hints: hints.clone(),
     });
 
     let engine = Arc::new(
@@ -84,6 +86,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         pool_members,
         profiles,
         quotas,
+        hints,
         engine,
         warm_store,
     });

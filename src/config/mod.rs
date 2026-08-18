@@ -29,6 +29,7 @@ pub struct AppState {
     pub pool_members: Arc<DashMap<String, Vec<PoolEndpointMember>>>,
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
     pub quotas: Arc<QuotaLimiter>,
+    pub hints: Arc<DashMap<String, crate::policy::RouteHint>>,
     pub engine: Arc<UniGatewayEngine>,
     pub warm_store: Arc<WarmStore>,
 }

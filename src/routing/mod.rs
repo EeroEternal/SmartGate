@@ -33,6 +33,7 @@ pub struct SmartGateFeedbackProvider {
     pub pools: Arc<DashMap<String, ModelPool>>,
     pub pool_members: Arc<DashMap<String, Vec<PoolEndpointMember>>>,
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
+    pub hints: Arc<DashMap<String, crate::policy::RouteHint>>,
 }
 
 /// Score boost so sticky endpoint wins within its tier when healthy.
@@ -54,7 +55,11 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
         };
 
         let now = Utc::now();
-        let hint = get_hint().filter(|h| h.pool_id.is_empty() || h.pool_id == pool_id);
+        let hint = self
+            .hints
+            .get(pool_id)
+            .map(|h| h.clone())
+            .or_else(|| get_hint());
         let input_tok = hint
             .as_ref()
             .map(|h| h.input_tokens)

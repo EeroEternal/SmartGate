@@ -555,6 +555,10 @@ async fn chat_proxy(
         affinity_enabled,
         sticky_endpoint_id: sticky_endpoint_id.clone(),
     };
+    state.hints.insert(virtual_model.pool_id.clone(), route_hint.clone());
+    state.hints.insert(virtual_model.id.clone(), route_hint.clone());
+    state.hints.insert(virtual_model.name.clone(), route_hint.clone());
+    state.hints.insert(requested_model.clone(), route_hint.clone());
     let dispatch = crate::policy::TASK_ROUTE_HINT
         .scope(
             route_hint,

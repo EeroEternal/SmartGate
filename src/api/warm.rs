@@ -191,6 +191,7 @@ mod tests {
             pool_members: Default::default(),
             profiles: Default::default(),
             quotas: Arc::new(crate::quota::QuotaLimiter::new()),
+            hints: Default::default(),
             engine: Arc::new(engine),
             warm_store: Arc::new(crate::warm::WarmStore::new()),
         })
