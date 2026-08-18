@@ -49,6 +49,9 @@ pub struct EndpointProfile {
     pub price: UnitPrice,
     /// 0–1 capability prior (default 0.5 cold start).
     pub capability_score: f64,
+    /// Capability implied by the upstream model name, used to break ties when two
+    /// endpoints carry the same configured score.
+    pub family_capability_score: f64,
     /// None = undeclared (do not hard-filter).
     pub supports_tools: Option<bool>,
     pub context_length: Option<i32>,
@@ -59,6 +62,7 @@ impl Default for EndpointProfile {
         Self {
             price: UnitPrice::default(),
             capability_score: 0.5,
+            family_capability_score: 0.5,
             supports_tools: None,
             context_length: None,
         }

@@ -172,7 +172,22 @@ $D < 0.55$ 时保持成本优先（够用就选便宜）。成本项上限被压
 在高复杂度请求上，这会把唯一满足能力门槛的 Pro 排除，使复杂任务被静默降级。
 现在 $D \ge 0.55$ 时能力合格集合不受预算 soft gate 排除（hard 阻断仍然生效）。
 
-### 7.4 可观测性
+### 7.4 能力分并列时按模型家族破平（已修复）
+
+线上 `fusion` 的实际配置是 `deepseek-v4-flash` 与 `deepseek-v4-pro` 都被写成 `capability_score = 0.80`。
+两者能力分完全相同，排序只能落到价格，Flash 必然胜出——这与 7.1 的公式修复无关，因为公式没有可用的能力差可比。
+
+现在 Endpoint 画像额外携带 **模型家族能力分**（由 `upstream_model_id` 推断），高难度排序键为：
+能力档（配置值，每 0.01 一档）> 家族画像档 > 单次成本。
+配置值相同时由家族画像决定（Pro 0.92 > Flash 0.65）；若用户刻意把 Flash 配得更高，则仍尊重配置值。
+
+另外当整个 Pool 的配置能力分差 < 0.05 而家族画像差 ≥ 0.05 时，直接改用家族画像并告警。
+
+### 7.5 可观测性
+
+路由决策不应只存在于服务器日志里（Railway 等托管平台的 Deploy Logs 只保留运行期输出，排查历史请求不便）。
+控制面在派发前用**与数据面相同的打分**生成候选快照，写入 `usage_logs.routing_decision.candidates`
+（endpoint、能力分、预估成本、得分、是否排除与排除原因），Analytics 的 Query Logs 可直接展开「Why this model?」查看排序。
 
 - `smartgate.routing` 日志输出每个候选的能力分、预估成本、得分、是否排除与排除原因（`health` / `tools_unsupported` / `budget_downshift`）；
 - `usage_logs.metadata` 记录 `attempts`、`attempt_count` 与 `fallback`，用于区分「未选中 Pro」与「选中 Pro 但上游失败后回退 Flash」；

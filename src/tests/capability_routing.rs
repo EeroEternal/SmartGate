@@ -50,6 +50,15 @@ fn member(endpoint_id: &str) -> PoolEndpointMember {
 }
 
 fn profile(capability: f64, input: f64, output: f64) -> EndpointProfile {
+    profile_with_family(capability, capability, input, output)
+}
+
+fn profile_with_family(
+    capability: f64,
+    family_capability: f64,
+    input: f64,
+    output: f64,
+) -> EndpointProfile {
     EndpointProfile {
         price: UnitPrice {
             input_per_1m: input,
@@ -57,6 +66,7 @@ fn profile(capability: f64, input: f64, output: f64) -> EndpointProfile {
             cache_read_per_1m: None,
         },
         capability_score: capability,
+        family_capability_score: family_capability,
         supports_tools: Some(true),
         context_length: Some(128_000),
     }
@@ -190,6 +200,42 @@ fn cooled_down_pro_falls_back_to_flash_and_is_reported() {
     assert_eq!(order.last().map(String::as_str), Some(PRO));
 }
 
+#[test]
+fn identical_configured_scores_are_broken_by_model_family() {
+    // Real misconfiguration seen in production: Flash and Pro both carry 0.80, so
+    // ranking on the configured score alone leaves price to decide.
+    let fixture = fixture(0.92);
+    fixture
+        .profiles
+        .insert(FLASH.to_string(), profile_with_family(0.80, 0.65, 0.14, 0.28));
+    fixture
+        .profiles
+        .insert(QWEN.to_string(), profile_with_family(0.50, 0.65, 0.30, 0.60));
+    fixture
+        .profiles
+        .insert(PRO.to_string(), profile_with_family(0.80, 0.92, 2.50, 10.00));
+    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+
+    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+}
+
+#[test]
+fn a_deliberately_higher_configured_score_still_wins() {
+    let fixture = fixture(0.92);
+    fixture
+        .profiles
+        .insert(FLASH.to_string(), profile_with_family(0.95, 0.65, 0.14, 0.28));
+    fixture
+        .profiles
+        .insert(PRO.to_string(), profile_with_family(0.80, 0.92, 2.50, 10.00));
+    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(FLASH)
+    );
+}
+
 #[tokio::test]
 async fn concurrent_easy_request_cannot_downgrade_a_hard_request() {
     let fixture = fixture(0.92);
@@ -203,6 +249,17 @@ async fn concurrent_easy_request_cannot_downgrade_a_hard_request() {
         .await;
 
     assert_eq!(order.first().map(String::as_str), Some(PRO));
+}
+
+#[test]
+fn explain_matches_the_order_the_router_uses() {
+    // No shared hint is published: `explain` must score the hint it is handed.
+    let fixture = fixture(0.92);
+    let candidates = fixture.provider.explain(POOL, hint(1.0, true, false));
+
+    assert_eq!(candidates.len(), 3);
+    assert_eq!(candidates[0]["endpoint_id"], PRO);
+    assert_eq!(candidates[0]["excluded"], false);
 }
 
 #[test]

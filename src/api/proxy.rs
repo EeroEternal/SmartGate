@@ -311,7 +311,7 @@ async fn chat_proxy(
         prefix_stable(&virtual_model.pool_id, sid, context_epoch, pfx_hash)
     });
 
-    set_hint(RouteHint {
+    let route_hint = RouteHint {
         input_tokens,
         output_tokens,
         has_tools,
@@ -320,8 +320,27 @@ async fn chat_proxy(
         pool_id: virtual_model.pool_id.clone(),
         affinity_enabled,
         sticky_endpoint_id: sticky_endpoint_id.clone(),
-    });
+    };
+    set_hint(route_hint.clone());
     let _hint_guard = HintGuard;
+    state
+        .hints
+        .insert(virtual_model.pool_id.clone(), route_hint.clone());
+    state
+        .hints
+        .insert(virtual_model.id.clone(), route_hint.clone());
+    state
+        .hints
+        .insert(virtual_model.name.clone(), route_hint.clone());
+    state
+        .hints
+        .insert(requested_model.clone(), route_hint.clone());
+
+    // Same scoring the data plane will apply, recorded so the decision is visible
+    // in usage logs instead of only in server logs.
+    let candidates = state
+        .feedback
+        .explain(&virtual_model.pool_id, route_hint.clone());
 
     let prompt_preview = extract_user_prompt_preview(&payload);
     let difficulty_tier = if difficulty >= 0.60 {
@@ -346,6 +365,7 @@ async fn chat_proxy(
         "downshift": downshift,
         "spent_today": spent,
         "daily_limit": limit,
+        "candidates": candidates,
         "context_slim": {
             "tool_chars_before": tool_chars_before,
             "slimmed_chars": slimmed_chars,
@@ -545,20 +565,6 @@ async fn chat_proxy(
         ChatProtocol::OpenAi => unigateway_sdk::host::HostProtocol::OpenAiChat,
         ChatProtocol::Anthropic => unigateway_sdk::host::HostProtocol::AnthropicMessages,
     };
-    let route_hint = RouteHint {
-        input_tokens,
-        output_tokens,
-        has_tools,
-        difficulty,
-        downshift,
-        pool_id: virtual_model.pool_id.clone(),
-        affinity_enabled,
-        sticky_endpoint_id: sticky_endpoint_id.clone(),
-    };
-    state.hints.insert(virtual_model.pool_id.clone(), route_hint.clone());
-    state.hints.insert(virtual_model.id.clone(), route_hint.clone());
-    state.hints.insert(virtual_model.name.clone(), route_hint.clone());
-    state.hints.insert(requested_model.clone(), route_hint.clone());
     let dispatch = crate::policy::TASK_ROUTE_HINT
         .scope(
             route_hint,

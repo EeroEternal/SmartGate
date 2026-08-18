@@ -876,12 +876,22 @@ async fn get_model_service(
             })
             .collect::<Vec<_>>(),
     );
-    let strongest_capability = endpoints
+    // Same ranking the router uses for hard requests: configured capability first,
+    // model family profile as the tie-break.
+    let hard_request_pick = endpoints
         .iter()
         .zip(effective_capabilities.iter())
         .filter(|(endpoint, _)| endpoint.enabled)
-        .map(|(_, capability)| *capability)
-        .fold(0.0_f64, f64::max);
+        .max_by(|(left, left_capability), (right, right_capability)| {
+            left_capability
+                .total_cmp(right_capability)
+                .then_with(|| {
+                    crate::pricing::default_capability_score(&left.upstream_model_id, None).total_cmp(
+                        &crate::pricing::default_capability_score(&right.upstream_model_id, None),
+                    )
+                })
+        })
+        .map(|(endpoint, _)| endpoint.id.clone());
     let endpoint_values = endpoints
         .into_iter()
         .zip(effective_capabilities)
@@ -917,9 +927,7 @@ async fn get_model_service(
                 "total_requests": runtime.as_ref().map(|metric| metric.total_requests).unwrap_or(0),
                 "total_errors": runtime.as_ref().map(|metric| metric.total_errors).unwrap_or(0),
                 // Capability-first routing sends hard requests here when true.
-                "preferred_for_hard_requests": endpoint.enabled
-                    && strongest_capability > 0.0
-                    && effective_capability >= strongest_capability - 0.04,
+                "preferred_for_hard_requests": hard_request_pick.as_deref() == Some(endpoint.id.as_str()),
             })
         })
         .collect::<Vec<_>>();
@@ -1979,6 +1987,20 @@ async fn get_routing_analytics(
     }
     .map_err(db_error)?;
 
+    // Candidate ids are meaningless to operators; resolve them to model names once.
+    let endpoint_names: HashMap<String, String> = sqlx::query_as::<_, (String, String)>(
+        "SELECT e.id, e.upstream_model_id
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE pa.org_id = $1",
+    )
+    .bind(&ctx.org_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+
     let mut high_count = 0usize;
     let mut medium_count = 0usize;
     let mut low_count = 0usize;
@@ -2025,6 +2047,7 @@ async fn get_routing_analytics(
         let mut difficulty_tier = if is_pro { "high" } else { "low" };
         let mut prompt_preview = String::new();
         let mut signals = Vec::new();
+        let mut candidates: Vec<Value> = Vec::new();
 
         if let Some(ref d_str) = decision_str {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(d_str) {
@@ -2046,6 +2069,23 @@ async fn get_routing_analytics(
                         if let Some(s_str) = s.as_str() {
                             signals.push(s_str.to_string());
                         }
+                    }
+                }
+                if let Some(items) = val.get("candidates").and_then(|v| v.as_array()) {
+                    for item in items {
+                        let endpoint_id = item
+                            .get("endpoint_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default();
+                        candidates.push(json!({
+                            "model": endpoint_names
+                                .get(endpoint_id)
+                                .cloned()
+                                .unwrap_or_else(|| endpoint_id.to_string()),
+                            "capability": item.get("capability").and_then(|v| v.as_f64()),
+                            "excluded": item.get("excluded").and_then(|v| v.as_bool()).unwrap_or(false),
+                            "exclusion_reason": item.get("exclusion_reason").and_then(|v| v.as_str()).unwrap_or(""),
+                        }));
                     }
                 }
             }
@@ -2115,6 +2155,7 @@ async fn get_routing_analytics(
             "signals": signals,
             "attempts": attempts,
             "fallback_used": fallback_used,
+            "candidates": candidates,
         }));
     }
 
