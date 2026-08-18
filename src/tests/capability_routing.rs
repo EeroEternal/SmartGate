@@ -252,6 +252,17 @@ async fn concurrent_easy_request_cannot_downgrade_a_hard_request() {
 }
 
 #[test]
+fn explain_matches_the_order_the_router_uses() {
+    // No shared hint is published: `explain` must score the hint it is handed.
+    let fixture = fixture(0.92);
+    let candidates = fixture.provider.explain(POOL, hint(1.0, true, false));
+
+    assert_eq!(candidates.len(), 3);
+    assert_eq!(candidates[0]["endpoint_id"], PRO);
+    assert_eq!(candidates[0]["excluded"], false);
+}
+
+#[test]
 fn low_difficulty_still_prefers_cheap_flash() {
     let fixture = fixture(0.92);
     fixture

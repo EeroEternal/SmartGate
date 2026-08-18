@@ -30,6 +30,7 @@ pub struct AppState {
     pub profiles: Arc<DashMap<String, EndpointProfile>>,
     pub quotas: Arc<QuotaLimiter>,
     pub hints: Arc<DashMap<String, crate::policy::RouteHint>>,
+    pub feedback: Arc<crate::routing::SmartGateFeedbackProvider>,
     pub engine: Arc<UniGatewayEngine>,
     pub warm_store: Arc<WarmStore>,
 }

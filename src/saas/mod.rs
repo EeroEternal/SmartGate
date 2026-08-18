@@ -1987,6 +1987,20 @@ async fn get_routing_analytics(
     }
     .map_err(db_error)?;
 
+    // Candidate ids are meaningless to operators; resolve them to model names once.
+    let endpoint_names: HashMap<String, String> = sqlx::query_as::<_, (String, String)>(
+        "SELECT e.id, e.upstream_model_id
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE pa.org_id = $1",
+    )
+    .bind(&ctx.org_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+
     let mut high_count = 0usize;
     let mut medium_count = 0usize;
     let mut low_count = 0usize;
@@ -2033,6 +2047,7 @@ async fn get_routing_analytics(
         let mut difficulty_tier = if is_pro { "high" } else { "low" };
         let mut prompt_preview = String::new();
         let mut signals = Vec::new();
+        let mut candidates: Vec<Value> = Vec::new();
 
         if let Some(ref d_str) = decision_str {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(d_str) {
@@ -2054,6 +2069,23 @@ async fn get_routing_analytics(
                         if let Some(s_str) = s.as_str() {
                             signals.push(s_str.to_string());
                         }
+                    }
+                }
+                if let Some(items) = val.get("candidates").and_then(|v| v.as_array()) {
+                    for item in items {
+                        let endpoint_id = item
+                            .get("endpoint_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default();
+                        candidates.push(json!({
+                            "model": endpoint_names
+                                .get(endpoint_id)
+                                .cloned()
+                                .unwrap_or_else(|| endpoint_id.to_string()),
+                            "capability": item.get("capability").and_then(|v| v.as_f64()),
+                            "excluded": item.get("excluded").and_then(|v| v.as_bool()).unwrap_or(false),
+                            "exclusion_reason": item.get("exclusion_reason").and_then(|v| v.as_str()).unwrap_or(""),
+                        }));
                     }
                 }
             }
@@ -2123,6 +2155,7 @@ async fn get_routing_analytics(
             "signals": signals,
             "attempts": attempts,
             "fallback_used": fallback_used,
+            "candidates": candidates,
         }));
     }
 

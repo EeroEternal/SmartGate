@@ -936,6 +936,7 @@ type QueryAnalyticsItem = {
   signals: string[]
   attempts?: string[]
   fallback_used?: boolean
+  candidates?: { model: string; capability?: number; excluded?: boolean; exclusion_reason?: string }[]
 }
 
 type RoutingAnalyticsData = {
@@ -961,11 +962,16 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedSignals, setExpandedSignals] = useState<Record<string, boolean>>({})
+  const [expandedCandidates, setExpandedCandidates] = useState<Record<string, boolean>>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(15)
 
   const toggleSignals = (id: string) => {
     setExpandedSignals((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const toggleCandidates = (id: string) => {
+    setExpandedCandidates((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   useEffect(() => {
@@ -1227,6 +1233,35 @@ export function AnalyticsPage() {
                             <div className="mt-1 inline-flex items-center rounded-md border border-rose-200/80 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700" title={`Attempted in order: ${(q.attempts ?? []).join(' → ')}`}>
                               Fallback after {(q.attempts ?? []).length - 1} failed attempt{(q.attempts ?? []).length > 2 ? 's' : ''}
                             </div>
+                          )}
+                          {(q.candidates?.length ?? 0) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleCandidates(q.id)}
+                              title="Show how each provider scored for this request"
+                              className="mt-1 block text-[10px] font-medium text-primary hover:text-primary-hover"
+                            >
+                              {expandedCandidates[q.id] ? 'Hide ranking' : 'Why this model?'}
+                            </button>
+                          )}
+                          {expandedCandidates[q.id] && (
+                            <ol className="mt-1.5 space-y-1">
+                              {(q.candidates ?? []).map((candidate, index) => (
+                                <li key={`${q.id}-${index}`} className="text-[10px] leading-tight text-zinc-500">
+                                  <span className={candidate.excluded ? 'line-through' : 'font-medium text-zinc-700'}>
+                                    {index + 1}. {candidate.model}
+                                  </span>
+                                  <span className="ml-1 text-zinc-400">
+                                    cap {(candidate.capability ?? 0).toFixed(2)}
+                                  </span>
+                                  {candidate.excluded && (
+                                    <span className="ml-1 text-rose-600">
+                                      excluded{candidate.exclusion_reason ? ` (${candidate.exclusion_reason})` : ''}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ol>
                           )}
                         </td>
                         <td className="py-3 px-4 align-top text-right whitespace-nowrap">

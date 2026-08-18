@@ -48,7 +48,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         UniGatewayEngine::builder()
             .with_builtin_http_drivers()
             .with_hooks(hooks)
-            .with_routing_feedback_provider(feedback_provider)
+            .with_routing_feedback_provider(feedback_provider.clone())
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to build UniGateway engine: {}", e))?,
     );
@@ -87,6 +87,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         profiles,
         quotas,
         hints,
+        feedback: feedback_provider,
         engine,
         warm_store,
     });

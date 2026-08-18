@@ -192,6 +192,13 @@ mod tests {
             profiles: Default::default(),
             quotas: Arc::new(crate::quota::QuotaLimiter::new()),
             hints: Default::default(),
+            feedback: Arc::new(crate::routing::SmartGateFeedbackProvider {
+                metrics: Default::default(),
+                pools: Default::default(),
+                pool_members: Default::default(),
+                profiles: Default::default(),
+                hints: Default::default(),
+            }),
             engine: Arc::new(engine),
             warm_store: Arc::new(crate::warm::WarmStore::new()),
         })

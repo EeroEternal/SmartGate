@@ -39,8 +39,31 @@ pub struct SmartGateFeedbackProvider {
 /// Score boost so sticky endpoint wins within its tier when healthy.
 pub const AFFINITY_BOOST: f64 = 10_000.0;
 
-impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
-    fn feedback(&self, pool_id: &str) -> RoutingFeedback {
+impl SmartGateFeedbackProvider {
+    /// Candidate ordering for one request, as JSON, for `routing_decision` in usage
+    /// logs. Lets operators see the decision without reading server logs.
+    pub fn explain(&self, pool_id: &str, hint: crate::policy::RouteHint) -> Vec<serde_json::Value> {
+        let (_, trace) = self.evaluate(pool_id, Some(hint));
+        trace
+            .iter()
+            .map(|candidate| {
+                serde_json::json!({
+                    "endpoint_id": candidate.endpoint_id,
+                    "capability": candidate.capability,
+                    "expected_cost": candidate.expected_cost,
+                    "score": candidate.score,
+                    "excluded": candidate.excluded,
+                    "exclusion_reason": candidate.exclusion_reason,
+                })
+            })
+            .collect()
+    }
+
+    fn evaluate(
+        &self,
+        pool_id: &str,
+        request_hint: Option<crate::policy::RouteHint>,
+    ) -> (RoutingFeedback, Vec<CandidateTrace>) {
         let mut feedback = RoutingFeedback::default();
 
         let raw_strategy = self
@@ -51,14 +74,15 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
         let strategy = canonicalize_strategy(&raw_strategy).to_string();
 
         let Some(members) = self.pool_members.get(pool_id) else {
-            return feedback;
+            return (feedback, Vec::new());
         };
 
         let now = Utc::now();
         // The task-local hint belongs to the request being dispatched. The shared
         // maps are only a fallback: they are written by every concurrent request,
         // so reading them first lets an easy request decide a hard request's route.
-        let hint = get_task_hint()
+        let hint = request_hint
+            .or_else(get_task_hint)
             .or_else(|| self.hints.get(pool_id).map(|h| h.clone()))
             .or_else(get_hint);
         let input_tok = hint
@@ -279,7 +303,13 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
             "routing feedback generated"
         );
 
-        feedback
+        (feedback, trace)
+    }
+}
+
+impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
+    fn feedback(&self, pool_id: &str) -> RoutingFeedback {
+        self.evaluate(pool_id, None).0
     }
 }
 
