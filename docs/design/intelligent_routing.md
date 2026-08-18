@@ -187,6 +187,10 @@ $D < 0.55$ 时保持成本优先（够用就选便宜）。成本项上限被压
 
 ### 7.5 可观测性
 
+Endpoint 健康状态在网关重启后会从数据库回填到内存指标，因此 `degraded` 不会因重启而丢失，
+也能被重启后的首次成功请求清除（此前重启会让内存状态回到 healthy，导致数据库里的 `degraded` 永久残留）。
+Admin UI 在本进程尚无请求样本时把状态标记为 `Last known ...`，不会用「0 errors out of 0 requests」冒充当前状态。
+
 路由决策不应只存在于服务器日志里（Railway 等托管平台的 Deploy Logs 只保留运行期输出，排查历史请求不便）。
 控制面在派发前用**与数据面相同的打分**生成候选快照，写入 `usage_logs.routing_decision.candidates`
 （endpoint、能力分、预估成本、得分、是否排除与排除原因），Analytics 的 Query Logs 可直接展开「Why this model?」查看排序。

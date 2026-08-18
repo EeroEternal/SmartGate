@@ -53,7 +53,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("Failed to build UniGateway engine: {}", e))?,
     );
 
-    crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles).await?;
+    crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles, &metrics).await?;
 
     let warm_store = Arc::new(
         crate::warm::WarmStore::try_with_config(&config.warm)

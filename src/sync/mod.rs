@@ -1,4 +1,4 @@
-use crate::models::{ModelPool as DbModelPool, PoolEndpointMember};
+use crate::models::{EndpointMetric, ModelPool as DbModelPool, PoolEndpointMember};
 use crate::pricing::{EndpointProfile, UnitPrice};
 use dashmap::DashMap;
 use sqlx::FromRow;
@@ -28,6 +28,8 @@ struct SyncEndpointRow {
     capability_score: f64,
     supports_tools: Option<i32>,
     context_length: Option<i32>,
+    health_status: String,
+    cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Push DB pool config into UniGateway and refresh in-memory routing caches.
@@ -37,6 +39,7 @@ pub async fn sync_all_pools(
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,
+    metrics: &DashMap<String, EndpointMetric>,
 ) -> anyhow::Result<()> {
     let db_pools =
         sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
@@ -53,7 +56,8 @@ pub async fn sync_all_pools(
                     mpe.priority AS pool_priority, mpe.weight AS pool_weight,
                     pa.provider_type, pa.protocol, pa.base_url, pa.api_key, pa.name AS account_name,
                     e.input_price_per_1m, e.output_price_per_1m,
-                    e.capability_score, e.supports_tools, e.context_length
+                    e.capability_score, e.supports_tools, e.context_length,
+                    e.health_status, e.cooldown_until
              FROM endpoints e
              JOIN model_pool_endpoints mpe ON e.id = mpe.endpoint_id
              JOIN provider_accounts pa ON e.account_id = pa.id
@@ -63,6 +67,18 @@ pub async fn sync_all_pools(
         .bind(&pool.id)
         .fetch_all(db)
         .await?;
+
+        // Seed health from the database so a restart does not lose a degraded state,
+        // and so the first successful request can clear it again.
+        for row in &rows {
+            if metrics.contains_key(&row.id) {
+                continue;
+            }
+            let mut metric = EndpointMetric::new(row.id.clone());
+            metric.health_status = row.health_status.clone();
+            metric.cooldown_until = row.cooldown_until.filter(|until| *until > chrono::Utc::now());
+            metrics.insert(row.id.clone(), metric);
+        }
 
         let configured_capabilities: Vec<(String, f64)> = rows
             .iter()
@@ -213,8 +229,9 @@ pub async fn sync_all_pools_from_state(
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,
+    metrics: &DashMap<String, EndpointMetric>,
 ) -> anyhow::Result<()> {
-    sync_all_pools(engine.as_ref(), db, pools, pool_members, profiles).await
+    sync_all_pools(engine.as_ref(), db, pools, pool_members, profiles, metrics).await
 }
 
 fn map_strategy(strategy: &str, session_affinity_enabled: bool) -> LoadBalancingStrategy {

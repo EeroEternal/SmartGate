@@ -907,6 +907,10 @@ async fn get_model_service(
                 .as_ref()
                 .and_then(|metric| metric.cooldown_until)
                 .is_some_and(|until| until > Utc::now());
+            let observed_requests = runtime
+                .as_ref()
+                .map(|metric| metric.total_requests)
+                .unwrap_or(0);
             json!({
                 "id": endpoint.id,
                 "provider_id": endpoint.provider_id,
@@ -924,8 +928,11 @@ async fn get_model_service(
                 "supports_tools": endpoint.supports_tools.map(|value| value != 0),
                 "health_status": health_status,
                 "cooling_down": cooling_down,
-                "total_requests": runtime.as_ref().map(|metric| metric.total_requests).unwrap_or(0),
+                "total_requests": observed_requests,
                 "total_errors": runtime.as_ref().map(|metric| metric.total_errors).unwrap_or(0),
+                // Without observed traffic the status is only what a previous process
+                // recorded, so the UI must not present it as current.
+                "health_observed": observed_requests > 0,
                 // Capability-first routing sends hard requests here when true.
                 "preferred_for_hard_requests": hard_request_pick.as_deref() == Some(endpoint.id.as_str()),
             })
@@ -2637,6 +2644,7 @@ async fn sync(state: &Arc<AppState>) {
         &state.pools,
         &state.pool_members,
         &state.profiles,
+        &state.metrics,
     )
     .await;
 }
