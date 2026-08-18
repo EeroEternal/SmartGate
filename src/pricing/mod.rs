@@ -129,9 +129,9 @@ pub fn effective_capability_score(model_id: &str, configured: f64) -> f64 {
 
 /// Resolve the capability scores of one pool from `(upstream_model_id, configured)` pairs.
 ///
-/// Configured values win, except when a multi-endpoint pool has no usable spread
-/// while the model families clearly differ: ranking on price alone would then send
-/// every hard request to the cheapest endpoint.
+/// Configured values win, except when they fail to separate models of clearly
+/// different strength — for example a Pro and a Flash endpoint both carrying 0.80.
+/// Such a score cannot rank the pool, so the model family profiles are used instead.
 pub fn resolve_pool_capabilities(members: &[(String, f64)]) -> Vec<f64> {
     let configured: Vec<f64> = members.iter().map(|(_, value)| *value).collect();
     if members.len() < 2 {
@@ -141,12 +141,13 @@ pub fn resolve_pool_capabilities(members: &[(String, f64)]) -> Vec<f64> {
         .iter()
         .map(|(model, _)| default_capability_score(model, None))
         .collect();
-    let spread = |values: &[f64]| {
-        let max = values.iter().copied().fold(f64::MIN, f64::max);
-        let min = values.iter().copied().fold(f64::MAX, f64::min);
-        max - min
-    };
-    if spread(&configured) < CAPABILITY_SPREAD_MIN && spread(&defaults) >= CAPABILITY_SPREAD_MIN {
+    let ambiguous = (0..members.len()).any(|left| {
+        ((left + 1)..members.len()).any(|right| {
+            (configured[left] - configured[right]).abs() < CAPABILITY_SPREAD_MIN
+                && (defaults[left] - defaults[right]).abs() >= CAPABILITY_SPREAD_MIN
+        })
+    });
+    if ambiguous {
         defaults
     } else {
         configured
@@ -156,6 +157,21 @@ pub fn resolve_pool_capabilities(members: &[(String, f64)]) -> Vec<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shared_score_across_model_tiers_falls_back_to_model_families() {
+        // Production configuration: Flash and Pro both set to 0.80, which cannot
+        // express that Pro is the stronger model.
+        let members = vec![
+            ("deepseek-v4-flash".to_string(), 0.80),
+            ("qwen3.6-flash".to_string(), 0.65),
+            ("deepseek-v4-pro".to_string(), 0.80),
+        ];
+        let resolved = resolve_pool_capabilities(&members);
+        assert_eq!(resolved[0], default_capability_score("deepseek-v4-flash", None));
+        assert_eq!(resolved[2], default_capability_score("deepseek-v4-pro", None));
+        assert!(resolved[2] > resolved[0]);
+    }
 
     #[test]
     fn flat_capability_profiles_fall_back_to_model_families() {
