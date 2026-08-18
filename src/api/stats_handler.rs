@@ -144,14 +144,14 @@ fn routing_signals(rows: &[&UsageStatRow]) -> (i64, i64, i64) {
         for value in values.into_iter().flatten() {
             for (key, item) in json_entries(&value) {
                 if key == "fallback" || key == "fallback_used" {
-                    fallback |= item.as_bool().unwrap_or(false);
+                    fallback |= json_flag(&item);
                 } else if key == "attempt_skips" {
                     attempt_skip_records += item
                         .as_array()
                         .map(|items| items.len() as i64)
                         .unwrap_or_else(|| i64::from(!item.is_null()));
                 } else if key == "downshift" {
-                    downshift |= item.as_bool().unwrap_or(false);
+                    downshift |= json_flag(&item);
                 }
             }
         }
@@ -160,6 +160,15 @@ fn routing_signals(rows: &[&UsageStatRow]) -> (i64, i64, i64) {
     }
 
     (fallback_requests, attempt_skip_records, downshift_requests)
+}
+
+/// Accept booleans and their string form, since usage metadata is stored as strings.
+fn json_flag(value: &Value) -> bool {
+    value.as_bool().unwrap_or_else(|| {
+        value
+            .as_str()
+            .is_some_and(|text| matches!(text, "true" | "1"))
+    })
 }
 
 fn json_entries(value: &Value) -> Vec<(String, Value)> {

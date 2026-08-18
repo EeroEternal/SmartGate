@@ -232,10 +232,45 @@ impl GatewayHooks for SmartGateHooks {
                 .map(|v| v as i32);
             let cached_input_tokens = cache_hit_tokens.unwrap_or(0) as i32;
 
+            // Attempt chain makes silent fallbacks visible: a capability-first pool
+            // that reports a cheap endpoint may have tried the strong one first.
+            let attempts = report
+                .attempts
+                .iter()
+                .map(|attempt| {
+                    format!(
+                        "{}:{:?}{}",
+                        attempt.endpoint_id,
+                        attempt.status,
+                        attempt
+                            .error_kind
+                            .as_ref()
+                            .map(|kind| format!(":{kind:?}"))
+                            .unwrap_or_default()
+                    )
+                })
+                .collect::<Vec<_>>();
+            let fallback_used = report.attempts.len() > 1;
+
             let mut metadata_values = report.metadata.clone();
             metadata_values.insert("usage_source".to_string(), usage_source.to_string());
             metadata_values.insert("usage_confidence".to_string(), usage_confidence.to_string());
             metadata_values.insert("pricing_source".to_string(), pricing_source.to_string());
+            metadata_values.insert("attempts".to_string(), attempts.join(","));
+            metadata_values.insert("attempt_count".to_string(), report.attempts.len().to_string());
+            metadata_values.insert(
+                "fallback".to_string(),
+                if fallback_used { "true" } else { "false" }.to_string(),
+            );
+            if fallback_used {
+                tracing::warn!(
+                    target: "smartgate.routing",
+                    pool_id = ?report.pool_id,
+                    selected_endpoint_id = %selected_endpoint_id,
+                    attempts = ?attempts,
+                    "request fell back to a later endpoint"
+                );
+            }
             let metadata = serde_json::to_string(&metadata_values).unwrap_or_default();
             let provider_account_id = report.metadata.get("account_id").cloned();
             let status_code = if report.error_kind.is_some() {
