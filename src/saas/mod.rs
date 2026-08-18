@@ -876,12 +876,22 @@ async fn get_model_service(
             })
             .collect::<Vec<_>>(),
     );
-    let strongest_capability = endpoints
+    // Same ranking the router uses for hard requests: configured capability first,
+    // model family profile as the tie-break.
+    let hard_request_pick = endpoints
         .iter()
         .zip(effective_capabilities.iter())
         .filter(|(endpoint, _)| endpoint.enabled)
-        .map(|(_, capability)| *capability)
-        .fold(0.0_f64, f64::max);
+        .max_by(|(left, left_capability), (right, right_capability)| {
+            left_capability
+                .total_cmp(right_capability)
+                .then_with(|| {
+                    crate::pricing::default_capability_score(&left.upstream_model_id, None).total_cmp(
+                        &crate::pricing::default_capability_score(&right.upstream_model_id, None),
+                    )
+                })
+        })
+        .map(|(endpoint, _)| endpoint.id.clone());
     let endpoint_values = endpoints
         .into_iter()
         .zip(effective_capabilities)
@@ -917,9 +927,7 @@ async fn get_model_service(
                 "total_requests": runtime.as_ref().map(|metric| metric.total_requests).unwrap_or(0),
                 "total_errors": runtime.as_ref().map(|metric| metric.total_errors).unwrap_or(0),
                 // Capability-first routing sends hard requests here when true.
-                "preferred_for_hard_requests": endpoint.enabled
-                    && strongest_capability > 0.0
-                    && effective_capability >= strongest_capability - 0.04,
+                "preferred_for_hard_requests": hard_request_pick.as_deref() == Some(endpoint.id.as_str()),
             })
         })
         .collect::<Vec<_>>();
