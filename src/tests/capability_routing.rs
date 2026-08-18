@@ -190,6 +190,21 @@ fn cooled_down_pro_falls_back_to_flash_and_is_reported() {
     assert_eq!(order.last().map(String::as_str), Some(PRO));
 }
 
+#[tokio::test]
+async fn concurrent_easy_request_cannot_downgrade_a_hard_request() {
+    let fixture = fixture(0.92);
+    // Another in-flight request already published an easy hint on the shared map.
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(0.15, false, false));
+
+    let order = crate::policy::TASK_ROUTE_HINT
+        .scope(hint(1.0, true, false), async { attempt_order(&fixture) })
+        .await;
+
+    assert_eq!(order.first().map(String::as_str), Some(PRO));
+}
+
 #[test]
 fn low_difficulty_still_prefers_cheap_flash() {
     let fixture = fixture(0.92);

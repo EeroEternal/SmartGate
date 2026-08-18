@@ -13,7 +13,7 @@ pub use strategy::{
 };
 
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
-use crate::policy::get_hint;
+use crate::policy::{get_hint, get_task_hint};
 use crate::pricing::EndpointProfile;
 use chrono::Utc;
 use dashmap::DashMap;
@@ -55,11 +55,12 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
         };
 
         let now = Utc::now();
-        let hint = self
-            .hints
-            .get(pool_id)
-            .map(|h| h.clone())
-            .or_else(|| get_hint());
+        // The task-local hint belongs to the request being dispatched. The shared
+        // maps are only a fallback: they are written by every concurrent request,
+        // so reading them first lets an easy request decide a hard request's route.
+        let hint = get_task_hint()
+            .or_else(|| self.hints.get(pool_id).map(|h| h.clone()))
+            .or_else(get_hint);
         let input_tok = hint
             .as_ref()
             .map(|h| h.input_tokens)

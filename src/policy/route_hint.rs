@@ -36,11 +36,13 @@ pub fn clear_hint() {
     }
 }
 
+/// Hint of the task currently being dispatched. Never shared across requests.
+pub fn get_task_hint() -> Option<RouteHint> {
+    TASK_ROUTE_HINT.try_with(|h| h.clone()).ok()
+}
+
 pub fn get_hint() -> Option<RouteHint> {
-    TASK_ROUTE_HINT
-        .try_with(|h| h.clone())
-        .ok()
-        .or_else(|| CURRENT.read().ok().and_then(|g| g.clone()))
+    get_task_hint().or_else(|| CURRENT.read().ok().and_then(|g| g.clone()))
 }
 
 /// RAII clear on drop.
