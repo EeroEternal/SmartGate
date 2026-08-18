@@ -97,11 +97,26 @@ pub async fn sync_all_pools(
             })
             .collect();
 
+        let vm_names: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM virtual_models WHERE pool_id = $1",
+        )
+        .bind(&pool.id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+
         let unigateway_endpoints: Vec<Endpoint> = rows
             .iter()
             .map(|r| {
                 let (provider_kind, driver_id, family) =
                     map_provider(&r.protocol, &r.provider_type);
+                let mut model_mapping = HashMap::new();
+                model_mapping.insert("*".to_string(), r.upstream_model_id.clone());
+                model_mapping.insert(pool.name.clone(), r.upstream_model_id.clone());
+                model_mapping.insert(r.upstream_model_id.clone(), r.upstream_model_id.clone());
+                for (vm_name,) in &vm_names {
+                    model_mapping.insert(vm_name.clone(), r.upstream_model_id.clone());
+                }
                 Endpoint {
                     endpoint_id: r.id.clone(),
                     provider_name: Some(r.account_name.clone()),
@@ -113,7 +128,7 @@ pub async fn sync_all_pools(
                     api_key: SecretString::new(r.api_key.clone()),
                     model_policy: ModelPolicy {
                         default_model: Some(r.upstream_model_id.clone()),
-                        model_mapping: HashMap::new(),
+                        model_mapping,
                     },
                     enabled: r.enabled,
                     max_concurrency: None,
