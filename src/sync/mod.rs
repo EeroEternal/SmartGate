@@ -107,6 +107,10 @@ pub async fn sync_all_pools(
                             cache_read_per_1m: None,
                         },
                         capability_score: capability,
+                        family_capability_score: crate::pricing::default_capability_score(
+                            &r.upstream_model_id,
+                            None,
+                        ),
                         supports_tools: r.supports_tools.map(|v| v != 0).or(Some(true)),
                         context_length: r.context_length,
                     },

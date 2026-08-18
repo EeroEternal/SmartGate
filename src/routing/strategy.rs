@@ -56,10 +56,12 @@ pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_r
 }
 
 pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000_000.0;
-/// One 0.01 capability step outranks any price difference on hard tasks.
-pub const CAPABILITY_RANK_SCALE: f64 = 100_000.0;
-/// Kept strictly below `CAPABILITY_RANK_SCALE` so price only breaks ties.
-pub const COST_TERM_MAX: f64 = 99_999.0;
+/// One 0.01 configured capability step outranks family profile and price.
+pub const CAPABILITY_RANK_SCALE: f64 = 1_000_000.0;
+/// Breaks ties between endpoints sharing a configured capability score.
+pub const FAMILY_RANK_SCALE: f64 = 1_000.0;
+/// Kept strictly below `FAMILY_RANK_SCALE` so price ranks last on hard tasks.
+pub const COST_TERM_MAX: f64 = 999.0;
 /// At or above this difficulty the pool must answer with its strongest endpoint.
 pub const HARD_TASK_DIFFICULTY: f64 = 0.55;
 /// Capability spread that still counts as "strongest in pool".
@@ -141,12 +143,20 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
                 0.0
             };
             if input.difficulty >= HARD_TASK_DIFFICULTY {
-                // Hard tasks rank on capability first; price only breaks ties
-                // between endpoints of equivalent strength.
+                // Hard tasks rank on configured capability, then on the model family
+                // profile (so two endpoints sharing a score do not fall back to
+                // price), and only then on cost.
                 let capability_rank = (capability.clamp(0.0, 1.0) * 100.0).round();
+                let family_rank = (input
+                    .profile
+                    .family_capability_score
+                    .clamp(0.0, 1.0)
+                    * 100.0)
+                    .round();
                 Some(
                     tier * CAPABILITY_TIER_SCALE
                         + capability_rank * CAPABILITY_RANK_SCALE
+                        + family_rank * FAMILY_RANK_SCALE
                         + normalized_cost,
                 )
             } else {
