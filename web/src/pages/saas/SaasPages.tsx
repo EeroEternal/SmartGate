@@ -1243,8 +1243,10 @@ export function AnalyticsPage() {
                 <span>
                   Showing <strong className="font-semibold text-zinc-900">{startIndex + 1}</strong>–<strong className="font-semibold text-zinc-900">{Math.min(startIndex + pageSize, totalFiltered)}</strong> of <strong className="font-semibold text-zinc-900">{totalFiltered}</strong> queries
                 </span>
-                <div className="w-28">
+                <div className="w-32 min-w-[125px]">
                   <Select
+                    size="sm"
+                    direction="up"
                     options={[
                       { id: '10', name: '10 / page' },
                       { id: '15', name: '15 / page' },
