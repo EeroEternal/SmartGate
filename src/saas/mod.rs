@@ -19,7 +19,7 @@ use crate::{
     auth::hash_token,
     config::AppState,
     policy::{evaluate_budget, BudgetOutcome},
-    pricing::default_capability_score,
+    pricing::effective_capability_score,
     routing::canonicalize_strategy,
 };
 
@@ -127,6 +127,25 @@ struct UpdateModelEndpointRequest {
     capability_score: Option<f64>,
     supports_tools: Option<bool>,
     context_length: Option<i32>,
+}
+
+/// Pool member of one model service, including the fields that explain routing.
+#[derive(Debug, sqlx::FromRow)]
+struct ServiceEndpointRow {
+    id: String,
+    provider_id: String,
+    provider_name: String,
+    provider_type: String,
+    protocol: String,
+    upstream_model_id: String,
+    base_url: String,
+    input_price_per_1m: f64,
+    output_price_per_1m: f64,
+    capability_score: f64,
+    context_length: Option<i32>,
+    enabled: bool,
+    health_status: String,
+    supports_tools: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -751,14 +770,10 @@ async fn create_model_service(
             .bind(&endpoint.upstream_model_id)
             .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
             .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-            .bind({
-                let cap = endpoint.capability_score.unwrap_or(0.0);
-                if cap <= 0.0 || (cap - 0.5).abs() < 1e-5 || (cap - 0.7).abs() < 1e-5 {
-                    default_capability_score(&endpoint.upstream_model_id, None)
-                } else {
-                    cap.clamp(0.0, 1.0)
-                }
-            })
+            .bind(effective_capability_score(
+                &endpoint.upstream_model_id,
+                endpoint.capability_score.unwrap_or(0.0),
+            ))
             .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
             .bind(endpoint.context_length)
             .execute(&mut *tx)
@@ -825,22 +840,11 @@ async fn get_model_service(
             Json(ApiResponse::error("Model service not found")),
         ));
     };
-    let endpoints: Vec<(
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        f64,
-        f64,
-        f64,
-        Option<i32>,
-    )> = sqlx::query_as(
-        "SELECT e.id, pa.id, CASE WHEN pa.name LIKE 'saas-%' THEN pa.provider_type ELSE pa.name END, pa.provider_type, pa.protocol, e.upstream_model_id, pa.base_url,
+    let endpoints: Vec<ServiceEndpointRow> = sqlx::query_as(
+        "SELECT e.id, pa.id AS provider_id, CASE WHEN pa.name LIKE 'saas-%' THEN pa.provider_type ELSE pa.name END AS provider_name,
+                    pa.provider_type, pa.protocol, e.upstream_model_id, pa.base_url,
                     e.input_price_per_1m, e.output_price_per_1m, e.capability_score,
-                    e.context_length
+                    e.context_length, e.enabled, e.health_status, e.supports_tools
              FROM model_pool_endpoints mpe
              JOIN model_pools mp ON mp.id = mpe.pool_id
              JOIN endpoints e ON e.id = mpe.endpoint_id
@@ -854,39 +858,70 @@ async fn get_model_service(
     .map_err(db_error)?;
     let provider_types = endpoints
         .iter()
-        .map(|endpoint| endpoint.3.clone())
+        .map(|endpoint| endpoint.provider_type.clone())
         .collect::<Vec<_>>();
+    // Report the capability the router actually uses, not the raw column, so the
+    // UI and routing decisions cannot disagree.
+    let effective_capabilities = crate::pricing::resolve_pool_capabilities(
+        &endpoints
+            .iter()
+            .map(|endpoint| {
+                (
+                    endpoint.upstream_model_id.clone(),
+                    crate::pricing::effective_capability_score(
+                        &endpoint.upstream_model_id,
+                        endpoint.capability_score,
+                    ),
+                )
+            })
+            .collect::<Vec<_>>(),
+    );
+    let strongest_capability = endpoints
+        .iter()
+        .zip(effective_capabilities.iter())
+        .filter(|(endpoint, _)| endpoint.enabled)
+        .map(|(_, capability)| *capability)
+        .fold(0.0_f64, f64::max);
     let endpoint_values = endpoints
         .into_iter()
-        .map(
-            |(
-                endpoint_id,
-                provider_id,
-                provider_name,
-                provider_type,
-                protocol,
-                model,
-                base_url,
-                input_price,
-                output_price,
-                capability,
-                context_length,
-            )| {
-                json!({
-                    "id": endpoint_id,
-                    "provider_id": provider_id,
-                    "provider_name": provider_name,
-                    "provider_type": provider_type,
-                    "protocol": protocol,
-                    "model": model,
-                    "base_url": base_url,
-                    "input_price_per_1m": input_price,
-                    "output_price_per_1m": output_price,
-                    "capability_score": capability,
-                    "context_length": context_length,
-                })
-            },
-        )
+        .zip(effective_capabilities)
+        .map(|(endpoint, effective_capability)| {
+            // Live routing health beats the persisted column: a repeatedly failing
+            // endpoint is the usual reason a strong model never appears in logs.
+            let runtime = state.metrics.get(&endpoint.id);
+            let health_status = runtime
+                .as_ref()
+                .map(|metric| metric.health_status.clone())
+                .unwrap_or_else(|| endpoint.health_status.clone());
+            let cooling_down = runtime
+                .as_ref()
+                .and_then(|metric| metric.cooldown_until)
+                .is_some_and(|until| until > Utc::now());
+            json!({
+                "id": endpoint.id,
+                "provider_id": endpoint.provider_id,
+                "provider_name": endpoint.provider_name,
+                "provider_type": endpoint.provider_type,
+                "protocol": endpoint.protocol,
+                "model": endpoint.upstream_model_id,
+                "base_url": endpoint.base_url,
+                "input_price_per_1m": endpoint.input_price_per_1m,
+                "output_price_per_1m": endpoint.output_price_per_1m,
+                "capability_score": effective_capability,
+                "configured_capability_score": endpoint.capability_score,
+                "context_length": endpoint.context_length,
+                "enabled": endpoint.enabled,
+                "supports_tools": endpoint.supports_tools.map(|value| value != 0),
+                "health_status": health_status,
+                "cooling_down": cooling_down,
+                "total_requests": runtime.as_ref().map(|metric| metric.total_requests).unwrap_or(0),
+                "total_errors": runtime.as_ref().map(|metric| metric.total_errors).unwrap_or(0),
+                // Capability-first routing sends hard requests here when true.
+                "preferred_for_hard_requests": endpoint.enabled
+                    && strongest_capability > 0.0
+                    && effective_capability >= strongest_capability - 0.04,
+            })
+        })
         .collect::<Vec<_>>();
     let endpoint_count = endpoint_values.len();
     Ok(Json(ApiResponse::success(json!({
@@ -1027,14 +1062,10 @@ async fn add_model_service_endpoint(
         .bind(&endpoint.upstream_model_id)
         .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
         .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-        .bind({
-            let cap = endpoint.capability_score.unwrap_or(0.0);
-            if cap <= 0.0 || (cap - 0.5).abs() < 1e-5 || (cap - 0.7).abs() < 1e-5 {
-                default_capability_score(&endpoint.upstream_model_id, None)
-            } else {
-                cap.clamp(0.0, 1.0)
-            }
-        })
+        .bind(effective_capability_score(
+            &endpoint.upstream_model_id,
+            endpoint.capability_score.unwrap_or(0.0),
+        ))
         .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
         .bind(endpoint.context_length)
         .execute(&mut *tx)
@@ -1213,7 +1244,7 @@ async fn update_model_service_endpoint(
         .execute(&state.db).await.map_err(db_error)?;
     sqlx::query("UPDATE endpoints SET upstream_model_id = $1, input_price_per_1m = $2, output_price_per_1m = $3, capability_score = $4, supports_tools = COALESCE($5, supports_tools), context_length = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7")
         .bind(model).bind(input.input_price_per_1m.unwrap_or(0.0)).bind(input.output_price_per_1m.unwrap_or(0.0))
-        .bind(input.capability_score.unwrap_or_else(|| default_capability_score(model, None)).clamp(0.0, 1.0))
+        .bind(effective_capability_score(model, input.capability_score.unwrap_or(0.0)))
         .bind(input.supports_tools.map(|value| if value { 1 } else { 0 })).bind(input.context_length).bind(&endpoint_id)
         .execute(&state.db).await.map_err(db_error)?;
     sync(&state).await;
@@ -1908,7 +1939,7 @@ async fn get_routing_analytics(
                 COALESCE(pa.name, pa.provider_type, 'unknown'),
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
                 u.latency_ms, u.status_code, u.estimated_cost,
-                u.routing_strategy, u.routing_decision
+                u.routing_strategy, u.routing_decision, u.metadata
          FROM usage_logs u
          JOIN projects p ON p.id = u.project_id
          LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
@@ -1931,6 +1962,7 @@ async fn get_routing_analytics(
         i32,
         Option<i32>,
         f64,
+        Option<String>,
         Option<String>,
         Option<String>,
     )> = if let Some(value) = since_value {
@@ -1972,6 +2004,7 @@ async fn get_routing_analytics(
         cost,
         strategy,
         decision_str,
+        metadata_str,
     ) in rows {
         total_cost += cost;
         total_latency += latency_ms as i64;
@@ -2044,6 +2077,25 @@ async fn get_routing_analytics(
             prompt_preview = format!("{} tokens query via {}", prompt_tokens, clean_service_name);
         }
 
+        // A stronger endpoint may have been tried first and failed; without the
+        // attempt chain the log looks like the request was never routed there.
+        let metadata = metadata_str
+            .as_deref()
+            .and_then(|raw| serde_json::from_str::<Value>(raw).ok());
+        let attempts = metadata
+            .as_ref()
+            .and_then(|value| value.get("attempts"))
+            .and_then(|value| value.as_str())
+            .map(|value| {
+                value
+                    .split(',')
+                    .filter(|item| !item.is_empty())
+                    .map(|item| item.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let fallback_used = attempts.len() > 1;
+
         queries.push(json!({
             "id": id,
             "timestamp": timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -2061,6 +2113,8 @@ async fn get_routing_analytics(
             "difficulty_tier": difficulty_tier,
             "prompt_preview": prompt_preview,
             "signals": signals,
+            "attempts": attempts,
+            "fallback_used": fallback_used,
         }));
     }
 
