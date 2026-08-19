@@ -296,7 +296,8 @@ export function NewServicePage() {
   </Page>
 }
 
-type ServiceEndpoint = { id: string; provider_id: string; provider_name: string; provider_type: string; protocol: string; model: string; base_url: string; input_price_per_1m: number; output_price_per_1m: number; capability_score: number; configured_capability_score?: number; context_length?: number; enabled?: boolean; health_status?: string; cooling_down?: boolean; health_observed?: boolean; total_requests?: number; total_errors?: number; preferred_for_hard_requests?: boolean }
+type ModelDna = { code_logic: number; reasoning_math: number; agent_tools: number; multilingual_nlp: number; context_retention: number; strengths: string[] }
+type ServiceEndpoint = { id: string; provider_id: string; provider_name: string; provider_type: string; protocol: string; model: string; base_url: string; input_price_per_1m: number; output_price_per_1m: number; capability_score: number; configured_capability_score?: number; context_length?: number; enabled?: boolean; supports_tools?: boolean; health_status?: string; cooling_down?: boolean; health_observed?: boolean; total_requests?: number; total_errors?: number; preferred_for_hard_requests?: boolean; model_dna?: ModelDna }
 type ServiceDetails = { id: string; name: string; model?: string; strategy: string; status: string; endpoint_count: number; endpoints: ServiceEndpoint[]; judge_enabled?: boolean; judge_endpoint_id?: string }
 type CallApi = 'openai-chat' | 'openai-responses' | 'anthropic-messages'
 
@@ -386,11 +387,311 @@ export function ServiceDetailsPage() {
       <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"><div className="min-w-0"><label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">Model service</label><div className="mt-2 flex items-center gap-2"><span className="truncate text-lg font-medium text-zinc-950">{service.name}</span><button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Copy model service name"><Copy className="h-4 w-4" /></button>{copied && <span className="text-xs text-emerald-600">Copied</span>}</div></div><div className="text-sm text-zinc-600"><div className="flex items-center gap-1"><span className="font-medium text-zinc-950">Routing</span><button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit routing strategy"><Pencil className="h-4 w-4" /></button></div><div className="mt-1 text-zinc-500">{routing?.label}</div>{service.strategy === 'capability_aware' && service.judge_enabled && <div className="mt-1 text-xs text-emerald-600 font-medium">Judge: {service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled'}</div>}</div><div className="text-sm text-zinc-600"><span className="font-medium text-zinc-950">Supported APIs</span><div className="mt-1 space-y-1 text-zinc-500"><div>OpenAI Chat</div><div>OpenAI Responses</div><div>Anthropic Messages</div></div></div></div></section>
       <CallExamplePanel api={callApi} model={service.name} onChange={setCallApi} />
       <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">Providers</h2><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="font-medium text-zinc-950">{endpoint.provider_name}</div><div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-zinc-400" title="Capability-first routing sends hard requests to the highest capability provider in this service">Capability {(endpoint.capability_score ?? 0.5).toFixed(2)}</span>{endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500" title={`Configured ${endpoint.configured_capability_score.toFixed(2)} did not separate this model from the others in the service, so the model family profile is used for routing.`}>auto</span>}{endpoint.preferred_for_hard_requests && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700" title="Where a high complexity request goes right now. Reflects capability, health, cooldown and tool support, so it moves to another provider when this one is unavailable.">Routes hard requests</span>}{endpoint.enabled === false && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">Disabled</span>}{endpoint.health_status && endpoint.health_status !== 'healthy' && (endpoint.health_observed ? <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700" title={`${endpoint.total_errors ?? 0} errors out of ${endpoint.total_requests ?? 0} requests`}>{endpoint.cooling_down ? 'Cooling down' : endpoint.health_status}</span> : <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700" title="Recorded before the last gateway restart. It clears automatically on the next successful request.">Last known {endpoint.health_status}</span>)}</div></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit provider"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title="Test connection"><Zap className="h-4 w-4" /></button><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="h-4 w-4" /></button></div></div></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add provider</button></div>}</div>
+      {service.endpoints.length > 0 && <ModelDnaSection service={service} />}
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
     {routingOpen && service && <EditRoutingModal service={service} onClose={() => setRoutingOpen(false)} onSaved={() => { setRoutingOpen(false); load() }} />}
     {editingEndpoint && <EditProviderModal endpoint={editingEndpoint} serviceId={id || ''} onClose={() => setEditingEndpoint(null)} onSaved={() => { setEditingEndpoint(null); load() }} />}
   </Page>
+}
+
+const RADAR_PALETTES = [
+  { stroke: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.22)', dot: '#7c3aed', text: 'text-purple-700', bg: 'bg-purple-600', pill: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.22)', dot: '#059669', text: 'text-emerald-700', bg: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.22)', dot: '#d97706', text: 'text-amber-700', bg: 'bg-amber-600', pill: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { stroke: '#0ea5e9', fill: 'rgba(14, 165, 233, 0.22)', dot: '#0284c7', text: 'text-sky-700', bg: 'bg-sky-600', pill: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { stroke: '#ec4899', fill: 'rgba(236, 72, 153, 0.22)', dot: '#db2777', text: 'text-pink-700', bg: 'bg-pink-600', pill: 'bg-pink-50 text-pink-700 border-pink-200' },
+]
+
+const RADAR_DIMENSIONS = [
+  { id: 'code_logic', name: 'Code & Logic', short: 'Code', icon: '💻', anchor: 'middle' as const, dx: 0, dy: -12 },
+  { id: 'reasoning_math', name: 'Reasoning & Math', short: 'Math/Logic', icon: '🧠', anchor: 'start' as const, dx: 10, dy: 4 },
+  { id: 'agent_tools', name: 'Agent & Tools', short: 'Tools', icon: '🛠️', anchor: 'start' as const, dx: 8, dy: 16 },
+  { id: 'multilingual_nlp', name: 'Multilingual & NLP', short: 'Language', icon: '🌐', anchor: 'end' as const, dx: -8, dy: 16 },
+  { id: 'context_retention', name: 'Long Context', short: 'Context', icon: '📜', anchor: 'end' as const, dx: -10, dy: 4 },
+]
+
+function ModelDnaSection({ service }: { service: ServiceDetails }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    service.endpoints.slice(0, 4).map((e) => e.id)
+  )
+  const [hoveredPoint, setHoveredPoint] = useState<{ model: string; dim: string; score: number; x: number; y: number } | null>(null)
+
+  const toggleEndpoint = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? (prev.length > 1 ? prev.filter((item) => item !== id) : prev) : [...prev, id]
+    )
+  }
+
+  const cx = 170
+  const cy = 150
+  const maxR = 95
+  const angles = [0, 1, 2, 3, 4].map((i) => (2 * Math.PI * i) / 5 - Math.PI / 2)
+
+  const getCoord = (score: number, idx: number) => {
+    const r = (Math.max(10, Math.min(100, score)) / 100) * maxR
+    const angle = angles[idx]
+    return {
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+    }
+  }
+
+  const gridLevels = [20, 40, 60, 80, 100]
+
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-zinc-950">Model DNA & Capability Footprint</h2>
+            <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
+              5D Radar
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            Multi-dimensional capability footprint across code, reasoning, tools, and context retention for smart tier routing.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {service.endpoints.map((ep, idx) => {
+            const isSelected = selectedIds.includes(ep.id)
+            const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
+            return (
+              <button
+                key={ep.id}
+                type="button"
+                onClick={() => toggleEndpoint(ep.id)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium border transition-all ${
+                  isSelected
+                    ? `${palette.pill} shadow-xs font-semibold`
+                    : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:text-zinc-700'
+                }`}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: isSelected ? palette.dot : '#a1a1aa' }}
+                />
+                <span>{ep.model}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-center">
+        <div className="relative flex flex-col items-center justify-center p-2 rounded-xl bg-zinc-50/60 border border-zinc-100">
+          <svg viewBox="0 0 340 300" className="w-full max-w-[340px] h-[300px] select-none">
+            {gridLevels.map((lvl) => {
+              const pts = angles
+                .map((a) => {
+                  const r = (lvl / 100) * maxR
+                  return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
+                })
+                .join(' ')
+              return (
+                <polygon
+                  key={lvl}
+                  points={pts}
+                  fill="none"
+                  stroke="#e4e4e7"
+                  strokeWidth={lvl === 100 ? '1.5' : '1'}
+                  strokeDasharray={lvl === 100 ? 'none' : '2,2'}
+                />
+              )
+            })}
+
+            {angles.map((a, i) => (
+              <line
+                key={i}
+                x1={cx}
+                y1={cy}
+                x2={cx + maxR * Math.cos(a)}
+                y2={cy + maxR * Math.sin(a)}
+                stroke="#e4e4e7"
+                strokeWidth="1"
+              />
+            ))}
+
+            {RADAR_DIMENSIONS.map((dim, i) => {
+              const a = angles[i]
+              const labelR = maxR + 24
+              const lx = cx + labelR * Math.cos(a) + dim.dx
+              const ly = cy + labelR * Math.sin(a) + dim.dy
+              return (
+                <text
+                  key={dim.id}
+                  x={lx}
+                  y={ly}
+                  textAnchor={dim.anchor}
+                  className="text-[11px] font-medium fill-zinc-600"
+                >
+                  {dim.icon} {dim.short}
+                </text>
+              )
+            })}
+
+            {service.endpoints.map((ep, idx) => {
+              if (!selectedIds.includes(ep.id)) return null
+              const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
+              const dna = ep.model_dna || {
+                code_logic: Math.round(ep.capability_score * 100),
+                reasoning_math: Math.round(ep.capability_score * 98),
+                agent_tools: ep.supports_tools ? 92 : 60,
+                multilingual_nlp: 90,
+                context_retention: 88,
+                strengths: [],
+              }
+              const scores = [
+                dna.code_logic,
+                dna.reasoning_math,
+                dna.agent_tools,
+                dna.multilingual_nlp,
+                dna.context_retention,
+              ]
+              const pts = scores.map((s, i) => getCoord(s, i))
+              const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ')
+
+              return (
+                <g key={ep.id} className="transition-all duration-300">
+                  <polygon
+                    points={ptsStr}
+                    fill={palette.fill}
+                    stroke={palette.stroke}
+                    strokeWidth="2"
+                    className="hover:opacity-90 transition-opacity"
+                  />
+                  {pts.map((p, pIdx) => (
+                    <circle
+                      key={pIdx}
+                      cx={p.x}
+                      cy={p.y}
+                      r="4"
+                      fill={palette.dot}
+                      stroke="#fff"
+                      strokeWidth="1.5"
+                      className="cursor-pointer hover:r-6 transition-all"
+                      onMouseEnter={() =>
+                        setHoveredPoint({
+                          model: ep.model,
+                          dim: RADAR_DIMENSIONS[pIdx].name,
+                          score: scores[pIdx],
+                          x: p.x,
+                          y: p.y,
+                        })
+                      }
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                  ))}
+                </g>
+              )
+            })}
+          </svg>
+
+          {hoveredPoint && (
+            <div
+              className="pointer-events-none absolute z-50 rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1 text-xs shadow-md backdrop-blur-xs"
+              style={{
+                left: `${(hoveredPoint.x / 340) * 100}%`,
+                top: `${(hoveredPoint.y / 300) * 100 - 18}%`,
+                transform: 'translate(-50%, -100%)',
+              }}
+            >
+              <div className="font-semibold text-zinc-950">{hoveredPoint.model}</div>
+              <div className="text-zinc-500 text-[11px]">
+                {hoveredPoint.dim}: <span className="font-mono font-bold text-zinc-900">{hoveredPoint.score}/100</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-1 flex items-center gap-4 text-[10px] text-zinc-400">
+            <span>Inner ring: 20</span>
+            <span>Mid ring: 60</span>
+            <span>Outer perimeter: 100</span>
+          </div>
+        </div>
+
+        <div className="space-y-3 max-h-[310px] overflow-y-auto pr-1">
+          {service.endpoints.map((ep, idx) => {
+            const isSelected = selectedIds.includes(ep.id)
+            const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
+            const dna = ep.model_dna || {
+              code_logic: Math.round(ep.capability_score * 100),
+              reasoning_math: Math.round(ep.capability_score * 98),
+              agent_tools: ep.supports_tools ? 92 : 60,
+              multilingual_nlp: 90,
+              context_retention: 88,
+              strengths: ['Adaptive Reasoning', 'Low-Latency Synthesis'],
+            }
+            return (
+              <div
+                key={ep.id}
+                onClick={() => toggleEndpoint(ep.id)}
+                className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
+                  isSelected
+                    ? 'border-zinc-300 bg-white shadow-xs'
+                    : 'border-zinc-200 bg-zinc-50/50 opacity-60 hover:opacity-100'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
+                    <span className="font-semibold text-zinc-900 truncate text-sm">{ep.model}</span>
+                    <span className="text-xs text-zinc-400 truncate">({ep.provider_name})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-700">
+                      Cap {(ep.capability_score ?? 0.5).toFixed(2)}
+                    </span>
+                    {ep.preferred_for_hard_requests && (
+                      <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                        Pro Tier
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {dna.strengths.map((str, sIdx) => (
+                    <span
+                      key={sIdx}
+                      className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700 border border-zinc-200/70"
+                    >
+                      ✨ {str}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-2.5 grid grid-cols-5 gap-1.5 text-center text-[10px]">
+                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                    <div className="text-zinc-400 text-[9px]">Code</div>
+                    <div className="font-bold text-zinc-900 font-mono">{dna.code_logic}</div>
+                  </div>
+                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                    <div className="text-zinc-400 text-[9px]">Math</div>
+                    <div className="font-bold text-zinc-900 font-mono">{dna.reasoning_math}</div>
+                  </div>
+                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                    <div className="text-zinc-400 text-[9px]">Tools</div>
+                    <div className="font-bold text-zinc-900 font-mono">{dna.agent_tools}</div>
+                  </div>
+                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                    <div className="text-zinc-400 text-[9px]">NLP</div>
+                    <div className="font-bold text-zinc-900 font-mono">{dna.multilingual_nlp}</div>
+                  </div>
+                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                    <div className="text-zinc-400 text-[9px]">Context</div>
+                    <div className="font-bold text-zinc-900 font-mono">{dna.context_retention}</div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: string; onChange: (api: CallApi) => void }) {

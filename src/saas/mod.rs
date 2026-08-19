@@ -973,6 +973,7 @@ async fn get_model_service(
                 "health_observed": observed_requests > 0,
                 // Capability-first routing sends hard requests here when true.
                 "preferred_for_hard_requests": hard_request_pick.as_deref() == Some(endpoint.id.as_str()),
+                "model_dna": crate::pricing::derive_model_dna(&endpoint.upstream_model_id, effective_capability, endpoint.supports_tools.map(|value| value != 0)),
             })
         })
         .collect::<Vec<_>>();

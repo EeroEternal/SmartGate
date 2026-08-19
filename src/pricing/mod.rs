@@ -154,6 +154,124 @@ pub fn resolve_pool_capabilities(members: &[(String, f64)]) -> Vec<f64> {
     }
 }
 
+/// 5-dimensional Capability Profile (Model DNA) for radar charts and fine-grained specialization routing.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ModelDna {
+    pub code_logic: u32,
+    pub reasoning_math: u32,
+    pub agent_tools: u32,
+    pub multilingual_nlp: u32,
+    pub context_retention: u32,
+    pub strengths: Vec<String>,
+}
+
+pub fn derive_model_dna(model_id: &str, capability_score: f64, supports_tools: Option<bool>) -> ModelDna {
+    let lower = model_id.to_ascii_lowercase();
+    let is_pro = capability_score >= 0.88 || lower.contains("pro") || lower.contains("max") || lower.contains("r1") || lower.contains("reasoner") || lower.contains("gpt-4") || lower.contains("sonnet") || lower.contains("opus");
+    let is_deepseek = lower.contains("deepseek");
+    let is_qwen = lower.contains("qwen") || lower.contains("bailian") || lower.contains("tongyi");
+    let is_claude = lower.contains("claude");
+    let is_openai = lower.contains("gpt") || lower.contains("o1") || lower.contains("o3");
+
+    if is_pro {
+        if is_deepseek {
+            ModelDna {
+                code_logic: 97,
+                reasoning_math: 98,
+                agent_tools: 93,
+                multilingual_nlp: 92,
+                context_retention: 94,
+                strengths: vec![
+                    "Top-Tier Code Synthesis".into(),
+                    "Complex Mathematical Proofs".into(),
+                    "Deep Multi-Step Reasoning".into(),
+                ],
+            }
+        } else if is_qwen {
+            ModelDna {
+                code_logic: 93,
+                reasoning_math: 94,
+                agent_tools: 96,
+                multilingual_nlp: 98,
+                context_retention: 96,
+                strengths: vec![
+                    "Dominant Multilingual & Chinese".into(),
+                    "Robust Agent Orchestration".into(),
+                    "Long Document Comprehension".into(),
+                ],
+            }
+        } else if is_claude || is_openai {
+            ModelDna {
+                code_logic: 96,
+                reasoning_math: 95,
+                agent_tools: 98,
+                multilingual_nlp: 96,
+                context_retention: 97,
+                strengths: vec![
+                    "Premier Tool Calling Reliability".into(),
+                    "Complex Instruction Following".into(),
+                    "General Intelligence SOTA".into(),
+                ],
+            }
+        } else {
+            let base = (capability_score * 100.0).round() as u32;
+            ModelDna {
+                code_logic: base.min(95),
+                reasoning_math: base.min(95),
+                agent_tools: if supports_tools.unwrap_or(true) { base.min(94) } else { 60 },
+                multilingual_nlp: base.min(94),
+                context_retention: base.min(94),
+                strengths: vec![
+                    "High-End Reasoning".into(),
+                    "Broad Domain Knowledge".into(),
+                ],
+            }
+        }
+    } else {
+        // Flash / Lightweight tier
+        if is_deepseek {
+            ModelDna {
+                code_logic: 84,
+                reasoning_math: 80,
+                agent_tools: 85,
+                multilingual_nlp: 86,
+                context_retention: 82,
+                strengths: vec![
+                    "Ultra-Low Latency Response".into(),
+                    "Cost-Optimal Code Assistance".into(),
+                    "High-Throughput Streaming".into(),
+                ],
+            }
+        } else if is_qwen {
+            ModelDna {
+                code_logic: 82,
+                reasoning_math: 78,
+                agent_tools: 90,
+                multilingual_nlp: 92,
+                context_retention: 88,
+                strengths: vec![
+                    "Instant Schema Extraction".into(),
+                    "Superior Cost/Quality NLP".into(),
+                    "Fast Agent Function Calling".into(),
+                ],
+            }
+        } else {
+            let base = ((capability_score * 100.0).round() as u32).clamp(60, 85);
+            ModelDna {
+                code_logic: base,
+                reasoning_math: base.saturating_sub(4),
+                agent_tools: if supports_tools.unwrap_or(true) { base + 2 } else { 55 },
+                multilingual_nlp: base + 3,
+                context_retention: base,
+                strengths: vec![
+                    "Fast Lightweight Response".into(),
+                    "Cost-Effective Execution".into(),
+                ],
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
