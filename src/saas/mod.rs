@@ -1389,6 +1389,19 @@ async fn test_model_service_endpoint(
         Ok(resp) => {
             let status = resp.status();
             if status.is_success() {
+                let _ = sqlx::query(
+                    "UPDATE endpoints SET health_status = 'healthy', cooldown_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+                )
+                .bind(&endpoint_id)
+                .execute(&state.db)
+                .await;
+
+                if let Some(mut metric) = state.metrics.get_mut(&endpoint_id) {
+                    metric.health_status = "healthy".to_string();
+                    metric.consecutive_failures = 0;
+                    metric.cooldown_until = None;
+                }
+
                 Ok(Json(ApiResponse::success(
                     json!({"passed": true, "message": "Connection verified successfully"}),
                 )))

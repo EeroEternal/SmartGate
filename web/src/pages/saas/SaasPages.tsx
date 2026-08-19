@@ -1136,22 +1136,22 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="mt-4 -mx-5 -mb-5 overflow-x-auto border-t border-zinc-100">
+          <div className="mt-4 -mx-5 -mb-5 overflow-x-auto rounded-b-xl border-t border-zinc-100">
             {!paginatedQueries.length ? (
               <div className="py-12 text-center text-sm text-zinc-500">
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
               </div>
             ) : (
-              <table className="w-full text-left text-xs divide-y divide-zinc-100">
+              <table className="w-full min-w-[760px] text-left text-xs divide-y divide-zinc-100 table-fixed">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-3 px-5 font-medium w-36">Time / Service</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px] max-w-sm">Prompt / User Intent</th>
-                    <th className="py-3 px-4 font-medium w-32">Complexity</th>
-                    <th className="py-3 px-4 font-medium min-w-[200px] max-w-md">Matched Signals</th>
-                    <th className="py-3 px-4 font-medium w-36">Routed Model</th>
-                    <th className="py-3 px-4 text-right font-medium w-28">Tokens / Latency</th>
-                    <th className="py-3 px-5 text-right font-medium w-24">Cost</th>
+                    <th className="py-3 px-4 font-medium w-[140px]">Time / Service</th>
+                    <th className="py-3 px-3 font-medium w-[220px]">Prompt / User Intent</th>
+                    <th className="py-3 px-3 font-medium w-[110px]">Complexity</th>
+                    <th className="py-3 px-3 font-medium w-[160px]">Matched Signals</th>
+                    <th className="py-3 px-3 font-medium w-[130px]">Routed Model</th>
+                    <th className="py-3 px-3 text-right font-medium w-[100px]">Tokens / Latency</th>
+                    <th className="py-3 px-4 text-right font-medium w-[80px]">Cost</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -1160,16 +1160,16 @@ export function AnalyticsPage() {
                     const cleanProvider = q.provider_name.replace(/^saas-[0-9a-fA-F-]{36}/, 'DeepSeek').replace(/^saas-/, '')
                     return (
                       <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
-                        <td className="py-3 px-5 align-top whitespace-nowrap">
-                          <div className="font-semibold text-zinc-900">{cleanService}</div>
+                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                          <div className="font-semibold text-zinc-900 truncate">{cleanService}</div>
                           <div className="mt-0.5 text-[11px] text-zinc-400">{q.timestamp}</div>
                         </td>
-                        <td className="py-3 px-4 align-top">
+                        <td className="py-3 px-3 align-top">
                           <div className="font-mono text-zinc-800 text-[11px] line-clamp-2 leading-relaxed break-words" title={q.prompt_preview}>
                             {q.prompt_preview}
                           </div>
                         </td>
-                        <td className="py-3 px-4 align-top whitespace-nowrap">
+                        <td className="py-3 px-3 align-top whitespace-nowrap">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               q.difficulty_tier === 'high'
@@ -1182,10 +1182,10 @@ export function AnalyticsPage() {
                             D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
                           </span>
                         </td>
-                        <td className="py-3 px-4 align-top min-w-[240px] max-w-sm">
+                        <td className="py-3 px-3 align-top">
                           {(() => {
                             const isExpanded = Boolean(expandedSignals[q.id])
-                            const list = isExpanded ? q.signals : q.signals.slice(0, 3)
+                            const list = isExpanded ? q.signals : q.signals.slice(0, 2)
                             return (
                               <div className="flex flex-wrap items-center gap-1" title={!isExpanded ? q.signals.join(', ') : undefined}>
                                 {list.map((sig, i) => (
