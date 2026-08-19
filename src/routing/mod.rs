@@ -278,16 +278,38 @@ impl SmartGateFeedbackProvider {
             }
         }
 
+        let tie_breaker_salt = uuid::Uuid::new_v4().as_u128();
+
         trace.sort_by(|left, right| {
             left.excluded
                 .cmp(&right.excluded)
                 .then_with(|| {
-                    right
-                        .score
-                        .unwrap_or(f64::NEG_INFINITY)
-                        .total_cmp(&left.score.unwrap_or(f64::NEG_INFINITY))
+                    let l_score = left.score.unwrap_or(f64::NEG_INFINITY);
+                    let r_score = right.score.unwrap_or(f64::NEG_INFINITY);
+                    if (l_score - r_score).abs() > 1e-6 {
+                        r_score.total_cmp(&l_score)
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
                 })
-                .then_with(|| left.endpoint_id.cmp(&right.endpoint_id))
+                .then_with(|| {
+                    let l_active = self.metrics.get(&left.endpoint_id).map(|m| m.active_requests).unwrap_or(0);
+                    let r_active = self.metrics.get(&right.endpoint_id).map(|m| m.active_requests).unwrap_or(0);
+                    l_active.cmp(&r_active)
+                })
+                .then_with(|| {
+                    use std::collections::hash_map::DefaultHasher;
+                    use std::hash::{Hash, Hasher};
+                    let mut l_hasher = DefaultHasher::new();
+                    left.endpoint_id.hash(&mut l_hasher);
+                    tie_breaker_salt.hash(&mut l_hasher);
+
+                    let mut r_hasher = DefaultHasher::new();
+                    right.endpoint_id.hash(&mut r_hasher);
+                    tie_breaker_salt.hash(&mut r_hasher);
+
+                    l_hasher.finish().cmp(&r_hasher.finish())
+                })
         });
 
         tracing::info!(
