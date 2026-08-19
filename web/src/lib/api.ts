@@ -1,5 +1,11 @@
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || 'admin123'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
+function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
+  if (envUrl.includes('xgate')) return ''
+  return envUrl
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 function apiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
