@@ -1728,7 +1728,7 @@ async fn create_api_key(
     }
     let id = Uuid::new_v4().to_string();
     let raw = format!("pk_{}", Uuid::new_v4().simple());
-    let prefix = raw[..7].to_string();
+    let prefix = format!("{}...{}", &raw[..7], &raw[raw.len().saturating_sub(4)..]);
     let mut tx = state.db.begin().await.map_err(db_error)?;
     sqlx::query("INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(&id).bind(&ctx.project_id).bind(&name).bind(hash_token(&raw)).bind(&prefix)

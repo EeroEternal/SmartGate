@@ -3,6 +3,7 @@ import { Plus, X, Key, FolderPlus, Link2, Pencil } from 'lucide-react'
 import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
 import { useDialog } from '../../components/Dialog'
+import { formatMaskedKey } from '../saas/SaasPages'
 
 interface Project {
   id: string
@@ -376,7 +377,7 @@ export default function AccessControl() {
                 <tr key={key.id}>
                   <td className="px-6 py-3">{key.name}</td>
                   <td className="px-6 py-3">{projectName(key.project_id)}</td>
-                  <td className="px-6 py-3 font-mono">{key.key_prefix}****</td>
+                  <td className="px-6 py-3 font-mono">{formatMaskedKey(key.key_prefix)}</td>
                   <td className="px-6 py-3 font-mono">{formatLimit(key.rpm_limit)}</td>
                   <td className="px-6 py-3 font-mono">{formatLimit(key.concurrency_limit)}</td>
                   <td className="px-6 py-3">{new Date(key.created_at).toLocaleDateString()}</td>

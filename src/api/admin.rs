@@ -627,7 +627,7 @@ async fn create_api_key(
     // Generate a secure random key
     let raw_key = format!("pk_{}", uuid::Uuid::new_v4().simple());
     let key_hash = hash_token(&raw_key);
-    let key_prefix = raw_key[..7].to_string(); // "pk_xxxx"
+    let key_prefix = format!("{}...{}", &raw_key[..7], &raw_key[raw_key.len().saturating_sub(4)..]);
     
     sqlx::query(
         "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit)
