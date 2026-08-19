@@ -1900,9 +1900,9 @@ export function QualityPage() {
         {/* Top 4 Quality Scorecards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quality Preserved Rate</div>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Quality Preserved Rate</div>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                 Verified
               </span>
             </div>
@@ -1913,9 +1913,9 @@ export function QualityPage() {
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Shadow Pro Agreement</div>
-              <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Shadow Pro Agreement</div>
+              <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
                 Judge Score
               </span>
             </div>
@@ -1926,9 +1926,9 @@ export function QualityPage() {
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">User Correction Rate</div>
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">User Correction Rate</div>
+              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
                 Healthy &lt; 3%
               </span>
             </div>
@@ -1939,9 +1939,9 @@ export function QualityPage() {
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Schema Compliance</div>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Schema Compliance</div>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                 100% Valid
               </span>
             </div>
@@ -1954,14 +1954,14 @@ export function QualityPage() {
 
         {/* A/B Benchmark ROI & Quality Evidence Matrix */}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900">A/B Benchmark Comparison & Pareto Frontier</h2>
               <p className="mt-0.5 text-xs text-zinc-400">
                 Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.
               </p>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
               <Sparkles className="h-3.5 w-3.5" />
               {routing ? `${routing.cost_saved_pct}% Cost Saved` : '85% Cost Saved'}
             </span>
