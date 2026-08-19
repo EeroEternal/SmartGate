@@ -1,10 +1,11 @@
 function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    // When running in the browser, always use relative paths for same-origin API
-    return ''
+    if (window.location.hostname === 'smartgate.run' || window.location.hostname.endsWith('.pages.dev')) {
+      return 'https://api.smartgate.run'
+    }
   }
   const envUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
-  if (envUrl.includes('xgate') || envUrl.includes('api.smartgate.run')) return ''
+  if (envUrl.includes('xgate')) return ''
   return envUrl
 }
 
