@@ -5,11 +5,14 @@ import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import BrandMark from '../../components/BrandMark'
 import { useDialog } from '../../components/Dialog'
+import { useI18n } from '../../lib/i18n'
+import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 
 type Service = { id: string; name: string; model: string; provider_type: string; provider_types?: string[]; endpoint_count?: number; strategy: string; health_status: string }
 type Key = { id: string; name: string; prefix: string; enabled: boolean; daily_spend_limit?: number; created_at: string; last_used_at?: string; model_services?: { id: string; name: string }[] }
 
 export function SaasLayout({ children }: { children: ReactNode }) {
+  const { t } = useI18n()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [accountOpen, setAccountOpen] = useState(false)
@@ -36,13 +39,13 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   }
 
   const links = [
-    ['Overview', '/app'],
-    ['Model services', '/app/services'],
-    ['API keys', '/app/keys'],
-    ['Codex', '/app/codex'],
-    ['Analytics', '/app/analytics'],
-    ['Quality', '/app/quality'],
-    ['Usage', '/app/usage'],
+    [t('nav.overview'), '/app'],
+    [t('nav.model_services'), '/app/services'],
+    [t('nav.api_keys'), '/app/keys'],
+    [t('nav.codex'), '/app/codex'],
+    [t('nav.analytics'), '/app/analytics'],
+    [t('nav.quality'), '/app/quality'],
+    [t('nav.usage'), '/app/usage'],
   ]
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
 
@@ -52,17 +55,20 @@ export function SaasLayout({ children }: { children: ReactNode }) {
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
         SmartGate
       </Link>
-      <div ref={accountRef} className="relative">
-        <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
-          <UserCircle className="h-6 w-6" />
-          <ChevronDown className={`h-4 w-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
-          <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">Signed in as</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || 'Account'}</div></div>
-          <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> Edit profile</button>
-          <button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> Logout</button>
-        </div>}
-        {profileOpen && <ProfileDialog email={email} onClose={() => setProfileOpen(false)} onSaved={(updatedEmail) => { setEmail(updatedEmail); setProfileOpen(false) }} />}
+      <div className="flex items-center gap-4">
+        <LanguageSwitcher size="sm" />
+        <div ref={accountRef} className="relative">
+          <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
+            <UserCircle className="h-6 w-6" />
+            <ChevronDown className={`h-4 w-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
+            <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">Signed in as</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || 'Account'}</div></div>
+            <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> Edit profile</button>
+            <button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> {t('nav.sign_out')}</button>
+          </div>}
+          {profileOpen && <ProfileDialog email={email} onClose={() => setProfileOpen(false)} onSaved={(updatedEmail) => { setEmail(updatedEmail); setProfileOpen(false) }} />}
+        </div>
       </div>
     </header>
     <div className="mx-auto grid max-w-[1440px] min-w-0 gap-8 px-6 py-8 md:px-10 lg:grid-cols-[200px_minmax(0,1fr)]">
@@ -412,6 +418,7 @@ const RADAR_DIMENSIONS = [
 ]
 
 function ModelDnaSection({ service }: { service: ServiceDetails }) {
+  const { t } = useI18n()
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
     service.endpoints.slice(0, 4).map((e) => e.id)
   )
@@ -422,6 +429,14 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
       prev.includes(id) ? (prev.length > 1 ? prev.filter((item) => item !== id) : prev) : [...prev, id]
     )
   }
+
+  const RADAR_DIMENSIONS = [
+    { id: 'code_logic', name: t('radar.code_logic'), short: t('radar.code_short'), icon: '💻', anchor: 'middle' as const, dx: 0, dy: -12 },
+    { id: 'reasoning_math', name: t('radar.reasoning_math'), short: t('radar.math_short'), icon: '🧠', anchor: 'start' as const, dx: 10, dy: 4 },
+    { id: 'agent_tools', name: t('radar.agent_tools'), short: t('radar.tools_short'), icon: '🛠️', anchor: 'start' as const, dx: 8, dy: 16 },
+    { id: 'multilingual_nlp', name: t('radar.multilingual_nlp'), short: t('radar.lang_short'), icon: '🌐', anchor: 'end' as const, dx: -8, dy: 16 },
+    { id: 'context_retention', name: t('radar.context_retention'), short: t('radar.context_short'), icon: '📜', anchor: 'end' as const, dx: -10, dy: 4 },
+  ]
 
   const cx = 170
   const cy = 150
@@ -444,13 +459,13 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-zinc-950">Model DNA & Capability Footprint</h2>
+            <h2 className="font-semibold text-zinc-950">{t('radar.title')}</h2>
             <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
-              5D Radar
+              {t('radar.badge')}
             </span>
           </div>
           <p className="mt-1 text-xs text-zinc-500">
-            Multi-dimensional capability footprint across code, reasoning, tools, and context retention for smart tier routing.
+            {t('radar.subtitle')}
           </p>
         </div>
 
@@ -606,9 +621,9 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
           )}
 
           <div className="mt-1 flex items-center gap-4 text-[10px] text-zinc-400">
-            <span>Inner ring: 20</span>
-            <span>Mid ring: 60</span>
-            <span>Outer perimeter: 100</span>
+            <span>{t('radar.inner_ring')}</span>
+            <span>{t('radar.mid_ring')}</span>
+            <span>{t('radar.outer_perimeter')}</span>
           </div>
         </div>
 
@@ -642,11 +657,11 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-700">
-                      Cap {(ep.capability_score ?? 0.5).toFixed(2)}
+                      {t('radar.cap_score', { score: (ep.capability_score ?? 0.5).toFixed(2) })}
                     </span>
                     {ep.preferred_for_hard_requests && (
                       <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
-                        Pro Tier
+                        {t('radar.pro_tier')}
                       </span>
                     )}
                   </div>
@@ -665,23 +680,23 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
 
                 <div className="mt-2.5 grid grid-cols-5 gap-1.5 text-center text-[10px]">
                   <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">Code</div>
+                    <div className="text-zinc-400 text-[9px]">{t('radar.code_short')}</div>
                     <div className="font-bold text-zinc-900 font-mono">{dna.code_logic}</div>
                   </div>
                   <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">Math</div>
+                    <div className="text-zinc-400 text-[9px]">{t('radar.math_short')}</div>
                     <div className="font-bold text-zinc-900 font-mono">{dna.reasoning_math}</div>
                   </div>
                   <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">Tools</div>
+                    <div className="text-zinc-400 text-[9px]">{t('radar.tools_short')}</div>
                     <div className="font-bold text-zinc-900 font-mono">{dna.agent_tools}</div>
                   </div>
                   <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">NLP</div>
+                    <div className="text-zinc-400 text-[9px]">{t('radar.lang_short')}</div>
                     <div className="font-bold text-zinc-900 font-mono">{dna.multilingual_nlp}</div>
                   </div>
                   <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">Context</div>
+                    <div className="text-zinc-400 text-[9px]">{t('radar.context_short')}</div>
                     <div className="font-bold text-zinc-900 font-mono">{dna.context_retention}</div>
                   </div>
                 </div>

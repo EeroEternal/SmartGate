@@ -15,6 +15,9 @@ import VirtualModels from './pages/VirtualModels'
 import AccessControl from './pages/access/AccessControl'
 import Statistics from './pages/stats/Statistics'
 
+import { I18nProvider, useI18n } from './lib/i18n'
+import { LanguageSwitcher } from './components/LanguageSwitcher'
+
 interface EndpointHealth {
   healthy: number
   degraded: number
@@ -22,6 +25,7 @@ interface EndpointHealth {
 }
 
 function Dashboard() {
+  const { t } = useI18n()
   const [health, setHealth] = useState<EndpointHealth | null>(null)
   const [stats, setStats] = useState<{ request_count: number; avg_latency: number } | null>(null)
 
@@ -45,7 +49,7 @@ function Dashboard() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-zinc-900">Dashboard</h2>
+        <h2 className="text-2xl font-bold text-zinc-900">{t('nav.dashboard')}</h2>
         <p className="text-sm text-zinc-500 mt-1">Endpoint health and recent gateway traffic.</p>
       </div>
 
@@ -87,13 +91,13 @@ function Dashboard() {
             <div className="font-mono text-xl mt-1">{total || '—'}</div>
           </div>
           <div>
-            <div className="text-zinc-500">Total Requests</div>
+            <div className="text-zinc-500">{t('overview.total_requests')}</div>
             <div className="font-mono text-xl mt-1">
               {stats?.request_count?.toLocaleString() ?? '—'}
             </div>
           </div>
           <div>
-            <div className="text-zinc-500">Avg Latency</div>
+            <div className="text-zinc-500">{t('overview.avg_latency')}</div>
             <div className="font-mono text-xl mt-1">
               {stats ? `${Math.round(stats.avg_latency)}ms` : '—'}
             </div>
@@ -108,6 +112,7 @@ function Dashboard() {
 }
 
 function Sidebar() {
+  const { t } = useI18n()
   const location = useLocation()
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
@@ -132,29 +137,32 @@ function Sidebar() {
       <nav className="flex-1 p-4 space-y-1">
         <Link to="/" className={navItemClass('/')}>
           <LayoutDashboard className="w-4 h-4" />
-          Dashboard
+          {t('nav.dashboard')}
         </Link>
         <Link to="/providers" className={navItemClass('/providers')}>
           <Database className="w-4 h-4" />
-          Providers
+          {t('nav.providers')}
         </Link>
         <Link to="/pools" className={navItemClass('/pools')}>
           <Layers className="w-4 h-4" />
-          Model Pools
+          {t('nav.pools')}
         </Link>
         <Link to="/virtual-models" className={navItemClass('/virtual-models')}>
           <Box className="w-4 h-4" />
-          Virtual Models
+          {t('nav.virtual_models')}
         </Link>
         <Link to="/access" className={navItemClass('/access')}>
           <ShieldCheck className="w-4 h-4" />
-          Access Control
+          {t('nav.access_keys')}
         </Link>
         <Link to="/stats" className={navItemClass('/stats')}>
           <Activity className="w-4 h-4" />
-          Statistics
+          {t('nav.statistics')}
         </Link>
       </nav>
+      <div className="p-4 border-t border-zinc-100">
+        <LanguageSwitcher size="sm" />
+      </div>
     </div>
   )
 }
@@ -194,13 +202,17 @@ function HeaderHealth() {
 }
 
 function AdminConsole() {
+  const { t } = useI18n()
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-auto">
         <header className="h-16 border-b border-zinc-200 bg-white flex items-center justify-between px-8">
-          <h2 className="text-sm font-medium text-zinc-500">Admin Console</h2>
-          <HeaderHealth />
+          <h2 className="text-sm font-medium text-zinc-500">{t('nav.admin_console')}</h2>
+          <div className="flex items-center gap-4">
+            <LanguageSwitcher size="sm" />
+            <HeaderHealth />
+          </div>
         </header>
         <main className="p-8">
           <Routes>
@@ -222,30 +234,32 @@ function AdminConsole() {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<AuthPage mode="login" />} />
-        <Route path="/register" element={<AuthPage mode="register" />} />
-        <Route path="/app" element={<SaasDashboard />} />
-        <Route path="/app/services" element={<SaasLayout><ServicesPage /></SaasLayout>} />
-        <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
-        <Route path="/app/services/:id" element={<SaasLayout><ServiceDetailsPage /></SaasLayout>} />
-        <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
-        <Route path="/app/codex" element={<SaasLayout><CodexPage /></SaasLayout>} />
-        <Route path="/app/analytics" element={<SaasLayout><AnalyticsPage /></SaasLayout>} />
-        <Route path="/app/quality" element={<SaasLayout><QualityPage /></SaasLayout>} />
-        <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
-        <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
-        <Route path="/admin/*" element={<AdminConsole />} />
-        <Route path="/providers" element={<AdminConsole />} />
-        <Route path="/pools/*" element={<AdminConsole />} />
-        <Route path="/virtual-models" element={<AdminConsole />} />
-        <Route path="/access" element={<AdminConsole />} />
-        <Route path="/stats" element={<AdminConsole />} />
-        <Route path="*" element={<LandingPage />} />
-      </Routes>
-    </Router>
+    <I18nProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/register" element={<AuthPage mode="register" />} />
+          <Route path="/app" element={<SaasDashboard />} />
+          <Route path="/app/services" element={<SaasLayout><ServicesPage /></SaasLayout>} />
+          <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
+          <Route path="/app/services/:id" element={<SaasLayout><ServiceDetailsPage /></SaasLayout>} />
+          <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
+          <Route path="/app/codex" element={<SaasLayout><CodexPage /></SaasLayout>} />
+          <Route path="/app/analytics" element={<SaasLayout><AnalyticsPage /></SaasLayout>} />
+          <Route path="/app/quality" element={<SaasLayout><QualityPage /></SaasLayout>} />
+          <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
+          <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
+          <Route path="/admin/*" element={<AdminConsole />} />
+          <Route path="/providers" element={<AdminConsole />} />
+          <Route path="/pools/*" element={<AdminConsole />} />
+          <Route path="/virtual-models" element={<AdminConsole />} />
+          <Route path="/access" element={<AdminConsole />} />
+          <Route path="/stats" element={<AdminConsole />} />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
+      </Router>
+    </I18nProvider>
   )
 }
 
