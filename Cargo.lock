@@ -528,9 +528,9 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "eero_llm_providers"
-version = "0.14.5"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d3be6e7d1a1592696deb4ce5e0390cc7f0b03231a02133b7d982c4684181cbd"
+checksum = "190ec095437080dd020e668896bc9492fcd2b473db2b5b5f9906111bfdcc8c05"
 dependencies = [
  "phf",
  "serde",
