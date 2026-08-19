@@ -1,7 +1,11 @@
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || 'admin123'
 function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    // When running in the browser, always use relative paths for same-origin API
+    return ''
+  }
   const envUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
-  if (envUrl.includes('xgate')) return ''
+  if (envUrl.includes('xgate') || envUrl.includes('api.smartgate.run')) return ''
   return envUrl
 }
 
