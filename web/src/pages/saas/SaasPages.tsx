@@ -1220,14 +1220,14 @@ export function AnalyticsPage() {
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
               </div>
             ) : (
-              <table className="w-full min-w-[760px] text-left text-xs divide-y divide-zinc-100 table-fixed">
+              <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
                     <th className="py-2.5 px-4 font-medium w-[140px]">Time / Service</th>
-                    <th className="py-2.5 px-3 font-medium w-[240px]">Prompt / User Intent</th>
-                    <th className="py-2.5 px-3 font-medium w-[110px]">Complexity</th>
-                    <th className="py-2.5 px-3 font-medium w-[150px]">Matched Signals</th>
-                    <th className="py-2.5 px-3 font-medium w-[140px]">Routed Model</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">Prompt / User Intent</th>
+                    <th className="py-2.5 px-3 font-medium w-[130px]">Complexity</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[220px] max-w-[280px]">Matched Signals</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">Routed Model</th>
                     <th className="py-2.5 px-3 text-right font-medium w-[100px]">Tokens / Latency</th>
                     <th className="py-2.5 px-4 text-right font-medium w-[80px]">Cost</th>
                   </tr>
@@ -1236,18 +1236,20 @@ export function AnalyticsPage() {
                   {paginatedQueries.map((q) => {
                     const cleanService = q.service_name.replace(/^[0-9a-fA-F-]{36,37}-/, '')
                     const cleanProvider = q.provider_name.replace(/^saas-[0-9a-fA-F-]{36}/, 'DeepSeek').replace(/^saas-/, '')
+                    const list = q.signals.slice(0, 2)
+                    const remaining = q.signals.slice(2)
                     return (
-                      <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors h-[48px]">
-                        <td className="py-2 px-4 align-middle whitespace-nowrap">
+                      <tr key={q.id} className="hover:bg-zinc-50/70 transition-colors">
+                        <td className="py-3 px-4 align-middle whitespace-nowrap">
                           <div className="font-semibold text-zinc-900 truncate">{cleanService}</div>
                           <div className="text-[10px] text-zinc-400">{q.timestamp}</div>
                         </td>
-                        <td className="py-2 px-3 align-middle max-w-[240px]">
+                        <td className="py-3 px-3 align-middle max-w-[240px]">
                           <div className="font-mono text-zinc-800 text-[11px] truncate" title={q.prompt_preview}>
                             {q.prompt_preview}
                           </div>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle whitespace-nowrap">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               q.difficulty_tier === 'high'
@@ -1260,51 +1262,56 @@ export function AnalyticsPage() {
                             D = {q.difficulty.toFixed(2)} ({q.difficulty_tier})
                           </span>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
-                          {(() => {
-                            const isExpanded = Boolean(expandedSignals[q.id])
-                            const list = isExpanded ? q.signals : q.signals.slice(0, 2)
-                            return (
-                              <div className="flex items-center gap-1" title={!isExpanded ? q.signals.join(', ') : undefined}>
-                                {list.map((sig, i) => (
-                                  <span
-                                    key={i}
-                                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-tight whitespace-nowrap ${
-                                      sig.includes('Judge')
-                                        ? 'bg-purple-50 text-purple-700 border border-purple-200/80 font-semibold'
-                                        : sig.includes('reasoning') || sig.includes('Correction')
-                                        ? 'bg-amber-50 text-amber-800 border border-amber-200/80'
-                                        : 'bg-zinc-100 text-zinc-700 border border-zinc-200/60'
-                                    }`}
-                                  >
-                                    {sig}
-                                  </span>
-                                ))}
-                                {!isExpanded && q.signals.length > 2 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSignals(q.id)}
-                                    title="Click to expand all signals"
-                                    className="inline-flex items-center rounded-md bg-zinc-100 hover:bg-zinc-200/90 border border-zinc-200/80 px-1 py-0.5 text-[10px] text-zinc-600 font-medium cursor-pointer transition-colors"
-                                  >
-                                    +{q.signals.length - 2}
-                                  </button>
-                                )}
-                                {isExpanded && q.signals.length > 2 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSignals(q.id)}
-                                    title="Click to collapse"
-                                    className="inline-flex items-center rounded-md bg-zinc-100 hover:bg-zinc-200/90 border border-zinc-200/80 px-1 py-0.5 text-[10px] text-zinc-500 font-medium cursor-pointer transition-colors"
-                                  >
-                                    Collapse
-                                  </button>
-                                )}
+                        <td className="py-3 px-3 align-middle">
+                          <div className="flex flex-wrap items-center gap-1 max-w-[260px]">
+                            {list.map((sig, i) => (
+                              <span
+                                key={i}
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-tight whitespace-nowrap ${
+                                  sig.includes('Judge')
+                                    ? 'bg-purple-50 text-purple-700 border border-purple-200/80 font-semibold'
+                                    : sig.includes('reasoning') || sig.includes('Correction')
+                                    ? 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                                    : 'bg-zinc-100 text-zinc-700 border border-zinc-200/60'
+                                }`}
+                              >
+                                {sig}
+                              </span>
+                            ))}
+                            {remaining.length > 0 && (
+                              <div className="group relative inline-flex items-center">
+                                <span
+                                  className="inline-flex items-center rounded-md bg-zinc-100 hover:bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 border border-zinc-200 cursor-help transition-colors"
+                                  title={q.signals.join(', ')}
+                                >
+                                  +{remaining.length}
+                                </span>
+                                <div className="pointer-events-none absolute left-0 bottom-full z-50 mb-2 hidden w-56 rounded-xl border border-zinc-200 bg-white p-2.5 shadow-xl group-hover:block text-left whitespace-normal">
+                                  <div className="text-[11px] font-semibold text-zinc-900 mb-1.5">
+                                    Matched Signals ({q.signals.length})
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {q.signals.map((s, idx) => (
+                                      <span
+                                        key={idx}
+                                        className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                                          s.includes('Judge')
+                                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                            : s.includes('reasoning') || s.includes('Correction')
+                                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                            : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+                                        }`}
+                                      >
+                                        {s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
-                            )
-                          })()}
+                            )}
+                          </div>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-zinc-900">{q.model}</span>
                             {(q.candidates?.length ?? 0) > 1 && (
@@ -1344,18 +1351,18 @@ export function AnalyticsPage() {
                               </div>
                             )}
                           </div>
-                          <div className="text-[10px] text-zinc-400 truncate max-w-[130px]" title={q.provider_name}>{cleanProvider}</div>
+                          <div className="text-[10px] text-zinc-400 truncate max-w-[140px]" title={q.provider_name}>{cleanProvider}</div>
                           {q.fallback_used && (
                             <div className="mt-0.5 inline-flex items-center rounded-md border border-rose-200/80 bg-rose-50 px-1.5 py-0.5 text-[9px] font-medium text-rose-700" title={`Attempted in order: ${(q.attempts ?? []).join(' → ')}`}>
                               Fallback
                             </div>
                           )}
                         </td>
-                        <td className="py-2 px-3 align-middle text-right whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle text-right whitespace-nowrap">
                           <div className="font-medium text-zinc-900">{q.total_tokens.toLocaleString()} tok</div>
                           <div className="text-[10px] text-zinc-400">{q.latency_ms}ms</div>
                         </td>
-                        <td className="py-2 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900">
+                        <td className="py-3 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900">
                           ${q.cost.toFixed(4)}
                         </td>
                       </tr>
@@ -1766,14 +1773,14 @@ export function QualityPage() {
                 {loading ? 'Loading quality evaluation records…' : 'No quality records found for this filter.'}
               </div>
             ) : (
-              <table className="w-full min-w-[760px] text-left text-xs divide-y divide-zinc-100 table-fixed">
+              <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
                     <th className="py-2.5 px-4 font-medium w-[140px]">Time / Service</th>
-                    <th className="py-2.5 px-3 font-medium w-[240px]">Prompt / User Intent</th>
-                    <th className="py-2.5 px-3 font-medium w-[130px]">Routed Model</th>
-                    <th className="py-2.5 px-3 font-medium w-[160px]">Quality Verdict</th>
-                    <th className="py-2.5 px-3 font-medium w-[130px]">Feedback Source</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">Prompt / User Intent</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">Routed Model</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[160px]">Quality Verdict</th>
+                    <th className="py-2.5 px-3 font-medium w-[140px]">Feedback Source</th>
                     <th className="py-2.5 px-3 text-right font-medium w-[100px]">Tokens / Latency</th>
                     <th className="py-2.5 px-4 text-right font-medium w-[80px]">Cost</th>
                   </tr>
@@ -1783,21 +1790,21 @@ export function QualityPage() {
                     const cleanService = r.service_name.replace(/^[0-9a-fA-F-]{36,37}-/, '')
                     const cleanProvider = r.provider_name.replace(/^saas-[0-9a-fA-F-]{36}/, 'DeepSeek').replace(/^saas-/, '')
                     return (
-                      <tr key={r.id} className="hover:bg-zinc-50/70 transition-colors h-[48px]">
-                        <td className="py-2 px-4 align-middle whitespace-nowrap">
+                      <tr key={r.id} className="hover:bg-zinc-50/70 transition-colors">
+                        <td className="py-3 px-4 align-middle whitespace-nowrap">
                           <div className="font-semibold text-zinc-900 truncate">{cleanService}</div>
                           <div className="text-[10px] text-zinc-400">{r.timestamp}</div>
                         </td>
-                        <td className="py-2 px-3 align-middle max-w-[240px]">
+                        <td className="py-3 px-3 align-middle max-w-[240px]">
                           <div className="font-mono text-zinc-800 text-[11px] truncate" title={r.prompt_preview}>
                             {r.prompt_preview || '—'}
                           </div>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle whitespace-nowrap">
                           <div className="font-semibold text-zinc-900">{r.model}</div>
-                          <div className="text-[10px] text-zinc-400 truncate max-w-[120px]">{cleanProvider}</div>
+                          <div className="text-[10px] text-zinc-400 truncate max-w-[140px]">{cleanProvider}</div>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               r.verdict === 'escalated'
@@ -1812,16 +1819,16 @@ export function QualityPage() {
                             <span className="font-mono text-[10px] opacity-75">({r.quality_score})</span>
                           </span>
                         </td>
-                        <td className="py-2 px-3 align-middle whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle whitespace-nowrap">
                           <span className="inline-flex items-center rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 border border-zinc-200/60">
                             {r.feedback_source}
                           </span>
                         </td>
-                        <td className="py-2 px-3 align-middle text-right whitespace-nowrap">
+                        <td className="py-3 px-3 align-middle text-right whitespace-nowrap">
                           <div className="font-medium text-zinc-900">{r.total_tokens.toLocaleString()} tok</div>
                           <div className="text-[10px] text-zinc-400">{r.latency_ms}ms</div>
                         </td>
-                        <td className="py-2 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900 font-mono">
+                        <td className="py-3 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900 font-mono">
                           ${r.cost.toFixed(4)}
                         </td>
                       </tr>
