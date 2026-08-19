@@ -3,11 +3,9 @@
 | | |
 |--|--|
 | **Product** | SmartGate |
-| **Legacy name** | ParaGateway (git path / history may still use this) |
 | **Status** | Canonical |
-| **Updated** | 2026-08-08 |
 | **Roadmap** | [roadmap.md](./roadmap.md) |
-| **Inspiration** | Enterprise AI gateway patterns (e.g. [Unity AI Gateway](https://www.databricks.com/blog/unity-ai-gateway-generally-available)): Cost · Control · Choice — **without** binding to a data catalog platform |
+| **Inspiration** | Enterprise AI gateway patterns: Cost · Control · Choice |
 
 ---
 
@@ -245,7 +243,6 @@ Preferred public license: **Apache-2.0** (confirm before publish).
 | Doc | Role |
 |-----|------|
 | [roadmap.md](./roadmap.md) | Phases and backlog |
+| [design.md](./design.md) | Technical architecture & design |
+| [provider-routing.md](./provider-routing.md) | Provider, Endpoint & Model Pool relationships |
 | [integrations/harness.md](./integrations/harness.md) | Agents / IDEs as clients |
-| [design.md](./design.md) | Technical design notes |
-| [unigateway_optimization.md](./unigateway_optimization.md) | Data-plane primitive asks |
-| [plan.md](./plan.md) | Alias → roadmap |

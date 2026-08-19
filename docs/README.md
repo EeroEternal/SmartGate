@@ -1,15 +1,19 @@
-# SmartGate documentation
+# SmartGate Documentation
 
-| Doc | Description |
-|-----|-------------|
-| [scope.md](./scope.md) | Product scope: Cost · Control · Choice; agents/MCP stance |
-| [roadmap.md](./roadmap.md) | Phases, done vs backlog |
-| [integrations/](./integrations/) | Client & harness setup |
-| [design.md](./design.md) | Technical design notes |
-| [provider-routing.md](./provider-routing.md) | Provider、Endpoint 与 Model Pool 的路由关系 |
-| [design/prompt_cache_billing.md](./design/prompt_cache_billing.md) | Prompt Cache 计费校准与前端卡片格式化优化 |
-| [design/warming.md](./design/warming.md) | Session Affinity & Warming 观测设计 |
-| [design/intelligent_routing.md](./design/intelligent_routing.md) | 智能模型路由与任务复杂度判别优化方案 |
-| [why.md](./why.md) | Legacy “why” notes (pre-SmartGate naming) |
-| [unigateway_optimization.md](./unigateway_optimization.md) | Data-plane primitive requests |
-| [plan.md](./plan.md) | Alias → roadmap.md |
+SmartGate is an open-source AI gateway with control and data plane separation, optimizing model routing, spend governance, and multi-provider resilience.
+
+## Overview & Scope
+- **[scope.md](./scope.md)**: Product scope, Cost · Control · Choice pillars, and client integrations.
+- **[roadmap.md](./roadmap.md)**: Engineering milestones, active progress, and backlog.
+- **[design.md](./design.md)**: System architecture, product hierarchy, and control/data plane boundaries.
+
+## Architecture & Routing
+- **[provider-routing.md](./provider-routing.md)**: Relationships between Provider Accounts, Endpoints, Model Pools, and Model Services.
+- **[design/intelligent_routing.md](./design/intelligent_routing.md)**: Two-stage capability-aware routing and task complexity detection.
+- **[design/prompt_cache_billing.md](./design/prompt_cache_billing.md)**: Prompt cache pricing calibration and dashboard metrics formatting.
+- **[design/warming.md](./design/warming.md)**: Session affinity, prefix caching, and TTFT warming.
+- **[savings_baseline_v2.md](./savings_baseline_v2.md)**: Multi-model cost comparison baseline design.
+
+## Integrations & Deployment
+- **[integrations/](./integrations/)**: Client integrations for Cursor, Claude Code, and custom coding agents.
+- **[deployment.md](./deployment.md)**: Deployment guides, Railway production setup, and environment variables.

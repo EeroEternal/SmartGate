@@ -4,7 +4,7 @@
 
 ### SmartGate 与 UniGateway 边界
 
-产品范围见 `docs/scope.md`；路线图见 `docs/roadmap.md`（`docs/plan.md` 为别名）。历史名 ParaGateway 与 SmartGate 为同一产品线。
+产品范围见 `docs/scope.md`；路线图见 `docs/roadmap.md`。
 
 - **SmartGate 是控制面 / 数据面分离的全功能 AI 网关**。控制面负责产品配置、组织/项目/API Key、Provider Account、Endpoint、Virtual Model、Model Pool、路由策略打分、鉴权、配额/预算、Token 与花费统计、健康策略和 Admin UI。
 - **UniGateway 是数据面协议与执行引擎**，负责协议层语义转换、provider driver、上游请求渲染、下游响应归一化、流式协议处理、SSE chunk 解析/重写和具体 provider 行为。

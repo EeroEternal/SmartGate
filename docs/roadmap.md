@@ -115,7 +115,6 @@ Not required for OSS usefulness. Sell **governance and ops**, not locked routing
 - Protocol stack reimplementation (UniGateway)
 - Consumer billing marketplace
 - Data catalog / lineage platform
-- Feature-parity race with XRouter as a checklist
 
 ## Product narrative (for docs & launch)
 
