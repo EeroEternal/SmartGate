@@ -1,14 +1,14 @@
 # SmartGate
 
 **Open-source, enterprise-grade AI Gateway — Cost · Control · Choice** on every model call.  
-Engineered with strict **Control Plane / Data Plane separation** (powered by the high-performance UniGateway data plane).
+Engineered with strict **Control Plane / Data Plane separation** for multi-model intelligence, session affinity, and cost governance.
 
 > Legacy name: **ParaGateway**. Scope: [`docs/scope.md`](docs/scope.md) · Roadmap: [`docs/roadmap.md`](docs/roadmap.md)
 
 ```text
 Agents / IDEs / Apps  →  SmartGate Control Plane (policies, auth, budgets, smart routing)
                                ↓
-                         UniGateway Data Plane (protocols, drivers, streaming, dispatch)
+                         Data Plane (wire protocols, streaming, dispatch)
                                ↓
                          Upstream Models & Inference Engines
 ```
@@ -45,8 +45,8 @@ Agents / IDEs / Apps  →  SmartGate Control Plane (policies, auth, budgets, sma
 
 | Plane | Responsibility |
 |---|---|
-| **Control Plane (SmartGate)** | Organization, Projects, API Keys, Provider Accounts, Virtual Models, Model Pools, Routing Strategy Calculation, Quotas/Budgets, Health Checks, Analytics, and SaaS Admin UI. |
-| **Data Plane (UniGateway)** | Wire protocols (OpenAI Chat, Responses, Anthropic Messages), Driver execution, SSE Streaming, Fallback mechanisms, and Normalized Usage Reports. |
+| **Control Plane** | Organization, Projects, API Keys, Provider Accounts, Virtual Models, Model Pools, Routing Strategy Calculation, Quotas/Budgets, Health Checks, Analytics, and SaaS Admin UI. |
+| **Data Plane** | Wire protocols (OpenAI Chat, Responses, Anthropic Messages), Driver execution, SSE Streaming, Fallback mechanisms, and Normalized Usage Reports. |
 
 > **Architectural Invariant**: Business domain objects (Org, Project, Key, Virtual Model) never pollute the data plane. Upstream wire specifics and header conversions stay in the data plane.
 
@@ -113,7 +113,6 @@ For production deployment instructions on Railway and Cloudflare Pages, see [`do
 - [Intelligent Routing Engine](docs/design/intelligent_routing.md)
 - [Harness & Client Integration](docs/integrations/harness.md)
 - [Codex Integration Guide](docs/integrations/codex.md)
-- [UniGateway Optimization Primitives](docs/unigateway_optimization.md)
 
 ---
 
