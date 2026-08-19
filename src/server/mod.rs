@@ -11,6 +11,7 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use tower_http::{
     cors::{AllowOrigin, CorsLayer},
+    services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
 use unigateway_sdk::core::UniGatewayEngine;
@@ -93,10 +94,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     });
 
     let app = Router::new()
-        .route(
-            "/",
-            get(|| async { "SmartGate API is running. Admin UI: http://localhost:18764" }),
-        )
         .route("/health", get(health_check))
         .nest(
             "/api/admin",
@@ -151,6 +148,16 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         )
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
+
+    let app = if std::path::Path::new("web/dist").exists() {
+        app.fallback_service(
+            ServeDir::new("web/dist").not_found_service(ServeFile::new("web/dist/index.html")),
+        )
+    } else {
+        app.fallback(get(|| async {
+            "SmartGate API is running. Admin UI: http://localhost:18764"
+        }))
+    };
 
     let listener = tokio::net::TcpListener::bind(config.addr).await?;
     axum::serve(listener, app).await?;
