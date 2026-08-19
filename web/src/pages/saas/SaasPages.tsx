@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, Info, LogOut, Pencil, Plus, Settings2, Trash2, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -1304,41 +1304,50 @@ export function AnalyticsPage() {
                           })()}
                         </td>
                         <td className="py-3 px-4 align-top whitespace-nowrap">
-                          <div className="font-semibold text-zinc-900">{q.model}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-zinc-900">{q.model}</span>
+                            {(q.candidates?.length ?? 0) > 1 && (
+                              <div className="group relative inline-flex items-center">
+                                <button
+                                  type="button"
+                                  className="text-zinc-400 hover:text-zinc-700 transition-colors p-0.5 rounded-full hover:bg-zinc-100 cursor-help"
+                                  aria-label="Why this model was chosen"
+                                  title="Why this model?"
+                                >
+                                  <Info className="h-3.5 w-3.5" />
+                                </button>
+                                <div className="pointer-events-none absolute left-0 bottom-full z-40 mb-2 hidden w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl group-hover:block text-left whitespace-normal">
+                                  <div className="text-[11px] font-semibold text-zinc-900 mb-1.5 flex items-center justify-between">
+                                    <span>Why this model?</span>
+                                    <span className="text-[10px] font-normal text-zinc-400">Candidate ranking</span>
+                                  </div>
+                                  <ol className="space-y-1.5">
+                                    {(q.candidates ?? []).map((candidate, index) => (
+                                      <li key={`${q.id}-${index}`} className="flex items-center justify-between text-[11px] leading-tight">
+                                        <span className={`truncate mr-2 ${index === 0 ? 'font-semibold text-zinc-950' : candidate.excluded ? 'line-through text-zinc-400' : 'text-zinc-600'}`}>
+                                          {index + 1}. {candidate.model}
+                                        </span>
+                                        <span className="shrink-0 text-[10px] font-mono text-zinc-400">
+                                          {candidate.excluded ? (
+                                            <span className="text-rose-500 font-sans">
+                                              excluded{candidate.exclusion_reason ? ` (${candidate.exclusion_reason})` : ''}
+                                            </span>
+                                          ) : (
+                                            `cap ${(candidate.capability ?? 0).toFixed(2)}`
+                                          )}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <div className="text-[11px] text-zinc-400 truncate max-w-[140px]" title={q.provider_name}>{cleanProvider}</div>
                           {q.fallback_used && (
                             <div className="mt-1 inline-flex items-center rounded-md border border-rose-200/80 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700" title={`Attempted in order: ${(q.attempts ?? []).join(' → ')}`}>
                               Fallback after {(q.attempts ?? []).length - 1} failed attempt{(q.attempts ?? []).length > 2 ? 's' : ''}
                             </div>
-                          )}
-                          {(q.candidates?.length ?? 0) > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => toggleCandidates(q.id)}
-                              title="Show how each provider scored for this request"
-                              className="mt-1 block text-[10px] font-medium text-primary hover:text-primary-hover"
-                            >
-                              {expandedCandidates[q.id] ? 'Hide ranking' : 'Why this model?'}
-                            </button>
-                          )}
-                          {expandedCandidates[q.id] && (
-                            <ol className="mt-1.5 space-y-1">
-                              {(q.candidates ?? []).map((candidate, index) => (
-                                <li key={`${q.id}-${index}`} className="text-[10px] leading-tight text-zinc-500">
-                                  <span className={candidate.excluded ? 'line-through' : 'font-medium text-zinc-700'}>
-                                    {index + 1}. {candidate.model}
-                                  </span>
-                                  <span className="ml-1 text-zinc-400">
-                                    cap {(candidate.capability ?? 0).toFixed(2)}
-                                  </span>
-                                  {candidate.excluded && (
-                                    <span className="ml-1 text-rose-600">
-                                      excluded{candidate.exclusion_reason ? ` (${candidate.exclusion_reason})` : ''}
-                                    </span>
-                                  )}
-                                </li>
-                              ))}
-                            </ol>
                           )}
                         </td>
                         <td className="py-3 px-4 align-top text-right whitespace-nowrap">
