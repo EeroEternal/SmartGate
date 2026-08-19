@@ -82,7 +82,7 @@ model_catalog_json = "/Users/you/.codex/models.json"
 
 [model_providers.smartgate]
 name = "SmartGate"
-base_url = "https://api.smartgate.ai/v1"
+base_url = "https://smartgate.run/v1"
 wire_api = "chat_completions"
 experimental_bearer_token = "<project-api-key>"`
 
@@ -303,7 +303,7 @@ function callExample(api: CallApi, model: string) {
   if (api === 'openai-responses') {
     return {
       label: 'OpenAI Responses',
-      path: 'https://api.smartgate.ai/v1/responses',
+      path: 'https://smartgate.run/v1/responses',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
       body: `{"model":"${model}","input":"Hello"}`,
     }
@@ -311,14 +311,14 @@ function callExample(api: CallApi, model: string) {
   if (api === 'anthropic-messages') {
     return {
       label: 'Anthropic Messages',
-      path: 'https://api.smartgate.ai/v1/messages',
+      path: 'https://smartgate.run/v1/messages',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'anthropic-version: 2023-06-01', 'Content-Type: application/json'],
       body: `{"model":"${model}","max_tokens":128,"messages":[{"role":"user","content":"Hello"}]}`,
     }
   }
   return {
     label: 'OpenAI Chat',
-    path: 'https://api.smartgate.ai/v1/chat/completions',
+    path: 'https://smartgate.run/v1/chat/completions',
     headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
     body: `{"model":"${model}","messages":[{"role":"user","content":"Hello"}]}`,
   }

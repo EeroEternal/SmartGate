@@ -7,7 +7,7 @@ Use Codex GUI with a SmartGate model service as the backend. SmartGate provides 
 1. Create a model service in SmartGate and connect one or more providers.
 2. Create a project API key and authorize the model service for that key.
 3. Choose the SmartGate model service name that Codex should request, such as `fusion`.
-4. Use the SmartGate API base URL for your deployment. The examples below use `https://api.smartgate.ai/v1`; replace it with your own URL when self-hosting.
+4. Use the SmartGate API base URL for your deployment. The examples below use `https://smartgate.run/v1`; replace it with your own URL when self-hosting.
 
 ## Recommended file layout
 
@@ -33,7 +33,7 @@ model_catalog_json = "/Users/you/.codex/models.json"
 
 [model_providers.smartgate]
 name = "SmartGate"
-base_url = "https://api.smartgate.ai/v1"
+base_url = "https://smartgate.run/v1"
 wire_api = "chat_completions"
 experimental_bearer_token = "<project API key>"
 ```
