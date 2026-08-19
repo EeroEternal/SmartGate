@@ -4,7 +4,7 @@ import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'l
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
-import { AnalyticsPage, CodexPage, KeysPage, NewServicePage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
+import { AnalyticsPage, CodexPage, KeysPage, NewServicePage, QualityPage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import BrandMark from './components/BrandMark'
@@ -234,6 +234,7 @@ function App() {
         <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
         <Route path="/app/codex" element={<SaasLayout><CodexPage /></SaasLayout>} />
         <Route path="/app/analytics" element={<SaasLayout><AnalyticsPage /></SaasLayout>} />
+        <Route path="/app/quality" element={<SaasLayout><QualityPage /></SaasLayout>} />
         <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
         <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
         <Route path="/admin/*" element={<AdminConsole />} />
