@@ -126,7 +126,7 @@ function Sidebar() {
           <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-white">
             <BrandMark className="h-5 w-5" />
           </div>
-          XGate
+          SmartGate
         </h1>
       </div>
       <nav className="flex-1 p-4 space-y-1">

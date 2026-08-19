@@ -1,13 +1,13 @@
-# Codex + XGate
+# Codex + SmartGate
 
-Use Codex GUI with an XGate model service as the backend. XGate provides the OpenAI-compatible gateway endpoint, while Codex remains responsible for the local coding-agent experience.
+Use Codex GUI with a SmartGate model service as the backend. SmartGate provides the OpenAI-compatible gateway endpoint, while Codex remains responsible for the local coding-agent experience.
 
 ## Before you start
 
-1. Create a model service in XGate and connect one or more providers.
+1. Create a model service in SmartGate and connect one or more providers.
 2. Create a project API key and authorize the model service for that key.
-3. Choose the XGate model service name that Codex should request, such as `fusion`.
-4. Use the XGate API base URL for your deployment. The examples below use `https://api.xgate.sh/v1`; replace it with your own URL when self-hosting.
+3. Choose the SmartGate model service name that Codex should request, such as `fusion`.
+4. Use the SmartGate API base URL for your deployment. The examples below use `https://api.smartgate.ai/v1`; replace it with your own URL when self-hosting.
 
 ## Recommended file layout
 
@@ -26,21 +26,21 @@ Do not commit `fusion.config.toml` if it contains a bearer token. Restrict its p
 
 ```toml
 model = "fusion"
-model_provider = "xgate"
+model_provider = "smartgate"
 preferred_auth_method = "apikey"
 model_reasoning_effort = "high"
 model_catalog_json = "/Users/you/.codex/models.json"
 
-[model_providers.xgate]
-name = "XGate"
-base_url = "https://api.xgate.sh/v1"
+[model_providers.smartgate]
+name = "SmartGate"
+base_url = "https://api.smartgate.ai/v1"
 wire_api = "chat_completions"
 experimental_bearer_token = "<project API key>"
 ```
 
-Replace the path, base URL, model name, and API key with values from your XGate workspace. The `experimental_bearer_token` value is the actual key. If you use an environment-variable-based authentication option supported by your Codex version, configure `env_key` with the **variable name**, not the key value itself.
+Replace the path, base URL, model name, and API key with values from your SmartGate workspace. The `experimental_bearer_token` value is the actual key. If you use an environment-variable-based authentication option supported by your Codex version, configure `env_key` with the **variable name**, not the key value itself.
 
-`wire_api = "chat_completions"` is important for XGate deployments that do not accept the Responses API `thinking_budget` parameter.
+`wire_api = "chat_completions"` is important for SmartGate deployments that do not accept the Responses API `thinking_budget` parameter.
 
 ## `models.json`
 
@@ -51,7 +51,7 @@ The catalog must use reasoning-level objects, not strings, and must include the 
   "models": [
     {
       "slug": "fusion",
-      "display_name": "Fusion (XGate)",
+      "display_name": "Fusion (SmartGate)",
       "context_window": 128000,
       "max_context_window": 128000,
       "default_reasoning_level": "high",
@@ -78,7 +78,7 @@ The catalog must use reasoning-level objects, not strings, and must include the 
 }
 ```
 
-Keep the catalog model `slug` aligned with the `model` value in the Profile and with the model service name authorized for the XGate API key.
+Keep the catalog model `slug` aligned with the `model` value in the Profile and with the model service name authorized for the SmartGate API key.
 
 ## Start Codex
 
@@ -101,4 +101,4 @@ A small launcher can invoke the same command if you prefer to start Codex from F
 | `AbsolutePathBuf deserialized without a base path` | Codex GUI loads an absolute catalog path from the main configuration context. | Keep `model_catalog_json` in the separate Profile and launch with `--profile fusion`. |
 | `legacy profile = "fusion" config is no longer supported` | Newer Codex versions no longer support the legacy inline profile syntax. | Use a standalone Profile file and `--profile fusion`. |
 
-Codex configuration formats can change between releases. If a field is rejected, compare the catalog schema and Profile format with the Codex version installed before changing the XGate endpoint.
+Codex configuration formats can change between releases. If a field is rejected, compare the catalog schema and Profile format with the Codex version installed before changing the SmartGate endpoint.

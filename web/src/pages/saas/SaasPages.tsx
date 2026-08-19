@@ -49,7 +49,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
     <header className="h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
       <Link to="/app" className="flex items-center gap-3 font-semibold tracking-tight">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
-        XGate
+        SmartGate
       </Link>
       <div ref={accountRef} className="relative">
         <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
@@ -75,21 +75,21 @@ export function SaasLayout({ children }: { children: ReactNode }) {
 
 export function CodexPage() {
   const profileConfig = `model = "fusion"
-model_provider = "xgate"
+model_provider = "smartgate"
 preferred_auth_method = "apikey"
 model_reasoning_effort = "high"
 model_catalog_json = "/Users/you/.codex/models.json"
 
-[model_providers.xgate]
-name = "XGate"
-base_url = "https://api.xgate.sh/v1"
+[model_providers.smartgate]
+name = "SmartGate"
+base_url = "https://api.smartgate.ai/v1"
 wire_api = "chat_completions"
 experimental_bearer_token = "<project-api-key>"`
 
   const modelCatalog = `{
   "models": [{
     "slug": "fusion",
-    "display_name": "Fusion (XGate)",
+    "display_name": "Fusion (SmartGate)",
     "context_window": 128000,
     "max_context_window": 128000,
     "default_reasoning_level": "high",
@@ -117,8 +117,8 @@ experimental_bearer_token = "<project-api-key>"`
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <div className="flex items-center gap-2 text-sm font-medium text-primary"><FileCode2 className="h-4 w-4" /> Codex integration</div>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Use Codex with XGate</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">Connect Codex GUI to an XGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while XGate provides routing, provider fallback, budgets, and usage tracking.</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Use Codex with SmartGate</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.</p>
       </div>
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">Codex supported</div>
     </div>
@@ -134,7 +134,7 @@ experimental_bearer_token = "<project-api-key>"`
     <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5">
       <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Codex Profile</h2><p className="mt-1 text-sm text-zinc-500">Save this as <code>~/.codex/fusion.config.toml</code>. Replace the path, endpoint, model name, and API key with values from this workspace.</p></div><span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">Profile</span></div>
       <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
-      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Why Chat Completions?</strong> Codex uses the OpenAI Responses API, while XGate translates the request for the configured upstream. For the Fusion Profile, use <code>wire_api = "chat_completions"</code> when the upstream does not accept the Responses API <code>thinking_budget</code> parameter.</div>
+      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Why Chat Completions?</strong> Codex uses the OpenAI Responses API, while SmartGate translates the request for the configured upstream. For the Fusion Profile, use <code>wire_api = "chat_completions"</code> when the upstream does not accept the Responses API <code>thinking_budget</code> parameter.</div>
     </section>
 
     <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
@@ -303,7 +303,7 @@ function callExample(api: CallApi, model: string) {
   if (api === 'openai-responses') {
     return {
       label: 'OpenAI Responses',
-      path: 'https://api.xgate.sh/v1/responses',
+      path: 'https://api.smartgate.ai/v1/responses',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
       body: `{"model":"${model}","input":"Hello"}`,
     }
@@ -311,14 +311,14 @@ function callExample(api: CallApi, model: string) {
   if (api === 'anthropic-messages') {
     return {
       label: 'Anthropic Messages',
-      path: 'https://api.xgate.sh/v1/messages',
+      path: 'https://api.smartgate.ai/v1/messages',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'anthropic-version: 2023-06-01', 'Content-Type: application/json'],
       body: `{"model":"${model}","max_tokens":128,"messages":[{"role":"user","content":"Hello"}]}`,
     }
   }
   return {
     label: 'OpenAI Chat',
-    path: 'https://api.xgate.sh/v1/chat/completions',
+    path: 'https://api.smartgate.ai/v1/chat/completions',
     headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
     body: `{"model":"${model}","messages":[{"role":"user","content":"Hello"}]}`,
   }
@@ -657,7 +657,7 @@ function LegacyNewServicePage() {
       </div>
 
       <button type="button" onClick={addEndpoint} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-4 text-sm text-zinc-600 hover:border-primary hover:text-primary"><Plus className="h-4 w-4" /> Add another upstream</button>
-      <div className="rounded-lg bg-surface-200 px-4 py-3 text-xs text-zinc-500">The public model works with <code>/v1/chat/completions</code> and <code>/v1/responses</code>. Provider keys stay inside XGate.</div>
+      <div className="rounded-lg bg-surface-200 px-4 py-3 text-xs text-zinc-500">The public model works with <code>/v1/chat/completions</code> and <code>/v1/responses</code>. Provider keys stay inside SmartGate.</div>
       {error && <ErrorMessage text={error} />}
       <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 p-3 shadow-lg backdrop-blur"><span className="hidden text-sm text-zinc-500 sm:inline">{completedCount} of {endpoints.length} upstreams ready</span><button disabled={busy} className="ml-auto rounded-lg bg-zinc-950 px-5 py-3 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create model service'}</button></div>
     </form>

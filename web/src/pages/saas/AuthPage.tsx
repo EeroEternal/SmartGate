@@ -56,7 +56,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
       <div className="w-full max-w-md">
         <Link to="/" className="flex justify-center items-center gap-3 font-semibold tracking-tight">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white"><BrandMark className="h-6 w-6" /></span>
-          XGate
+          SmartGate
         </Link>
         <div className="mt-10 bg-white border border-zinc-200 rounded-2xl p-8 shadow-sm">
           <h1 className="text-2xl font-semibold tracking-tight">{isRegister ? 'Create your workspace' : 'Welcome back'}</h1>
@@ -81,7 +81,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             {error && <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
             <button disabled={busy} className="w-full rounded-lg bg-zinc-950 py-3 text-sm font-medium text-white disabled:opacity-50">{busy ? 'Please wait…' : isRegister && !codeSent ? 'Send verification code' : isRegister ? 'Create account' : 'Sign in'}</button>
           </form>
-          <p className="mt-6 text-center text-sm text-zinc-500">{isRegister ? 'Already have an account?' : 'New to XGate?'} <Link className="font-medium text-zinc-950" to={isRegister ? '/login' : '/register'}>{isRegister ? 'Sign in' : 'Create one'}</Link></p>
+          <p className="mt-6 text-center text-sm text-zinc-500">{isRegister ? 'Already have an account?' : 'New to SmartGate?'} <Link className="font-medium text-zinc-950" to={isRegister ? '/login' : '/register'}>{isRegister ? 'Sign in' : 'Create one'}</Link></p>
         </div>
       </div>
     </div>
