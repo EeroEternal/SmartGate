@@ -15,29 +15,13 @@ Agents / IDEs / Apps  →  SmartGate Control Plane (policies, auth, budgets, sma
 
 ---
 
-## 🚀 Key Technical Highlights
+## 🚀 Key Highlights
 
-### 1. Intelligent Capability-First Routing (Pro vs. Flash)
-- **Real-Time Difficulty Scorer**: Evaluates prompt complexity ($D \in [0.0, 1.0]$) using token characteristics, semantic reasoning signals, tool call definitions, and context length.
-- **Strict Tiered Dispatching**: High-difficulty requests ($D \ge 0.55$) automatically route to top-tier reasoning models (e.g. `deepseek-v4-pro`, `claude-3-5-sonnet`, `gpt-4o`), while simple tasks route to lightweight, cost-effective models (e.g. `deepseek-v4-flash`, `qwen-flash`), delivering up to **85%+ cost savings**.
-- **Auxiliary Complexity Judge**: Optional pre-flight evaluation using lightweight judge models on ambiguous boundary queries ($D \in [0.30, 0.65]$).
-
-### 2. Stable Prompt Cache & Session Affinity
-- **Multi-Protocol Session Binding**: Seamlessly extracts `session_id` from `X-SmartGate-Session-Id`, `_smartgate_context.session_id`, or standard OpenAI `user` field.
-- **Node Affinity (+10,000 Score Boost)**: Locks multi-turn conversations to the exact physical GPU instance holding active KV Cache blocks, turning cache misses into near **100% KV cache hit rates**.
-- **Prefix / Tail Decoupling**: Slices immutable historical context from the dynamic newest user prompt to generate 64-bit `FNV-1a` invariant fingerprints.
-
-### 3. Zene Warm Layer & Delta Context Assembly
-- **Immutable Prefix Pre-Warming**: Pre-publishes static system prompts, codebase architectures (Repo Maps), and tool schemas to Redis/memory snapshots.
-- **Delta-Only Delivery**: Clients only transmit incremental tail turns with `X-SmartGate-Context-Delivery: delta`, reducing network bandwidth and payload sizes by **up to 90%**.
-
-### 4. Deterministic Tool Context Slimming
-- **Age-Based Truncation**: Automatically trims bloated historical tool results (`read_file`, `grep`, `bash`) while preserving the most recent turn in full.
-- **Deterministic Placeholders**: Formats aged outputs into identical static summaries, keeping the prompt cache prefix invariant across long-running autonomous agent loops.
-
-### 5. Progressive Budget Governance & Safety Gates
-- **Tiered Budgeting**: Tracks real-time token spend per project and API Key against daily limits.
-- **Soft Downshift Protection**: Automatically transitions non-critical workloads to economy models upon reaching 80% budget threshold without dropping mission-critical complex tasks.
+- **🧠 Intelligent Capability Routing (Pro vs. Flash)**: Real-time difficulty scoring ($D \in [0, 1]$) routes complex reasoning to Pro models and everyday tasks to Flash, cutting costs by **up to 85%+**.
+- **⚡️ Stable Prompt Cache & Session Affinity**: Locks multi-turn sessions to the same physical GPU instance (+10,000 Affinity Boost) for maximum KV Cache reuse.
+- **📦 Warm Layer & Delta Delivery**: Pre-warms immutable system prompts & repo maps; transmits only incremental tail turns to slash payload sizes by **up to 90%**.
+- **✂️ Deterministic Context Slimming**: Safely compresses bloated historical tool outputs into deterministic summaries without breaking token cache invariants.
+- **🛡️ Progressive Spend Governance**: Real-time token budgeting with 80% soft downshift protection for economy traffic while shielding mission-critical complex tasks.
 
 ---
 
