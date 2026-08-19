@@ -1213,7 +1213,7 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="mt-4 -mx-5 -mb-5 overflow-x-auto rounded-b-xl border-t border-zinc-100">
+          <div className="mt-4 -mx-5 -mb-5 overflow-x-auto rounded-b-xl border-t border-zinc-100 min-h-[440px]">
             {!paginatedQueries.length ? (
               <div className="py-12 text-center text-sm text-zinc-500">
                 {loading ? 'Loading queries…' : 'No query records found for this period.'}
@@ -1366,9 +1366,9 @@ export function AnalyticsPage() {
           </div>
 
           {totalFiltered > 0 && (
-            <div className="mt-4 -mx-5 -mb-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/50 px-5 py-3 text-xs text-zinc-500">
+            <div className="mt-4 -mx-5 -mb-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/50 px-5 py-3 text-xs text-zinc-500 select-none">
               <div className="flex items-center gap-3">
-                <span>
+                <span className="whitespace-nowrap">
                   Showing <strong className="font-semibold text-zinc-900">{startIndex + 1}</strong>–<strong className="font-semibold text-zinc-900">{Math.min(startIndex + pageSize, totalFiltered)}</strong> of <strong className="font-semibold text-zinc-900">{totalFiltered}</strong> queries
                 </span>
                 <div className="w-32 min-w-[125px]">
@@ -1382,23 +1382,26 @@ export function AnalyticsPage() {
                       { id: '50', name: '50 / page' },
                     ]}
                     selected={{ id: String(pageSize), name: `${pageSize} / page` }}
-                    onChange={(opt) => setPageSize(Number(opt.id))}
+                    onChange={(opt) => {
+                      setPageSize(Number(opt.id))
+                      setPage(1)
+                    }}
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   disabled={currentPage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
                   aria-label="Previous page"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
 
-                <div className="flex items-center gap-1 px-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
                     .reduce<(number | string)[]>((acc, p, idx, arr) => {
@@ -1414,16 +1417,16 @@ export function AnalyticsPage() {
                           key={idx}
                           type="button"
                           onClick={() => setPage(item)}
-                          className={`min-w-[28px] h-7 rounded-md px-2 text-xs font-medium transition-colors ${
+                          className={`h-8 w-8 flex items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                             currentPage === item
-                              ? 'bg-zinc-900 text-white'
+                              ? 'bg-zinc-900 text-white shadow-sm'
                               : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
                           }`}
                         >
                           {item}
                         </button>
                       ) : (
-                        <span key={idx} className="px-1 text-zinc-400">
+                        <span key={idx} className="h-8 w-8 flex items-center justify-center text-xs text-zinc-400">
                           {item}
                         </span>
                       )
@@ -1434,7 +1437,7 @@ export function AnalyticsPage() {
                   type="button"
                   disabled={currentPage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
                   aria-label="Next page"
                 >
                   <ChevronRight className="h-4 w-4" />
