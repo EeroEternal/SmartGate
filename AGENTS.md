@@ -18,6 +18,12 @@
 - **不做 meta-harness**（任务级 harness 选择、共驾 session、OS sandbox）；那是 Omnigent 等客户端层。SmartGate 做请求级模型路由与公司级花费治理。
 - 修复前先判断问题属于控制面（配置/策略/预算）还是数据面（协议/driver）；边界不清时先说明归属。
 
+### Language & Documentation Standards
+
+- **All SmartGate content must be in English**: This includes code comments, Rust docstrings, API error messages, commit messages, architecture documents, and README.
+- In UI localization files (`en.json`, `zh.json`, `ja.json`, `ko.json`), English (`en.json`) is the primary source of truth.
+- Do not add Chinese comments or docstrings in backend/frontend source code.
+
 ### 文件组织
 
 - **严禁在根目录放置临时或测试脚本**。
