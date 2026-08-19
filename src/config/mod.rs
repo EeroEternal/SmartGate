@@ -53,8 +53,9 @@ impl Config {
 
         let admin_token =
             std::env::var("ADMIN_TOKEN").map_err(|_| anyhow::anyhow!("ADMIN_TOKEN must be set"))?;
+        let default_origins = "http://127.0.0.1:18764,http://localhost:18764,https://smartgate.run,https://app.smartgate.run,https://api.smartgate.run";
         let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGIN")
-            .unwrap_or_else(|_| "http://127.0.0.1:18764,http://localhost:18764".to_string())
+            .unwrap_or_else(|_| default_origins.to_string())
             .split(',')
             .map(str::trim)
             .filter(|origin| !origin.is_empty())

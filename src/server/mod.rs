@@ -93,6 +93,8 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         warm_store,
     });
 
+    let allowed_origins = config.cors_allowed_origins.clone();
+
     let app = Router::new()
         .route("/health", get(health_check))
         .nest(
@@ -118,13 +120,17 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         .route("/v1/responses", post(crate::api::proxy::responses))
         .layer(
             CorsLayer::new()
-                .allow_origin(AllowOrigin::list(
-                    config
-                        .cors_allowed_origins
-                        .iter()
-                        .filter_map(|origin| origin.parse().ok())
-                        .collect::<Vec<_>>(),
-                ))
+                .allow_origin(AllowOrigin::predicate(move |origin, _| {
+                    let origin_str = match origin.to_str() {
+                        Ok(s) => s,
+                        Err(_) => return false,
+                    };
+                    origin_str.starts_with("http://localhost:")
+                        || origin_str.starts_with("http://127.0.0.1:")
+                        || origin_str.ends_with(".pages.dev")
+                        || origin_str.ends_with("smartgate.run")
+                        || allowed_origins.iter().any(|o| o == origin_str)
+                }))
                 .allow_credentials(true)
                 .allow_methods([
                     axum::http::Method::GET,
