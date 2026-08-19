@@ -242,6 +242,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
                 .post(test_model_service_endpoint)
                 .delete(delete_model_service_endpoint),
         )
+        .route("/test-connection", post(test_connection))
         .route(
             "/model-services/:id",
             get(get_model_service)
@@ -1302,6 +1303,119 @@ async fn update_model_service_endpoint(
     Ok(Json(ApiResponse::success(
         json!({"id": endpoint_id, "updated": true}),
     )))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestConnectionPayload {
+    pub protocol: Option<String>,
+    pub base_url: String,
+    pub api_key: String,
+    pub upstream_model_id: String,
+}
+
+async fn test_connection(
+    State(_state): State<Arc<AppState>>,
+    _ctx: SaasContext,
+    Json(payload): Json<TestConnectionPayload>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    if payload.base_url.trim().is_empty()
+        || payload.api_key.trim().is_empty()
+        || payload.upstream_model_id.trim().is_empty()
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("Base URL, API Key, and Model are required to test connection")),
+        ));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string()))))?;
+
+    let is_anthropic = payload
+        .protocol
+        .as_deref()
+        .unwrap_or("openai")
+        .eq_ignore_ascii_case("anthropic");
+
+    let (url, body) = if is_anthropic {
+        let trimmed = payload.base_url.trim_end_matches('/');
+        let url = if trimmed.ends_with("/messages") {
+            trimmed.to_string()
+        } else {
+            format!("{}/messages", trimmed)
+        };
+        (
+            url,
+            json!({
+                "model": payload.upstream_model_id,
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Hi"}]
+            }),
+        )
+    } else {
+        let trimmed = payload.base_url.trim_end_matches('/');
+        let url = if trimmed.ends_with("/chat/completions") {
+            trimmed.to_string()
+        } else {
+            format!("{}/chat/completions", trimmed)
+        };
+        (
+            url,
+            json!({
+                "model": payload.upstream_model_id,
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Hi"}]
+            }),
+        )
+    };
+
+    let mut req_builder = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&body);
+
+    if is_anthropic {
+        req_builder = req_builder
+            .header("x-api-key", &payload.api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+        req_builder = req_builder.header("Authorization", format!("Bearer {}", payload.api_key));
+    }
+
+    match req_builder.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                Ok(Json(ApiResponse::success(
+                    json!({"passed": true, "message": "Connection verified successfully"}),
+                )))
+            } else {
+                let err_text = resp.text().await.unwrap_or_default();
+                let err_msg = serde_json::from_str::<serde_json::Value>(&err_text)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("error")
+                            .and_then(|e| e.get("message").or(Some(e)))
+                            .map(|m| m.as_str().map(String::from).unwrap_or_else(|| m.to_string()))
+                    })
+                    .unwrap_or_else(|| err_text.chars().take(200).collect());
+                Err((
+                    StatusCode::BAD_GATEWAY,
+                    Json(ApiResponse::error(format!(
+                        "Upstream returned HTTP {}: {}",
+                        status.as_u16(),
+                        if err_msg.is_empty() { "Request failed" } else { &err_msg }
+                    ))),
+                ))
+            }
+        }
+        Err(e) => Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ApiResponse::error(format!("Connection failed: {}", e))),
+        )),
+    }
 }
 
 async fn test_model_service_endpoint(
