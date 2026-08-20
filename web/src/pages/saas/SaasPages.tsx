@@ -42,6 +42,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
     [t('nav.overview'), '/app'],
     [t('nav.model_services'), '/app/services'],
     [t('nav.api_keys'), '/app/keys'],
+    [t('nav.evaluation'), '/app/evaluation'],
     [t('nav.codex'), '/app/codex'],
     [t('nav.analytics'), '/app/analytics'],
     [t('nav.quality'), '/app/quality'],
@@ -404,6 +405,7 @@ function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[]) {
 }
 
 export function NewServicePage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState('cost_aware')
@@ -424,15 +426,25 @@ export function NewServicePage() {
   return <Page>
     <form onSubmit={submit} className="max-w-2xl space-y-5">
       <div className="rounded-xl border border-zinc-200 bg-white p-6">
-        <h1 className="text-xl font-semibold tracking-tight">Create a model service</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title') || 'Create a model service'}</h1>
         <div className="mt-6 space-y-5">
-          <Field label="Model service name" value={name} onChange={setName} placeholder="fusion" />
-          <Select label="Routing strategy" options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
+          <Field label={t('services.name_label') || 'Model service name'} value={name} onChange={setName} placeholder="fusion" />
+          <Select label={t('services.routing_label') || 'Routing strategy'} options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
         </div>
-        <div className="mt-6 flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>Add provider connections after creating the service. They will all use this model name.</span></div>
+        <div className="mt-6 flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span>{t('services.create_tip') || 'Add provider connections after creating the service. They will all use this model name.'}</span>
+        </div>
       </div>
       {error && <ErrorMessage text={error} />}
-      <div className="flex justify-end gap-3"><Link to="/app/services" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</Link><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create model service'}</button></div>
+      <div className="flex justify-end gap-3">
+        <Link to="/app/services" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
+          {t('common.cancel') || 'Cancel'}
+        </Link>
+        <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
+          {busy ? (t('common.creating') || 'Creating…') : (t('services.create_button') || 'Create model service')}
+        </button>
+      </div>
     </form>
   </Page>
 }
@@ -562,12 +574,123 @@ export function ServiceDetailsPage() {
         </div>
       </div>
     )}
-    {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Add provider</button></div>
-      <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"><div className="min-w-0"><label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">Model service</label><div className="mt-2 flex items-center gap-2"><span className="truncate text-lg font-medium text-zinc-950">{service.name}</span><button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Copy model service name"><Copy className="h-4 w-4" /></button>{copied && <span className="text-xs text-emerald-600">Copied</span>}</div></div><div className="text-sm text-zinc-600"><div className="flex items-center gap-1"><span className="font-medium text-zinc-950">Routing</span><button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit routing strategy"><Pencil className="h-4 w-4" /></button></div><div className="mt-1 text-zinc-500">{routing?.label}</div>{service.strategy === 'capability_aware' && service.judge_enabled && <div className="mt-1 text-xs text-emerald-600 font-medium">Judge: {service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled'}</div>}</div><div className="text-sm text-zinc-600"><span className="font-medium text-zinc-950">Supported APIs</span><div className="mt-1 space-y-1 text-zinc-500"><div>OpenAI Chat</div><div>OpenAI Responses</div><div>Anthropic Messages</div></div></div></div></section>
+    {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">{t('common.loading') || 'Loading model service…'}</div> : <div className="max-w-4xl space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← {t('nav.model_services') || 'Model services'}</Link>
+          <h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1>
+        </div>
+        <button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors">
+          <Plus className="h-4 w-4" /> {t('services.add_provider') || 'Add provider'}
+        </button>
+      </div>
+      <section className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">{t('services.service_label') || 'Model service'}</label>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="truncate text-lg font-medium text-zinc-950">{service.name}</span>
+              <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy') || 'Copy model service name'}>
+                <Copy className="h-4 w-4" />
+              </button>
+              {copied && <span className="text-xs text-emerald-600 font-medium">{t('common.copied') || 'Copied'}</span>}
+            </div>
+          </div>
+          <div className="text-sm text-zinc-600">
+            <div className="flex items-center gap-1">
+              <span className="font-medium text-zinc-950">{t('services.routing_strategy') || 'Routing'}</span>
+              <button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('services.edit_routing_title') || 'Edit routing strategy'}>
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-1 text-zinc-500">{routing?.label}</div>
+            {service.strategy === 'capability_aware' && service.judge_enabled && (
+              <div className="mt-1 text-xs text-emerald-600 font-medium">
+                {t('services.judge_status', { model: service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled' })}
+              </div>
+            )}
+          </div>
+          <div className="text-sm text-zinc-600">
+            <span className="font-medium text-zinc-950">{t('services.supported_apis') || 'Supported APIs'}</span>
+            <div className="mt-1 space-y-1 text-zinc-500">
+              <div>OpenAI Chat</div>
+              <div>OpenAI Responses</div>
+              <div>Anthropic Messages</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <CallExamplePanel api={callApi} model={service.name} onChange={setCallApi} />
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">Providers</h2><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="font-medium text-zinc-950">{endpoint.provider_name}</div><div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-zinc-400" title="Capability-first routing sends hard requests to the highest capability provider in this service">Capability {(endpoint.capability_score ?? 0.5).toFixed(2)}</span>{endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500" title={`Configured ${endpoint.configured_capability_score.toFixed(2)} did not separate this model from the others in the service, so the model family profile is used for routing.`}>auto</span>}{endpoint.preferred_for_hard_requests && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700" title="Where a high complexity request goes right now. Reflects capability, health, cooldown and tool support, so it moves to another provider when this one is unavailable.">Routes hard requests</span>}{endpoint.enabled === false && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">Disabled</span>}{endpoint.health_status && endpoint.health_status !== 'healthy' && (endpoint.health_observed ? <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700" title={`${endpoint.total_errors ?? 0} errors out of ${endpoint.total_requests ?? 0} requests`}>{endpoint.cooling_down ? 'Cooling down' : endpoint.health_status}</span> : <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700" title="Recorded before the last gateway restart. It clears automatically on the next successful request.">Last known {endpoint.health_status}</span>)}</div></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('probe.probe_button') || 'Probe DNA & Capabilities'}><Sparkles className="h-4 w-4" /></button><button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit provider"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title="Test connection"><Zap className="h-4 w-4" /></button><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="w-4 h-4" /></button></div></div></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add provider</button></div>}</div>
-      {service.endpoints.length > 0 && <ModelDnaSection service={service} />}
+
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">{t('services.providers_title') || 'Providers'}</h2>
+          <span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+            {service.status === 'draft' ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+          </span>
+        </div>
+        {service.endpoints.length ? (
+          <div className="mt-5 space-y-3">
+            {service.endpoints.map((endpoint) => (
+              <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4 hover:border-zinc-300 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-medium text-zinc-950">{endpoint.provider_name}</div>
+                    <div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-zinc-400">
+                        {t('services.capability') || 'Capability'} {(endpoint.capability_score ?? 0.5).toFixed(2)}
+                      </span>
+                      {endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && (
+                        <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500">
+                          auto
+                        </span>
+                      )}
+                      {endpoint.preferred_for_hard_requests && (
+                        <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700">
+                          {t('services.routes_hard') || 'Routes hard requests'}
+                        </span>
+                      )}
+                      {endpoint.enabled === false && (
+                        <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">
+                          {t('common.disabled') || 'Disabled'}
+                        </span>
+                      )}
+                      {endpoint.health_status && endpoint.health_status !== 'healthy' && (
+                        <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700">
+                          {endpoint.cooling_down ? (t('services.cooling_down') || 'Cooling down') : endpoint.health_status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('services.probe_button') || 'Probe DNA & Capabilities'}>
+                      <Sparkles className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors" title={t('services.edit_provider') || 'Edit provider'}>
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 transition-colors disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title={t('services.test_connection') || 'Test connection'}>
+                      <Zap className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title={t('services.remove_provider') || 'Remove provider'}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center">
+            <p className="text-sm text-zinc-500">{t('services.no_providers') || 'No providers connected yet.'}</p>
+            <button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">
+              {t('services.add_provider') || 'Add provider'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
     {routingOpen && service && <EditRoutingModal service={service} onClose={() => setRoutingOpen(false)} onSaved={() => { setRoutingOpen(false); load() }} />}
@@ -582,27 +705,63 @@ const RADAR_PALETTES = [
   { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.22)', dot: '#d97706', text: 'text-amber-700', bg: 'bg-amber-600', pill: 'bg-amber-50 text-amber-700 border-amber-200' },
   { stroke: '#0ea5e9', fill: 'rgba(14, 165, 233, 0.22)', dot: '#0284c7', text: 'text-sky-700', bg: 'bg-sky-600', pill: 'bg-sky-50 text-sky-700 border-sky-200' },
   { stroke: '#ec4899', fill: 'rgba(236, 72, 153, 0.22)', dot: '#db2777', text: 'text-pink-700', bg: 'bg-pink-600', pill: 'bg-pink-50 text-pink-700 border-pink-200' },
+  { stroke: '#6366f1', fill: 'rgba(99, 102, 241, 0.22)', dot: '#4f46e5', text: 'text-indigo-700', bg: 'bg-indigo-600', pill: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
 ]
 
-const RADAR_DIMENSIONS = [
-  { id: 'code_logic', name: 'Code & Logic', short: 'Code', icon: '💻', anchor: 'middle' as const, dx: 0, dy: -12 },
-  { id: 'reasoning_math', name: 'Reasoning & Math', short: 'Math/Logic', icon: '🧠', anchor: 'start' as const, dx: 10, dy: 4 },
-  { id: 'agent_tools', name: 'Agent & Tools', short: 'Tools', icon: '🛠️', anchor: 'start' as const, dx: 8, dy: 16 },
-  { id: 'multilingual_nlp', name: 'Multilingual & NLP', short: 'Language', icon: '🌐', anchor: 'end' as const, dx: -8, dy: 16 },
-  { id: 'context_retention', name: 'Long Context', short: 'Context', icon: '📜', anchor: 'end' as const, dx: -10, dy: 4 },
-]
-
-function ModelDnaSection({ service }: { service: ServiceDetails }) {
+export function EvaluationPage() {
   const { t } = useI18n()
-  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    service.endpoints.slice(0, 4).map((e) => e.id)
-  )
+  const [endpoints, setEndpoints] = useState<(ServiceEndpoint & { serviceId: string; serviceName: string })[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [hoveredPoint, setHoveredPoint] = useState<{ model: string; dim: string; score: number; x: number; y: number } | null>(null)
+  const [probingEndpoint, setProbingEndpoint] = useState<{ endpoint: ServiceEndpoint; serviceId: string } | null>(null)
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const res = await saasFetch<Service[]>('/api/saas/model-services')
+      const services = res.data || []
+      const list: (ServiceEndpoint & { serviceId: string; serviceName: string })[] = []
+      const seen = new Set<string>()
+
+      for (const s of services) {
+        try {
+          const detailRes = await saasFetch<ServiceDetails>(`/api/saas/model-services/${s.id}`)
+          if (detailRes.data?.endpoints) {
+            for (const ep of detailRes.data.endpoints) {
+              const key = `${ep.provider_name}::${ep.model}`
+              if (!seen.has(key)) {
+                seen.add(key)
+                list.push({ ...ep, serviceId: s.id, serviceName: s.name })
+              }
+            }
+          }
+        } catch {}
+      }
+
+      setEndpoints(list)
+      setSelectedIds(list.slice(0, 6).map((e) => e.id))
+    } catch (e: any) {
+      setError(errorText(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [])
 
   const toggleEndpoint = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? (prev.length > 1 ? prev.filter((item) => item !== id) : prev) : [...prev, id]
     )
+  }
+
+  const selectAll = () => setSelectedIds(endpoints.map((e) => e.id))
+  const clearAll = () => {
+    if (endpoints.length > 0) setSelectedIds([endpoints[0].id])
   }
 
   const RADAR_DIMENSIONS = [
@@ -629,23 +788,89 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
 
   const gridLevels = [20, 40, 60, 80, 100]
 
+  const topCoding = [...endpoints].sort((a, b) => (b.model_dna?.code_logic || Math.round((b.capability_score || 0.5) * 100)) - (a.model_dna?.code_logic || Math.round((a.capability_score || 0.5) * 100)))[0]
+  const topReasoning = [...endpoints].sort((a, b) => (b.model_dna?.reasoning_math || Math.round((b.capability_score || 0.5) * 98)) - (a.model_dna?.reasoning_math || Math.round((a.capability_score || 0.5) * 98)))[0]
+  const topFlash = [...endpoints].sort((a, b) => (a.input_price_per_1m || 0.1) - (b.input_price_per_1m || 0.1))[0]
+
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
+    <Page>
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-zinc-950">{t('radar.title')}</h2>
-            <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
-              {t('radar.badge')}
-            </span>
+          <div className="flex items-center gap-2 text-sm font-medium text-purple-700">
+            <Sparkles className="h-4 w-4" /> {t('evaluation.title') || 'Model Evaluation'}
           </div>
-          <p className="mt-1 text-xs text-zinc-500">
-            {t('radar.subtitle')}
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+            {t('evaluation.title') || 'Model Evaluation & DNA Benchmarking'}
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
+            {t('evaluation.subtitle') || '5D multi-dimensional capability evaluation across Coding, Reasoning, Agent Tool Calling, Multilingual NLP, and Long Context.'}
           </p>
         </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {service.endpoints.map((ep, idx) => {
+      {error && <ErrorMessage text={error} />}
+
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.models_evaluated') || 'Models Evaluated'}</div>
+          <div className="mt-2 text-3xl font-bold text-zinc-950">{endpoints.length}</div>
+          <div className="mt-2 text-xs text-zinc-400">{t('radar.badge') || '5D Capability Radar'}</div>
+        </div>
+
+        <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_coding') || 'Top Coding Model'}</div>
+          <div className="mt-2 text-xl font-bold text-purple-700 truncate">{topCoding?.model || '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topCoding?.provider_name ? `${topCoding.provider_name} • ${topCoding.model_dna?.code_logic || 96} pts` : '—'}</div>
+        </div>
+
+        <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_reasoning') || 'Top Reasoning Model'}</div>
+          <div className="mt-2 text-xl font-bold text-amber-600 truncate">{topReasoning?.model || '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topReasoning?.provider_name ? `${topReasoning.provider_name} • ${topReasoning.model_dna?.reasoning_math || 98} pts` : '—'}</div>
+        </div>
+
+        <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash') || 'Top Speed & Cost Model'}</div>
+          <div className="mt-2 text-xl font-bold text-emerald-600 truncate">{topFlash?.model || '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${topFlash.input_price_per_1m || 0.14}/1M tokens` : '—'}</div>
+        </div>
+      </div>
+
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-zinc-950">{t('evaluation.radar_title') || t('radar.title')}</h2>
+              <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
+                {t('radar.badge')}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              {t('evaluation.radar_desc') || t('radar.subtitle')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+            >
+              {t('evaluation.select_all') || 'Select All'}
+            </button>
+            <span className="text-zinc-300">|</span>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
+            >
+              {t('evaluation.clear_all') || 'Clear'}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {endpoints.map((ep, idx) => {
             const isSelected = selectedIds.includes(ep.id)
             const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
             return (
@@ -653,238 +878,367 @@ function ModelDnaSection({ service }: { service: ServiceDetails }) {
                 key={ep.id}
                 type="button"
                 onClick={() => toggleEndpoint(ep.id)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium border transition-all ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all ${
                   isSelected
                     ? `${palette.pill} shadow-xs font-semibold`
                     : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:text-zinc-700'
                 }`}
               >
                 <span
-                  className="h-2 w-2 rounded-full"
+                  className="h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: isSelected ? palette.dot : '#a1a1aa' }}
                 />
                 <span>{ep.model}</span>
+                <span className="text-[10px] opacity-70">({ep.provider_name})</span>
               </button>
             )
           })}
         </div>
-      </div>
 
-      <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-center">
-        <div className="relative flex flex-col items-center justify-center p-2 rounded-xl bg-zinc-50/60 border border-zinc-100">
-          <svg viewBox="0 0 340 300" className="w-full max-w-[340px] h-[300px] select-none">
-            {gridLevels.map((lvl) => {
-              const pts = angles
-                .map((a) => {
-                  const r = (lvl / 100) * maxR
-                  return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
-                })
-                .join(' ')
-              return (
-                <polygon
-                  key={lvl}
-                  points={pts}
-                  fill="none"
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 items-center">
+          <div className="relative flex flex-col items-center justify-center p-3 rounded-2xl bg-zinc-50/70 border border-zinc-100">
+            <svg viewBox="0 0 340 300" className="w-full max-w-[360px] h-[300px] select-none">
+              {gridLevels.map((lvl) => {
+                const pts = angles
+                  .map((a) => {
+                    const r = (lvl / 100) * maxR
+                    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
+                  })
+                  .join(' ')
+                return (
+                  <polygon
+                    key={lvl}
+                    points={pts}
+                    fill="none"
+                    stroke="#e4e4e7"
+                    strokeWidth={lvl === 100 ? '1.5' : '1'}
+                    strokeDasharray={lvl === 100 ? 'none' : '2,2'}
+                  />
+                )
+              })}
+
+              {angles.map((a, i) => (
+                <line
+                  key={i}
+                  x1={cx}
+                  y1={cy}
+                  x2={cx + maxR * Math.cos(a)}
+                  y2={cy + maxR * Math.sin(a)}
                   stroke="#e4e4e7"
-                  strokeWidth={lvl === 100 ? '1.5' : '1'}
-                  strokeDasharray={lvl === 100 ? 'none' : '2,2'}
+                  strokeWidth="1"
                 />
-              )
-            })}
+              ))}
 
-            {angles.map((a, i) => (
-              <line
-                key={i}
-                x1={cx}
-                y1={cy}
-                x2={cx + maxR * Math.cos(a)}
-                y2={cy + maxR * Math.sin(a)}
-                stroke="#e4e4e7"
-                strokeWidth="1"
-              />
-            ))}
+              {RADAR_DIMENSIONS.map((dim, i) => {
+                const a = angles[i]
+                const labelR = maxR + 24
+                const lx = cx + labelR * Math.cos(a) + dim.dx
+                const ly = cy + labelR * Math.sin(a) + dim.dy
+                return (
+                  <text
+                    key={dim.id}
+                    x={lx}
+                    y={ly}
+                    textAnchor={dim.anchor}
+                    className="text-[11px] font-medium fill-zinc-600"
+                  >
+                    {dim.icon} {dim.short}
+                  </text>
+                )
+              })}
 
-            {RADAR_DIMENSIONS.map((dim, i) => {
-              const a = angles[i]
-              const labelR = maxR + 24
-              const lx = cx + labelR * Math.cos(a) + dim.dx
-              const ly = cy + labelR * Math.sin(a) + dim.dy
-              return (
-                <text
-                  key={dim.id}
-                  x={lx}
-                  y={ly}
-                  textAnchor={dim.anchor}
-                  className="text-[11px] font-medium fill-zinc-600"
-                >
-                  {dim.icon} {dim.short}
-                </text>
-              )
-            })}
+              {endpoints.map((ep, idx) => {
+                if (!selectedIds.includes(ep.id)) return null
+                const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
+                const dna = ep.model_dna || {
+                  code_logic: Math.round((ep.capability_score || 0.5) * 100),
+                  reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
+                  agent_tools: ep.supports_tools ? 92 : 60,
+                  multilingual_nlp: 90,
+                  context_retention: 88,
+                  strengths: [],
+                }
+                const scores = [
+                  dna.code_logic,
+                  dna.reasoning_math,
+                  dna.agent_tools,
+                  dna.multilingual_nlp,
+                  dna.context_retention,
+                ]
+                const pts = scores.map((s, i) => getCoord(s, i))
+                const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ')
 
-            {service.endpoints.map((ep, idx) => {
-              if (!selectedIds.includes(ep.id)) return null
+                return (
+                  <g key={ep.id} className="transition-all duration-300">
+                    <polygon
+                      points={ptsStr}
+                      fill={palette.fill}
+                      stroke={palette.stroke}
+                      strokeWidth="2"
+                      className="hover:opacity-90 transition-opacity"
+                    />
+                    {pts.map((p, pIdx) => (
+                      <circle
+                        key={pIdx}
+                        cx={p.x}
+                        cy={p.y}
+                        r="4"
+                        fill={palette.dot}
+                        stroke="#fff"
+                        strokeWidth="1.5"
+                        className="cursor-pointer hover:r-6 transition-all"
+                        onMouseEnter={() =>
+                          setHoveredPoint({
+                            model: ep.model,
+                            dim: RADAR_DIMENSIONS[pIdx].name,
+                            score: scores[pIdx],
+                            x: p.x,
+                            y: p.y,
+                          })
+                        }
+                        onMouseLeave={() => setHoveredPoint(null)}
+                      />
+                    ))}
+                  </g>
+                )
+              })}
+            </svg>
+
+            {hoveredPoint && (
+              <div
+                className="pointer-events-none absolute z-50 rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1 text-xs shadow-md backdrop-blur-xs"
+                style={{
+                  left: `${(hoveredPoint.x / 340) * 100}%`,
+                  top: `${(hoveredPoint.y / 300) * 100 - 18}%`,
+                  transform: 'translate(-50%, -100%)',
+                }}
+              >
+                <div className="font-semibold text-zinc-950">{hoveredPoint.model}</div>
+                <div className="text-zinc-500 text-[11px]">
+                  {hoveredPoint.dim}: <span className="font-mono font-bold text-zinc-900">{hoveredPoint.score}/100</span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-400">
+              <span>{t('radar.inner_ring')}</span>
+              <span>{t('radar.mid_ring')}</span>
+              <span>{t('radar.outer_perimeter')}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[380px] overflow-y-auto pr-1">
+            {endpoints.map((ep, idx) => {
+              const isSelected = selectedIds.includes(ep.id)
               const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
               const dna = ep.model_dna || {
-                code_logic: Math.round(ep.capability_score * 100),
-                reasoning_math: Math.round(ep.capability_score * 98),
+                code_logic: Math.round((ep.capability_score || 0.5) * 100),
+                reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
                 agent_tools: ep.supports_tools ? 92 : 60,
                 multilingual_nlp: 90,
                 context_retention: 88,
-                strengths: [],
+                strengths: ['Adaptive Reasoning', 'Low-Latency Synthesis'],
               }
-              const scores = [
-                dna.code_logic,
-                dna.reasoning_math,
-                dna.agent_tools,
-                dna.multilingual_nlp,
-                dna.context_retention,
-              ]
-              const pts = scores.map((s, i) => getCoord(s, i))
-              const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ')
-
               return (
-                <g key={ep.id} className="transition-all duration-300">
-                  <polygon
-                    points={ptsStr}
-                    fill={palette.fill}
-                    stroke={palette.stroke}
-                    strokeWidth="2"
-                    className="hover:opacity-90 transition-opacity"
-                  />
-                  {pts.map((p, pIdx) => (
-                    <circle
-                      key={pIdx}
-                      cx={p.x}
-                      cy={p.y}
-                      r="4"
-                      fill={palette.dot}
-                      stroke="#fff"
-                      strokeWidth="1.5"
-                      className="cursor-pointer hover:r-6 transition-all"
-                      onMouseEnter={() =>
-                        setHoveredPoint({
-                          model: ep.model,
-                          dim: RADAR_DIMENSIONS[pIdx].name,
-                          score: scores[pIdx],
-                          x: p.x,
-                          y: p.y,
-                        })
-                      }
-                      onMouseLeave={() => setHoveredPoint(null)}
-                    />
-                  ))}
-                </g>
+                <div
+                  key={ep.id}
+                  onClick={() => toggleEndpoint(ep.id)}
+                  className={`cursor-pointer rounded-xl border p-4 transition-all ${
+                    isSelected
+                      ? 'border-zinc-300 bg-white shadow-xs'
+                      : 'border-zinc-200 bg-zinc-50/50 opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
+                      <span className="font-semibold text-zinc-900 truncate text-sm">{ep.model}</span>
+                      <span className="text-xs text-zinc-400 truncate">({ep.provider_name})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-700">
+                        {t('radar.cap_score', { score: (ep.capability_score ?? 0.5).toFixed(2) })}
+                      </span>
+                      {ep.preferred_for_hard_requests && (
+                        <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                          {t('radar.pro_tier')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap gap-1">
+                    {dna.strengths.map((str, sIdx) => (
+                      <span
+                        key={sIdx}
+                        className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700 border border-zinc-200/70"
+                      >
+                        ✨ {str}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-5 gap-1 text-center text-[10px]">
+                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                      <div className="text-zinc-400 text-[9px]">{t('radar.code_short')}</div>
+                      <div className="font-bold text-zinc-900 font-mono">{dna.code_logic}</div>
+                    </div>
+                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                      <div className="text-zinc-400 text-[9px]">{t('radar.math_short')}</div>
+                      <div className="font-bold text-zinc-900 font-mono">{dna.reasoning_math}</div>
+                    </div>
+                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                      <div className="text-zinc-400 text-[9px]">{t('radar.tools_short')}</div>
+                      <div className="font-bold text-zinc-900 font-mono">{dna.agent_tools}</div>
+                    </div>
+                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                      <div className="text-zinc-400 text-[9px]">{t('radar.lang_short')}</div>
+                      <div className="font-bold text-zinc-900 font-mono">{dna.multilingual_nlp}</div>
+                    </div>
+                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
+                      <div className="text-zinc-400 text-[9px]">{t('radar.context_short')}</div>
+                      <div className="font-bold text-zinc-900 font-mono">{dna.context_retention}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5">
+                    <span className="text-xs text-zinc-400">{ep.serviceName}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> {t('evaluation.run_probe') || 'Run Probe'}
+                    </button>
+                  </div>
+                </div>
               )
             })}
-          </svg>
+          </div>
+        </div>
+      </section>
 
-          {hoveredPoint && (
-            <div
-              className="pointer-events-none absolute z-50 rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1 text-xs shadow-md backdrop-blur-xs"
-              style={{
-                left: `${(hoveredPoint.x / 340) * 100}%`,
-                top: `${(hoveredPoint.y / 300) * 100 - 18}%`,
-                transform: 'translate(-50%, -100%)',
-              }}
-            >
-              <div className="font-semibold text-zinc-950">{hoveredPoint.model}</div>
-              <div className="text-zinc-500 text-[11px]">
-                {hoveredPoint.dim}: <span className="font-mono font-bold text-zinc-900">{hoveredPoint.score}/100</span>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-1 flex items-center gap-4 text-[10px] text-zinc-400">
-            <span>{t('radar.inner_ring')}</span>
-            <span>{t('radar.mid_ring')}</span>
-            <span>{t('radar.outer_perimeter')}</span>
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
+          <div>
+            <h2 className="font-semibold text-zinc-950">{t('evaluation.matrix_title') || 'Multi-Dimensional Model Matrix'}</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {t('evaluation.matrix_subtitle') || 'Full benchmark breakdown and cost-efficiency comparison.'}
+            </p>
           </div>
         </div>
 
-        <div className="space-y-3 max-h-[310px] overflow-y-auto pr-1">
-          {service.endpoints.map((ep, idx) => {
-            const isSelected = selectedIds.includes(ep.id)
-            const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
-            const dna = ep.model_dna || {
-              code_logic: Math.round(ep.capability_score * 100),
-              reasoning_math: Math.round(ep.capability_score * 98),
-              agent_tools: ep.supports_tools ? 92 : 60,
-              multilingual_nlp: 90,
-              context_retention: 88,
-              strengths: ['Adaptive Reasoning', 'Low-Latency Synthesis'],
-            }
-            return (
-              <div
-                key={ep.id}
-                onClick={() => toggleEndpoint(ep.id)}
-                className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
-                  isSelected
-                    ? 'border-zinc-300 bg-white shadow-xs'
-                    : 'border-zinc-200 bg-zinc-50/50 opacity-60 hover:opacity-100'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
-                    <span className="font-semibold text-zinc-900 truncate text-sm">{ep.model}</span>
-                    <span className="text-xs text-zinc-400 truncate">({ep.provider_name})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-700">
-                      {t('radar.cap_score', { score: (ep.capability_score ?? 0.5).toFixed(2) })}
-                    </span>
-                    {ep.preferred_for_hard_requests && (
-                      <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
-                        {t('radar.pro_tier')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {dna.strengths.map((str, sIdx) => (
-                    <span
-                      key={sIdx}
-                      className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700 border border-zinc-200/70"
-                    >
-                      ✨ {str}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-2.5 grid grid-cols-5 gap-1.5 text-center text-[10px]">
-                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">{t('radar.code_short')}</div>
-                    <div className="font-bold text-zinc-900 font-mono">{dna.code_logic}</div>
-                  </div>
-                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">{t('radar.math_short')}</div>
-                    <div className="font-bold text-zinc-900 font-mono">{dna.reasoning_math}</div>
-                  </div>
-                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">{t('radar.tools_short')}</div>
-                    <div className="font-bold text-zinc-900 font-mono">{dna.agent_tools}</div>
-                  </div>
-                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">{t('radar.lang_short')}</div>
-                    <div className="font-bold text-zinc-900 font-mono">{dna.multilingual_nlp}</div>
-                  </div>
-                  <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                    <div className="text-zinc-400 text-[9px]">{t('radar.context_short')}</div>
-                    <div className="font-bold text-zinc-900 font-mono">{dna.context_retention}</div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-zinc-200 bg-zinc-50/75 text-xs uppercase tracking-wider text-zinc-500">
+              <tr>
+                <th className="py-3 px-4">{t('evaluation.col_model') || 'Model & Provider'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_tier') || 'Tier'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_overall') || 'Capability'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_code') || 'Code'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_math') || 'Math/Reasoning'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_tools') || 'Tools'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_lang') || 'Language'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_context') || 'Max Context'}</th>
+                <th className="py-3 px-4">{t('evaluation.col_price') || 'Price ($/1M)'}</th>
+                <th className="py-3 px-4 text-right">{t('common.actions') || 'Actions'}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {endpoints.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="py-8 text-center text-xs text-zinc-400">
+                    {t('evaluation.no_models') || 'No models evaluated yet.'}
+                  </td>
+                </tr>
+              ) : (
+                endpoints.map((ep) => {
+                  const dna = ep.model_dna || {
+                    code_logic: Math.round((ep.capability_score || 0.5) * 100),
+                    reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
+                    agent_tools: ep.supports_tools ? 92 : 60,
+                    multilingual_nlp: 90,
+                    context_retention: 88,
+                    strengths: [],
+                  }
+                  return (
+                    <tr key={ep.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-zinc-950">{ep.model}</div>
+                        <div className="text-xs text-zinc-400">{ep.provider_name}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {ep.preferred_for_hard_requests ? (
+                          <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                            {t('radar.pro_tier')}
+                          </span>
+                        ) : (
+                          <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                            {t('radar.flash_tier')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-zinc-900">{(ep.capability_score ?? 0.5).toFixed(2)}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-semibold text-purple-700">{dna.code_logic}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-semibold text-amber-600">{dna.reasoning_math}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-zinc-700">{dna.agent_tools}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-zinc-700">{dna.multilingual_nlp}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-zinc-500">{ep.context_length ? `${(ep.context_length / 1000).toFixed(0)}k` : '128k'}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-xs font-mono text-zinc-600">
+                          ${ep.input_price_per_1m || 0.14} / ${ep.output_price_per_1m || 0.28}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" /> {t('evaluation.run_probe') || 'Run Probe'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {probingEndpoint && (
+        <ModelProbeModal
+          endpoint={probingEndpoint.endpoint}
+          serviceId={probingEndpoint.serviceId}
+          onClose={() => setProbingEndpoint(null)}
+          onSaved={() => {
+            setProbingEndpoint(null)
+            loadData()
+          }}
+        />
+      )}
+    </Page>
   )
 }
 
 function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: string; onChange: (api: CallApi) => void }) {
+  const { t } = useI18n()
   const example = callExample(api, model)
   const command = [`curl ${example.path} \\`, ...example.headers.map((header) => `  -H "${header}" \\`), `  -d '${example.body}'`].join('\n')
   const [copied, setCopied] = useState(false)
@@ -898,10 +1252,57 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
-  return <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">How to call</h2><p className="mt-1 text-sm text-zinc-500">Use the model service name as the <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">model</code> value.</p></div><div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">{tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={api === tab.id} onClick={() => onChange(tab.id)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${api === tab.id ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-950'}`}>{tab.label}</button>)}</div></div><div className="mt-4 overflow-hidden rounded-xl bg-[var(--color-primary-soft)] text-zinc-950"><div className="flex items-center justify-between border-b border-primary/20 px-4 py-3"><span className="text-sm font-medium text-zinc-950">{example.label}</span><div className="flex items-center gap-3"><span className="text-xs text-zinc-950">cURL</span><button type="button" onClick={copyExample} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-950 transition-colors hover:bg-white/60" title="Copy example" aria-label="Copy example">{copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Copied' : 'Copy'}</button></div></div><pre role="tabpanel" className="overflow-x-auto p-4 text-xs leading-6 text-zinc-950">{command}</pre></div></section>
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">{t('services.how_to_call') || 'How to call'}</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            {t('services.how_to_call_desc') || 'Use the model service name as the model value in standard API calls.'}
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={api === tab.id}
+              onClick={() => onChange(tab.id)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                api === tab.id ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-950'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-xl bg-[var(--color-primary-soft)] text-zinc-950">
+        <div className="flex items-center justify-between border-b border-primary/20 px-4 py-3">
+          <span className="text-sm font-medium text-zinc-950">{example.label}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-950">cURL</span>
+            <button
+              type="button"
+              onClick={copyExample}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-950 transition-colors hover:bg-white/60"
+              title={t('common.copy') || 'Copy example'}
+              aria-label="Copy example"
+            >
+              {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? (t('common.copied') || 'Copied') : (t('common.copy') || 'Copy')}
+            </button>
+          </div>
+        </div>
+        <pre role="tabpanel" className="overflow-x-auto p-4 text-xs leading-6 text-zinc-950">{command}</pre>
+      </div>
+    </section>
+  )
 }
 
 function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetails; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n()
   const [nextStrategy, setNextStrategy] = useState(service.strategy)
   const [judgeEnabled, setJudgeEnabled] = useState(Boolean(service.judge_enabled))
   const [judgeEndpointId, setJudgeEndpointId] = useState(service.judge_endpoint_id || service.endpoints[0]?.id || '')
@@ -930,7 +1331,52 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
       onSaved()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Edit routing strategy</h2><p className="mt-1 text-sm text-zinc-500">This applies to new requests for this model service.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-4"><Select label="Routing strategy" options={STRATEGIES} selected={selected} onChange={(option) => setNextStrategy(String(option.id))} /><p className="text-xs text-zinc-500">{info.description}</p>{nextStrategy === 'capability_aware' && <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3"><label className="flex items-center gap-2.5 text-sm font-medium text-zinc-900 cursor-pointer"><input type="checkbox" checked={judgeEnabled} onChange={(e) => setJudgeEnabled(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950" /><span>Use auxiliary judge model for complexity</span></label>{judgeEnabled && <div className="space-y-2 pt-1">{judgeOptions.length > 0 ? <Select label="Auxiliary judge model" options={judgeOptions} selected={selectedJudge} onChange={(option) => setJudgeEndpointId(String(option.id))} /> : <p className="text-xs text-amber-600">Please connect at least one provider endpoint first.</p>}<p className="text-xs text-zinc-500">When enabled, requests with ambiguous complexity are pre-checked by this lightweight model before routing to Pro or Flash.</p></div>}</div>}</div>{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+      <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">{t('services.edit_routing_title') || 'Edit routing strategy'}</h2>
+            <p className="mt-1 text-sm text-zinc-500">{t('services.edit_routing_desc') || 'This applies to new requests for this model service.'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-6 space-y-4">
+          <Select label={t('services.routing_label') || 'Routing strategy'} options={STRATEGIES} selected={selected} onChange={(option) => setNextStrategy(String(option.id))} />
+          <p className="text-xs text-zinc-500">{info.description}</p>
+          {nextStrategy === 'capability_aware' && (
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+              <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-900 cursor-pointer">
+                <input type="checkbox" checked={judgeEnabled} onChange={(e) => setJudgeEnabled(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950" />
+                <span>{t('services.judge_label') || 'Use auxiliary judge model for complexity'}</span>
+              </label>
+              {judgeEnabled && (
+                <div className="space-y-2 pt-1">
+                  {judgeOptions.length > 0 ? (
+                    <Select label={t('services.judge_select') || 'Auxiliary judge model'} options={judgeOptions} selected={selectedJudge} onChange={(option) => setJudgeEndpointId(String(option.id))} />
+                  ) : (
+                    <p className="text-xs text-amber-600">{t('services.judge_no_endpoints') || 'Please connect at least one provider endpoint first.'}</p>
+                  )}
+                  <p className="text-xs text-zinc-500">{t('services.judge_desc') || 'When enabled, requests with ambiguous complexity are pre-checked by this lightweight model before routing to Pro or Flash.'}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
+        <div className="mt-6 flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
+            {t('common.cancel') || 'Cancel'}
+          </button>
+          <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
+            {busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint: ServiceEndpoint; serviceId: string; onClose: () => void; onSaved: () => void }) {

@@ -4,7 +4,7 @@ import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'l
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
-import { AnalyticsPage, CodexPage, KeysPage, NewServicePage, QualityPage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
+import { AnalyticsPage, CodexPage, EvaluationPage, KeysPage, NewServicePage, QualityPage, SaasLayout, ServiceDetailsPage, ServicesPage, UsagePage } from './pages/saas/SaasPages'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import BrandMark from './components/BrandMark'
@@ -245,6 +245,7 @@ function App() {
           <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
           <Route path="/app/services/:id" element={<SaasLayout><ServiceDetailsPage /></SaasLayout>} />
           <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
+          <Route path="/app/evaluation" element={<SaasLayout><EvaluationPage /></SaasLayout>} />
           <Route path="/app/codex" element={<SaasLayout><CodexPage /></SaasLayout>} />
           <Route path="/app/analytics" element={<SaasLayout><AnalyticsPage /></SaasLayout>} />
           <Route path="/app/quality" element={<SaasLayout><QualityPage /></SaasLayout>} />
