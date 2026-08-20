@@ -50,7 +50,8 @@
     "back": "Back",
     "next": "Next",
     "previous": "Previous",
-    "learn_more": "Learn more"
+    "learn_more": "Learn more",
+    "view_all": "View all"
   },
   "pagination": {
     "showing": "Showing {start}–{end} of {total} records",
@@ -94,7 +95,11 @@
     "step3_title": "3. Generate SmartGate Key",
     "step3_desc": "Create a secure API key bound to your authorized model services.",
     "step4_title": "4. Call via Standard APIs",
-    "step4_desc": "Replace your base URL with SmartGate while retaining OpenAI or Anthropic SDKs."
+    "step4_desc": "Replace your base URL with SmartGate while retaining OpenAI or Anthropic SDKs.",
+    "last_30_days": "last 30 days",
+    "success_rate_detail": "{rate}% successful",
+    "input_output": "input + output",
+    "personal_services": "personal model services"
   },
   "services": {
     "title": "Model services",
@@ -153,12 +158,15 @@
     "judge_status": "Judge: {model}",
     "provider_name": "Provider name",
     "provider_id": "Provider ID",
+    "provider_label": "Provider",
     "model_label": "Model",
     "protocol_label": "Protocol",
     "base_url": "Provider API base URL",
     "api_key": "Provider API key",
     "api_key_new": "New Provider API key (optional)",
     "api_key_placeholder": "Leave blank to keep the current key",
+    "api_key_paste_placeholder": "Paste your provider key",
+    "key_verified_healthy": "Key verified & connection healthy",
     "advanced_settings": "Price and capability settings",
     "hide_advanced": "Hide advanced settings",
     "input_price": "Input $/1M",
@@ -166,7 +174,9 @@
     "capability_range": "Capability 0–1",
     "context_length": "Context length",
     "custom_provider": "Custom provider",
-    "select_model": "Select a model"
+    "select_model": "Select a model",
+    "private_desc": "Your private endpoints and routing.",
+    "connect_first": "Connect your first model service."
   },
   "evaluation": {
     "title": "Model Evaluation & DNA Benchmarking",
@@ -218,7 +228,10 @@
     "revoke_confirm_title": "Revoke this API key?",
     "revoke_confirm_msg": "Existing requests will not be interrupted.",
     "delete_confirm_title": "Delete this API key permanently?",
-    "delete_confirm_msg": "This cannot be undone."
+    "delete_confirm_msg": "This cannot be undone.",
+    "ready_to_connect": "Ready to connect an app?",
+    "ready_desc": "Create an API key and connect using OpenAI Chat, OpenAI Responses, or Anthropic Messages.",
+    "manage_keys": "Manage keys"
   },
   "analytics": {
     "title": "Routing Analytics & Complexity Insights",
@@ -343,7 +356,9 @@
     "dollar_savings": "Estimated dollar savings",
     "not_available": "Not available",
     "compared_with": "Compared with {service} / {model} ({provider}).",
+    "savings_basis_desc": "Estimated against the selected model service endpoint using recorded tokens and restored trimmed context; actual provider billing may differ.",
     "todays_budget": "Today’s budget",
+    "budget_limit": "Budget limit",
     "no_limit": "No limit set",
     "status_label": "Status: {status}",
     "data_coverage": "Usage data coverage",
@@ -355,8 +370,29 @@
     "configured_pricing_detail": "{priced} of {total} requests have a pricing rule",
     "requests_without_tokens": "Requests without provider-reported tokens",
     "requests_without_tokens_sub": "{count} requests below use a local estimate or have no token data.",
+    "missing_tokens_count": "{count} requests without provider-reported tokens",
+    "local_estimates_count": "{count} use local estimates",
+    "unavailable_count": "{count} have no token data",
     "needs_review": "Needs review",
-    "showing_first_10": "Showing the first 10 provider and model groups."
+    "showing_first_10": "Showing the first 10 provider and model groups.",
+    "baseline_modal_title": "Savings comparison baseline",
+    "baseline_modal_desc": "Choose one model from a Model Service as the comparison price.",
+    "select_service": "Select a model service",
+    "model_endpoint_label": "Model / provider endpoint",
+    "baseline_price_note": "The estimate uses this endpoint’s configured prices. A single model is supported in the first version.",
+    "create_service_first": "Create a Model Service with at least one endpoint before configuring a baseline.",
+    "save_baseline": "Save baseline",
+    "tracking_desc": "Your gateway is tracking spend and routing signals so you can make better model choices.",
+    "no_trimming": "No context trimming recorded yet."
+  },
+  "profile": {
+    "title": "Edit profile",
+    "subtitle": "Update your account information.",
+    "email": "Email",
+    "new_password": "New password (optional)",
+    "new_password_placeholder": "Leave blank to keep your password",
+    "current_password": "Current password",
+    "current_password_placeholder": "Required to save changes"
   },
   "codex": {
     "title": "Developer Codex & SDK Integration",

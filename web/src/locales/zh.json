@@ -50,7 +50,8 @@
     "back": "返回",
     "next": "下一页",
     "previous": "上一页",
-    "learn_more": "了解更多"
+    "learn_more": "了解更多",
+    "view_all": "查看全部"
   },
   "pagination": {
     "showing": "显示第 {start}–{end} 条，共 {total} 条记录",
@@ -94,7 +95,11 @@
     "step3_title": "3. 生成 SmartGate Key",
     "step3_desc": "创建安全绑定的网关调用密钥，并精准授权指定模型服务。",
     "step4_title": "4. 标准 API 调用",
-    "step4_desc": "将请求 Base URL 切换为 SmartGate，100% 兼容 OpenAI 与 Anthropic SDK。"
+    "step4_desc": "将请求 Base URL 切换为 SmartGate，100% 兼容 OpenAI 与 Anthropic SDK。",
+    "last_30_days": "最近 30 天",
+    "success_rate_detail": "{rate}% 成功率",
+    "input_output": "输入 + 输出",
+    "personal_services": "个专属模型服务"
   },
   "services": {
     "title": "模型服务",
@@ -153,12 +158,15 @@
     "judge_status": "裁判模型: {model}",
     "provider_name": "Provider 名称",
     "provider_id": "Provider 标识",
+    "provider_label": "Provider",
     "model_label": "模型",
     "protocol_label": "协议",
     "base_url": "Provider API Base URL 地址",
     "api_key": "Provider API 密钥",
     "api_key_new": "新 Provider API 密钥 (选填)",
     "api_key_placeholder": "留空则保持当前密钥不变",
+    "api_key_paste_placeholder": "粘贴您的 Provider API 密钥",
+    "key_verified_healthy": "密钥验证通过，连接正常",
     "advanced_settings": "价格与能力进阶设置",
     "hide_advanced": "收起进阶设置",
     "input_price": "输入 $/1M",
@@ -166,7 +174,9 @@
     "capability_range": "能力评分 (0–1)",
     "context_length": "上下文长度",
     "custom_provider": "自定义 Provider",
-    "select_model": "选择模型"
+    "select_model": "选择模型",
+    "private_desc": "您的专属端点与智能路由配置。",
+    "connect_first": "连接您的第一个模型服务。"
   },
   "evaluation": {
     "title": "模型评估与能力基准看板",
@@ -218,7 +228,10 @@
     "revoke_confirm_title": "撤销此 API 密钥？",
     "revoke_confirm_msg": "此密钥将被立即禁用，但进行中的请求不会被中断。",
     "delete_confirm_title": "永久删除此 API 密钥？",
-    "delete_confirm_msg": "此操作无法撤销，使用此密钥的客户端将无法继续访问。"
+    "delete_confirm_msg": "此操作无法撤销，使用此密钥的客户端将无法继续访问。",
+    "ready_to_connect": "准备好在应用中使用网关了吗？",
+    "ready_desc": "创建 API 密钥后，即可通过标准 OpenAI Chat、Responses 或 Anthropic Messages 协议发起调用。",
+    "manage_keys": "管理 API 密钥"
   },
   "analytics": {
     "title": "路由分析与复杂度洞察",
@@ -343,7 +356,9 @@
     "dollar_savings": "预估节省美金额度",
     "not_available": "暂不可用",
     "compared_with": "对比基线: {service} / {model} ({provider})。",
+    "savings_basis_desc": "根据所选模型服务端点的定价规则以及已恢复的剪裁上下文进行估算；实际供应商账单可能有所偏差。",
     "todays_budget": "今日预算监控",
+    "budget_limit": "每日预算限额",
     "no_limit": "未设置限额",
     "status_label": "状态: {status}",
     "data_coverage": "用量数据覆盖度",
@@ -355,15 +370,29 @@
     "configured_pricing_detail": "{priced} / {total} 次请求已配置价格规则",
     "requests_without_tokens": "缺少服务商原生 Token 的请求",
     "requests_without_tokens_sub": "以下 {count} 次请求使用本地估算或无 Token 数据。",
+    "missing_tokens_count": "{count} 次请求无供应商上报 Token",
+    "local_estimates_count": "{count} 次采用本地估算",
+    "unavailable_count": "{count} 次无 Token 数据",
     "needs_review": "待核对",
-    "showing_first_10": "当前展示前 10 组服务商与模型。"
+    "showing_first_10": "当前展示前 10 组服务商与模型。",
+    "baseline_modal_title": "节省对比基准设置",
+    "baseline_modal_desc": "从模型服务中选择一个模型端点作为基准比价。",
+    "select_service": "选择模型服务",
+    "model_endpoint_label": "模型 / Provider 端点",
+    "baseline_price_note": "成本估算将使用此端点配置的价格标准。当前版本支持设置单一对比基线。",
+    "create_service_first": "在配置基线之前，请先创建包含至少一个端点的模型服务。",
+    "save_baseline": "保存基线",
+    "tracking_desc": "SmartGate 持续追踪花费与复杂度路由信号，助您做出更优的模型决策。",
+    "no_trimming": "暂未记录到上下文剪裁数据。"
   },
-  "codex": {
-    "title": "开发者集成与 SDK 接入",
-    "subtitle": "提供 OpenAI、Anthropic、Python 与 TypeScript SDK 的无缝平替接入示例。",
-    "quick_install": "快速安装",
-    "copy_code": "复制代码",
-    "compatible_notice": "SmartGate 终结点 100% 协议级兼容标准 OpenAI Chat、Responses 与 Anthropic Messages 接口规范。"
+  "profile": {
+    "title": "编辑个人资料",
+    "subtitle": "更新您的账户与安全信息。",
+    "email": "电子邮箱",
+    "new_password": "新密码 (选填)",
+    "new_password_placeholder": "留空则保持当前密码不变",
+    "current_password": "当前密码",
+    "current_password_placeholder": "保存修改需要验证当前密码"
   },
   "auth": {
     "sign_in": "登录 SmartGate",

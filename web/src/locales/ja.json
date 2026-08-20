@@ -50,7 +50,8 @@
     "back": "戻る",
     "next": "次へ",
     "previous": "前へ",
-    "learn_more": "詳細を見る"
+    "learn_more": "詳細を見る",
+    "view_all": "すべて見る"
   },
   "pagination": {
     "showing": "{total} 件中 {start}–{end} 件を表示",
@@ -94,7 +95,11 @@
     "step3_title": "3. SmartGate キーを生成",
     "step3_desc": "承認されたモデルサービスにバインドされた安全な API キーを発行します。",
     "step4_title": "4. 標準 API で呼び出し",
-    "step4_desc": "OpenAI / Anthropic SDK をそのまま使用し、接続先 URL を SmartGate に切り替えます。"
+    "step4_desc": "OpenAI / Anthropic SDK をそのまま使用し、接続先 URL を SmartGate に切り替えます。",
+    "last_30_days": "過去 30 日間",
+    "success_rate_detail": "{rate}% 成功",
+    "input_output": "入力 + 出力",
+    "personal_services": "個の専用モデルサービス"
   },
   "services": {
     "title": "モデルサービス",
@@ -153,12 +158,15 @@
     "judge_status": "判定モデル: {model}",
     "provider_name": "プロバイダー名",
     "provider_id": "プロバイダー ID",
+    "provider_label": "プロバイダー",
     "model_label": "モデル",
     "protocol_label": "プロトコル",
     "base_url": "プロバイダー API Base URL",
     "api_key": "プロバイダー API キー",
     "api_key_new": "新しい API キー (任意)",
     "api_key_placeholder": "現在のキーを維持する場合は空欄のままにしてください",
+    "api_key_paste_placeholder": "プロバイダーの API キーを貼り付け",
+    "key_verified_healthy": "キーが確認され、接続は正常です",
     "advanced_settings": "価格と能力の詳細設定",
     "hide_advanced": "詳細設定を非表示",
     "input_price": "入力 $/1M",
@@ -166,7 +174,9 @@
     "capability_range": "能力スコア (0–1)",
     "context_length": "コンテキスト長",
     "custom_provider": "カスタムプロバイダー",
-    "select_model": "モデルを選択"
+    "select_model": "モデルを選択",
+    "private_desc": "プライベートエンドポイントとルーティング設定。",
+    "connect_first": "最初のモデルサービスを接続してください。"
   },
   "evaluation": {
     "title": "モデル評価と能力ベンチマーク",
@@ -218,7 +228,10 @@
     "revoke_confirm_title": "API キーを取り消しますか？",
     "revoke_confirm_msg": "既存のリクエストは中断されませんが、新しいリクエストは拒否されます。",
     "delete_confirm_title": "API キーを完全に削除しますか？",
-    "delete_confirm_msg": "この操作は元に戻せません。"
+    "delete_confirm_msg": "この操作は元に戻せません。",
+    "ready_to_connect": "アプリに接続する準備はできましたか？",
+    "ready_desc": "API キーを作成し、OpenAI Chat、OpenAI Responses、または Anthropic Messages プロトコルで接続します。",
+    "manage_keys": "API キーを管理"
   },
   "analytics": {
     "title": "ルーティング分析と複雑性インサイト",
@@ -343,7 +356,9 @@
     "dollar_savings": "推定削減額 (USD)",
     "not_available": "利用不可",
     "compared_with": "比較対象: {service} / {model} ({provider})。",
+    "savings_basis_desc": "選択したモデルサービスエンドポイントの価格設定と復元されたトリミングコンテキストを使用して推定されます。実際のプロバイダー請求とは異なる場合があります。",
     "todays_budget": "本日の予算",
+    "budget_limit": "予算制限",
     "no_limit": "制限なし",
     "status_label": "ステータス: {status}",
     "data_coverage": "データカバレッジ",
@@ -355,15 +370,29 @@
     "configured_pricing_detail": "{total} 件中 {priced} 件のリクエストに料金ルールが設定されています",
     "requests_without_tokens": "プロバイダー報告トークンのないリクエスト",
     "requests_without_tokens_sub": "以下の {count} 件のリクエストはローカル推定を使用しているか、データがありません。",
+    "missing_tokens_count": "{count} 件のリクエストにプロバイダー報告トークンがありません",
+    "local_estimates_count": "{count} 件でローカル推定を使用",
+    "unavailable_count": "{count} 件にトークンデータがありません",
     "needs_review": "要確認",
-    "showing_first_10": "上位 10 組のプロバイダーとモデルグループを表示しています。"
+    "showing_first_10": "上位 10 組のプロバイダーとモデルグループを表示しています。",
+    "baseline_modal_title": "節約比較基準の設定",
+    "baseline_modal_desc": "比較価格としてモデルサービスから1つのモデルを選択します。",
+    "select_service": "モデルサービスを選択",
+    "model_endpoint_label": "モデル / プロバイダーエンドポイント",
+    "baseline_price_note": "見積もりには、このエンドポイントの設定価格が使用されます。第1バージョンでは単一のモデルがサポートされています。",
+    "create_service_first": "基準を設定する前に、少なくとも1つのエンドポイントを持つモデルサービスを作成してください。",
+    "save_baseline": "基準を保存",
+    "tracking_desc": "SmartGate は支出とルーティングシグナルを追跡し、より良いモデル選択をサポートします。",
+    "no_trimming": "コンテキストトリミングはまだ記録されていません。"
   },
-  "codex": {
-    "title": "開発者ドキュメントと SDK 統合",
-    "subtitle": "OpenAI、Anthropic、Python、TypeScript SDK のシームレスな統合例。",
-    "quick_install": "クイックインストール",
-    "copy_code": "コードをコピー",
-    "compatible_notice": "SmartGate エンドポイントは、標準の OpenAI Chat、Responses、Anthropic Messages プロトコルと 100% 互換性があります。"
+  "profile": {
+    "title": "プロファイルを編集",
+    "subtitle": "アカウント情報を更新します。",
+    "email": "メールアドレス",
+    "new_password": "新しいパスワード (任意)",
+    "new_password_placeholder": "パスワードを維持する場合は空欄のままにしてください",
+    "current_password": "現在のパスワード",
+    "current_password_placeholder": "変更を保存するには現在のパスワードが必要です"
   },
   "auth": {
     "sign_in": "SmartGate にログイン",
