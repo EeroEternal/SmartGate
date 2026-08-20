@@ -159,6 +159,7 @@ experimental_bearer_token = "<project-api-key>"`
 }
 
 export function ServicesPage() {
+  const { t } = useI18n()
   const [services, setServices] = useState<Service[]>([])
   const [error, setError] = useState('')
   const { dialog, showConfirm } = useDialog()
@@ -168,10 +169,80 @@ export function ServicesPage() {
       .catch((e: unknown) => setError(errorText(e)))
   }
   useEffect(() => { load() }, [])
-  async function remove(id: string) { if (!await showConfirm('Remove this model service?', 'Remove model service?')) return; await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' }); load() }
-  return <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="w-4 h-4" /> Add service</Link>}>
-    {dialog}{error && <ErrorMessage text={error} />}{!services.length ? <Empty text="No model services yet." href="/app/services/new" /> : <div className="space-y-3">{services.map((service) => { const routing = routingInfo(service.strategy); const count = service.endpoint_count || 0; return <div key={service.id} className="bg-white border border-zinc-200 rounded-xl p-5 flex items-center justify-between gap-4"><div className="min-w-0"><div className="font-medium">{service.name}</div><div className="mt-2 space-y-1 text-sm text-zinc-500"><div>{count} provider{count === 1 ? '' : 's'} connected</div><div>{routing.label}</div></div></div><div className="flex items-center gap-4"><span className={`text-xs ${service.health_status === 'draft' ? 'text-amber-600' : 'text-emerald-600'}`}>{serviceStatusLabel(service.health_status || 'ready')}</span><Link to={`/app/services/${service.id}`} className="text-sm font-medium text-primary hover:text-primary-hover">{service.health_status === 'draft' ? 'Set up' : 'Manage'}</Link><button onClick={() => remove(service.id)} className="text-zinc-400 hover:text-rose-600" title="Remove"><Trash2 className="w-4 h-4" /></button></div></div>})}</div>}
-  </Page>
+  async function remove(id: string) {
+    if (!await showConfirm(t('services.remove_confirm') || 'Remove this model service?', t('services.remove_title') || 'Remove model service?')) return
+    await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' })
+    load()
+  }
+  return (
+    <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /> {t('services.create_button') || 'Add service'}</Link>}>
+      {dialog}
+      {error && <ErrorMessage text={error} />}
+      {!services.length ? (
+        <Empty text={t('services.no_services') || 'No model services yet.'} href="/app/services/new" />
+      ) : (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {services.map((service) => {
+            const routing = routingInfo(service.strategy)
+            const count = service.endpoint_count || 0
+            const isDraft = service.health_status === 'draft' || count === 0
+            return (
+              <div
+                key={service.id}
+                className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:border-zinc-300 transition-all"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-zinc-950 text-base truncate" title={service.name}>
+                        {service.name}
+                      </h3>
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${
+                        isDraft ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}
+                    >
+                      {isDraft ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 border border-purple-200/70">
+                      {routing.label}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      <span className={`h-1.5 w-1.5 rounded-full ${count > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      {count === 1
+                        ? (t('services.providers_connected_single') || '1 provider connected')
+                        : t('services.providers_connected', { count }) || `${count} providers connected`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between border-t border-zinc-100 pt-4">
+                  <Link
+                    to={`/app/services/${service.id}`}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
+                  >
+                    {isDraft ? (t('services.setup') || 'Set up') : (t('services.manage') || 'Manage')} →
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => remove(service.id)}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    title={t('services.remove') || 'Remove'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Page>
+  )
 }
 
 type CatalogOffering = {
@@ -1293,10 +1364,12 @@ function LegacyNewServicePage() {
 }
 
 export function KeysPage() {
+  const { t } = useI18n()
   const [keys, setKeys] = useState<Key[]>([])
   const [services, setServices] = useState<Service[]>([])
   const { dialog, showConfirm } = useDialog()
   const [raw, setRaw] = useState('')
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<Key | null>(null)
@@ -1328,20 +1401,178 @@ export function KeysPage() {
     load()
   }
   async function revoke(id: string) {
-    if (!await showConfirm('Existing requests will not be interrupted.', 'Revoke this API key?')) return
+    if (!await showConfirm(t('keys.revoke_confirm_msg') || 'Existing requests will not be interrupted.', t('keys.revoke_confirm_title') || 'Revoke this API key?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}/revoke`, { method: 'POST' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function remove(id: string) {
-    if (!await showConfirm('This cannot be undone.', 'Delete this API key permanently?')) return
+    if (!await showConfirm(t('keys.delete_confirm_msg') || 'This cannot be undone.', t('keys.delete_confirm_title') || 'Delete this API key permanently?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
-  return <Page action={<button type="button" onClick={() => { setError(''); setModalOpen(true) }} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Create key</button>}>
-    {dialog}{raw && <div className="rounded-xl border border-amber-200 bg-amber-50 p-5"><div className="text-sm font-medium text-amber-900">Copy this key now. It will not be shown again.</div><div className="mt-3 flex gap-2"><code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">{raw}</code><button type="button" onClick={() => navigator.clipboard.writeText(raw)} className="rounded-lg border border-amber-300 p-2"><Copy className="h-4 w-4" /></button></div></div>}
-    {error && <ErrorMessage text={error} />}
-    {!keys.length ? <Empty text="No API keys yet." href="/app/services" /> : <div className="mt-6 space-y-3">{keys.map((key) => <div key={key.id} className="flex justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-5"><div className="min-w-0"><div className="font-medium">{key.name}</div><div className="mt-1 font-mono text-sm text-zinc-500">{formatMaskedKey(key.prefix)}</div><div className="mt-2 space-y-1 text-xs text-zinc-400"><div>Created {key.created_at}</div>{key.last_used_at && <div>Last used {key.last_used_at}</div>}</div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${key.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{key.enabled ? 'Active' : 'Revoked'}</span>{key.model_services?.length ? key.model_services.map((service) => <span key={service.id} className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600">{service.name}</span>) : <span className="text-zinc-400">All project services (legacy key)</span>}</div></div><div className="flex shrink-0 items-start gap-3">{key.enabled && <button type="button" onClick={() => setEditingKey(key)} className="self-start text-xs text-zinc-600 hover:text-zinc-950" aria-label={`Edit ${key.name}`}><Pencil className="h-4 w-4" /></button>}{key.enabled && <button type="button" onClick={() => revoke(key.id)} className="self-start text-xs text-rose-600 hover:text-rose-700">Revoke</button>}<button type="button" onClick={() => remove(key.id)} className="self-start text-xs text-zinc-500 hover:text-rose-600">Delete</button></div></div>)}</div>}
-    {modalOpen && <CreateKeyModal services={services} existingNames={keys.map((key) => key.name)} onClose={() => setModalOpen(false)} onCreate={create} />}
-    {editingKey && <EditKeyModal keyData={editingKey} services={services} existingNames={keys.map((key) => key.name)} onClose={() => setEditingKey(null)} onUpdate={update} />}
-  </Page>
+  function copyKeyText(text: string, id: string) {
+    navigator.clipboard.writeText(text)
+    setCopiedKeyId(id)
+    setTimeout(() => setCopiedKeyId(null), 2000)
+  }
+
+  return (
+    <Page
+      action={
+        <button
+          type="button"
+          onClick={() => { setError(''); setModalOpen(true) }}
+          className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"
+        >
+          <Plus className="h-4 w-4" /> {t('keys.create_button') || 'Create key'}
+        </button>
+      }
+    >
+      {dialog}
+      {raw && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 mb-6">
+          <div className="text-sm font-medium text-amber-900">
+            {t('keys.copy_notice') || 'Copy this key now. It will not be shown again.'}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-sm">
+              {raw}
+            </code>
+            <button
+              type="button"
+              onClick={() => copyKeyText(raw, 'raw')}
+              className="rounded-lg border border-amber-300 p-2 text-amber-900 hover:bg-amber-100 transition-colors"
+              title="Copy"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <ErrorMessage text={error} />}
+      {!keys.length ? (
+        <Empty text={t('keys.no_keys') || 'No API keys yet.'} href="/app/services" />
+      ) : (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {keys.map((key) => {
+            const masked = formatMaskedKey(key.prefix)
+            const isCopied = copiedKeyId === key.id
+            return (
+              <div
+                key={key.id}
+                className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:border-zinc-300 transition-all"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-zinc-950 text-base truncate" title={key.name}>
+                        {key.name}
+                      </h3>
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${
+                        key.enabled
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
+                      }`}
+                    >
+                      {key.enabled ? (t('keys.active') || 'Active') : (t('keys.revoked') || 'Revoked')}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2 border border-zinc-100">
+                    <code className="font-mono text-xs text-zinc-700 truncate">{masked}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyKeyText(key.prefix, key.id)}
+                      className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900 transition-colors"
+                      title={t('common.copy') || 'Copy'}
+                    >
+                      {isCopied ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
+                      {t('keys.authorized_services') || 'Authorized Services'}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {key.model_services?.length ? (
+                        key.model_services.map((service) => (
+                          <span
+                            key={service.id}
+                            className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700"
+                          >
+                            {service.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-zinc-400 italic">
+                          {t('keys.all_services_legacy') || 'All project services (legacy key)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-0.5 text-[11px] text-zinc-400">
+                    <div>{t('keys.created', { date: key.created_at }) || `Created ${key.created_at}`}</div>
+                    {key.last_used_at && (
+                      <div>{t('keys.last_used', { date: key.last_used_at }) || `Last used ${key.last_used_at}`}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3 border-t border-zinc-100 pt-4 text-xs">
+                  {key.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingKey(key)}
+                      className="inline-flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      {t('keys.edit') || 'Edit'}
+                    </button>
+                  )}
+                  {key.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => revoke(key.id)}
+                      className="font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                    >
+                      {t('keys.revoke') || 'Revoke'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => remove(key.id)}
+                    className="inline-flex items-center gap-1 font-medium text-rose-500 hover:text-rose-700 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('keys.delete') || 'Delete'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {modalOpen && (
+        <CreateKeyModal
+          services={services}
+          existingNames={keys.map((key) => key.name)}
+          onClose={() => setModalOpen(false)}
+          onCreate={create}
+        />
+      )}
+      {editingKey && (
+        <EditKeyModal
+          keyData={editingKey}
+          services={services}
+          existingNames={keys.map((key) => key.name)}
+          onClose={() => setEditingKey(null)}
+          onUpdate={update}
+        />
+      )}
+    </Page>
+  )
 }
 
 function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: { keyData: Key; services: Service[]; existingNames: string[]; onClose: () => void; onUpdate: (id: string, name: string, modelServiceIds: string[]) => Promise<void> }) {
@@ -1452,6 +1683,7 @@ const compactTokens = (value: number | undefined) => {
 }
 
 export function UsagePage() {
+  const { t } = useI18n()
   const [data, setData] = useState<UsageData | null>(null)
   const [savings, setSavings] = useState<SavingsData | null>(null)
   const [baseline, setBaseline] = useState<SavingsBaseline | null>(null)
@@ -1494,27 +1726,193 @@ export function UsagePage() {
   const maxProviderSpend = Math.max(...providers.map((item) => item.estimated_spend), 0.000001)
   const missingUsage = data?.coverage?.missing_usage_breakdown || []
 
-  return <Page>
-    {error && <ErrorMessage text={error} />}
-    <div className="mb-5 flex items-end justify-between gap-4"><div><h1 className="text-xl font-semibold tracking-tight">Usage</h1><p className="mt-1 text-sm text-zinc-500">Automatic statistics from your last 30 days of model calls.</p></div><span className="text-xs text-zinc-400">Provider-reported usage when available</span></div>
-    <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Stat label="Requests" value={compactNumber(data?.requests)} />
-      <Stat label="Total tokens" value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
-      <Stat label="Estimated spend" value={money(data?.estimated_spend)} />
-      <Stat label="Success rate" value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
-    </div>
+  return (
+    <Page>
+      {error && <ErrorMessage text={error} />}
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{t('usage.title') || 'Usage'}</h1>
+          <p className="mt-1 text-sm text-zinc-500">{t('usage.subtitle') || 'Automatic statistics from your last 30 days of model calls.'}</p>
+        </div>
+        <span className="text-xs text-zinc-400">{t('usage.provider_reported_note') || 'Provider-reported usage when available'}</span>
+      </div>
+      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label={t('usage.requests') || 'Requests'} value={compactNumber(data?.requests)} />
+        <Stat label={t('usage.total_tokens') || 'Total tokens'} value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
+        <Stat label={t('usage.estimated_spend') || 'Estimated spend'} value={money(data?.estimated_spend)} />
+        <Stat label={t('usage.success_rate') || 'Success rate'} value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
+      </div>
 
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div><h2 className="font-semibold">Prompt cache</h2><p className="mt-1 text-sm text-zinc-500">Provider-reported input tokens served from cache. This is separate from context trimming.</p></div><div className="mt-5 grid grid-cols-2 items-stretch gap-4 md:grid-cols-3 xl:grid-cols-5"><Stat label="Cache hit tokens" value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} /><Stat label="Requests with hits" value={compactNumber(data?.cache?.hit_requests)} /><Stat label="Input token hit rate" value={coveragePercent(data?.cache?.hit_rate)} /><Stat label="Cache write tokens" value={compactTokens(data?.cache?.write_tokens)} fullValue={compactNumber(data?.cache?.write_tokens)} /><Stat label="Input token write rate" value={coveragePercent(data?.cache?.write_rate)} /></div>{data?.cache?.reported_requests === 0 && <p className="mt-4 text-xs text-zinc-500">No provider-reported cache metrics are available for this period.</p>}</section>
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <div>
+          <h2 className="font-semibold">{t('usage.prompt_cache') || 'Prompt cache'}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{t('usage.prompt_cache_subtitle') || 'Provider-reported input tokens served from cache. This is separate from context trimming.'}</p>
+        </div>
+        <div className="mt-5 grid grid-cols-2 items-stretch gap-4 md:grid-cols-3 xl:grid-cols-5">
+          <Stat label={t('usage.cache_hit_tokens') || 'Cache hit tokens'} value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} />
+          <Stat label={t('usage.requests_with_hits') || 'Requests with hits'} value={compactNumber(data?.cache?.hit_requests)} />
+          <Stat label={t('usage.hit_rate') || 'Input token hit rate'} value={coveragePercent(data?.cache?.hit_rate)} />
+          <Stat label={t('usage.cache_write_tokens') || 'Cache write tokens'} value={compactTokens(data?.cache?.write_tokens)} fullValue={compactNumber(data?.cache?.write_tokens)} />
+          <Stat label={t('usage.write_rate') || 'Input token write rate'} value={coveragePercent(data?.cache?.write_rate)} />
+        </div>
+        {data?.cache?.reported_requests === 0 && (
+          <p className="mt-4 text-xs text-zinc-500">{t('usage.no_cache_data') || 'No provider-reported cache metrics are available for this period.'}</p>
+        )}
+      </section>
 
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Usage by provider and model</h2><p className="mt-1 text-sm text-zinc-500">Each provider includes the models used through it.</p>{providers.length ? <div className="mt-5 divide-y divide-zinc-100">{providers.map((item) => { const providerModels = modelsByProvider.get(item.provider || '') || []; return <div key={item.provider} className="py-5 first:pt-0 last:pb-0"><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{item.provider}</span><span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} /></div><div className="mt-1 space-y-1 text-xs text-zinc-500"><div>{compactNumber(item.requests)} requests</div><div>{compactNumber(item.total_tokens)} tokens</div>{item.cache_hit_tokens ? <div>{compactNumber(item.cache_hit_tokens)} cache hit tokens</div> : null}{item.cache_write_tokens ? <div>{compactNumber(item.cache_write_tokens)} cache write tokens</div> : null}</div>{providerModels.length ? <div className="mt-5 border-l-2 border-zinc-100 pl-4"><div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">Models</div><div className="space-y-3">{providerModels.slice(0, 10).map((model) => <div key={`${model.provider}-${model.model}`} className="flex items-center justify-between gap-4"><div className="min-w-0"><div className="truncate text-sm">{model.model}</div><div className="mt-1 text-xs text-zinc-500">{compactNumber(model.requests)} requests <span className="mx-1">/</span> {compactNumber(model.total_tokens)} tokens{model.cache_hit_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_hit_tokens)} cached</> : null}{model.cache_write_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_write_tokens)} written</> : null}</div></div><span className="shrink-0 font-mono text-sm text-zinc-600">{money(model.estimated_spend)}</span></div>)}</div></div> : null}</div> })}</div> : <p className="mt-5 text-sm text-zinc-500">No usage recorded yet.</p>}</section>
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <h2 className="font-semibold">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'}</p>
+        {providers.length ? (
+          <div className="mt-5 divide-y divide-zinc-100">
+            {providers.map((item) => {
+              const providerModels = modelsByProvider.get(item.provider || '') || []
+              return (
+                <div key={item.provider} className="py-5 first:pt-0 last:pb-0">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="font-medium">{item.provider}</span>
+                    <span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-zinc-100">
+                    <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} />
+                  </div>
+                  <div className="mt-1 space-y-1 text-xs text-zinc-500">
+                    <div>{compactNumber(item.requests)} {t('usage.requests') || 'requests'}</div>
+                    <div>{compactNumber(item.total_tokens)} {t('usage.total_tokens') || 'tokens'}</div>
+                    {item.cache_hit_tokens ? <div>{compactNumber(item.cache_hit_tokens)} {t('usage.cache_hit_tokens') || 'cache hit tokens'}</div> : null}
+                    {item.cache_write_tokens ? <div>{compactNumber(item.cache_write_tokens)} {t('usage.cache_write_tokens') || 'cache write tokens'}</div> : null}
+                  </div>
+                  {providerModels.length ? (
+                    <div className="mt-5 border-l-2 border-zinc-100 pl-4">
+                      <div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">{t('usage.models_label') || 'Models'}</div>
+                      <div className="space-y-3">
+                        {providerModels.slice(0, 10).map((model) => (
+                          <div key={`${model.provider}-${model.model}`} className="flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm">{model.model}</div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                {compactNumber(model.requests)} {t('usage.requests') || 'requests'} <span className="mx-1">/</span> {compactNumber(model.total_tokens)} {t('usage.total_tokens') || 'tokens'}
+                                {model.cache_hit_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_hit_tokens)} {t('usage.cached_suffix') || 'cached'}</> : null}
+                                {model.cache_write_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_write_tokens)} {t('usage.written_suffix') || 'written'}</> : null}
+                              </div>
+                            </div>
+                            <span className="shrink-0 font-mono text-sm text-zinc-600">{money(model.estimated_spend)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="mt-5 text-sm text-zinc-500">{t('usage.no_usage_yet') || 'No usage recorded yet.'}</p>
+        )}
+      </section>
 
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold">Context savings</h2><p className="mt-1 text-sm text-zinc-500">Signals produced by context reduction. This is separate from provider billing.</p></div><button type="button" onClick={() => setBaselineOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950"><Settings2 className="h-4 w-4" />{baseline ? 'Change baseline' : 'Configure baseline'}</button></div><div className="mt-5 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2"><Stat label="Context characters trimmed" value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} /><Stat label="Estimated dollar savings" value={savings?.estimated_savings == null ? 'Not available' : money(Number(savings.estimated_savings))} /></div>{baseline && <p className="mt-4 text-xs text-zinc-500">Compared with {baseline.model_service_name} / {baseline.model} ({baseline.provider_name}).</p>}<p className="mt-2 text-xs text-zinc-500">{savings?.basis || 'Configure a model service baseline to estimate dollar savings.'}</p></section>
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">{t('usage.context_savings') || 'Context savings'}</h2>
+            <p className="mt-1 text-sm text-zinc-500">{t('usage.context_savings_sub') || 'Signals produced by context reduction. This is separate from provider billing.'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBaselineOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950 transition-colors"
+          >
+            <Settings2 className="h-4 w-4" />
+            {baseline ? (t('usage.change_baseline') || 'Change baseline') : (t('usage.config_baseline') || 'Configure baseline')}
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
+          <Stat label={t('usage.trimmed_chars') || 'Context characters trimmed'} value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} />
+          <Stat label={t('usage.dollar_savings') || 'Estimated dollar savings'} value={savings?.estimated_savings == null ? (t('usage.not_available') || 'Not available') : money(Number(savings.estimated_savings))} />
+        </div>
+        {baseline && (
+          <p className="mt-4 text-xs text-zinc-500">
+            {t('usage.compared_with', { service: baseline.model_service_name, model: baseline.model, provider: baseline.provider_name }) || `Compared with ${baseline.model_service_name} / ${baseline.model} (${baseline.provider_name}).`}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-zinc-500">{savings?.basis || (t('usage.config_baseline') || 'Configure a model service baseline to estimate dollar savings.')}</p>
+      </section>
 
-    {baselineOpen && <SavingsBaselineModal services={baselineOptions} baseline={baseline} onClose={() => setBaselineOpen(false)} onSaved={(next) => { setBaseline(next); setBaselineOpen(false); saasFetch<SavingsData>('/api/saas/savings?range=30d').then((result) => setSavings(result.data || null)).catch((e: unknown) => setError(errorText(e))) }} />}
+      {baselineOpen && (
+        <SavingsBaselineModal
+          services={baselineOptions}
+          baseline={baseline}
+          onClose={() => setBaselineOpen(false)}
+          onSaved={(next) => {
+            setBaseline(next)
+            setBaselineOpen(false)
+            saasFetch<SavingsData>('/api/saas/savings?range=30d').then((result) => setSavings(result.data || null)).catch((e: unknown) => setError(errorText(e)))
+          }}
+        />
+      )}
 
-    {data?.budget && <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex justify-between text-sm"><span>Today’s budget</span><span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : 'No limit set'}</span></div><div className="mt-3 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} /></div><div className="mt-2 text-xs text-zinc-500">Status: {data.budget.status}</div></div>}
-    {data?.coverage && <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Usage data coverage</h2><p className="mt-1 text-sm text-zinc-500">Shows which requests use provider-reported tokens and which rely on estimates.</p></div><span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{coveragePercent(data.coverage.usage)} provider-reported</span></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Coverage label="Provider-reported tokens" value={data.coverage.usage} detail={`${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests include token data`} /><Coverage label="Configured pricing" value={data.coverage.pricing} detail={`${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests have a pricing rule`} /></div>{missingUsage.length > 0 && <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4"><div className="font-medium text-amber-900">Requests without provider-reported tokens</div><p className="mt-1 text-sm text-amber-800">{compactNumber(data.coverage.missing_usage_requests)} requests below use a local estimate or have no token data.</p><div className="mt-4 divide-y divide-amber-200/70">{missingUsage.slice(0, 10).map((item) => <div key={`${item.provider}-${item.model}`} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><div className="truncate text-sm font-medium text-amber-950">{item.provider} / {item.model}</div><div className="mt-1 space-y-0.5 text-xs text-amber-800"><div>{compactNumber(item.requests)} requests without provider-reported tokens</div>{item.local_estimate_requests > 0 && <div>{compactNumber(item.local_estimate_requests)} use local estimates</div>}{item.unavailable_requests > 0 && <div>{compactNumber(item.unavailable_requests)} have no token data</div>}</div></div><span className="shrink-0 rounded-full bg-white/70 px-2 py-1 text-xs font-medium text-amber-900">Needs review</span></div>)}</div>{missingUsage.length > 10 && <div className="mt-3 text-xs text-amber-800">Showing the first 10 provider and model groups.</div>}</div>}</section>}
-  </Page>
+      {data?.budget && (
+        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="flex justify-between text-sm">
+            <span>{t('usage.todays_budget') || 'Today’s budget'}</span>
+            <span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : (t('usage.no_limit') || 'No limit set')}</span>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-zinc-100">
+            <div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} />
+          </div>
+          <div className="mt-2 text-xs text-zinc-500">{t('usage.status_label', { status: data.budget.status }) || `Status: ${data.budget.status}`}</div>
+        </div>
+      )}
+
+      {data?.coverage && (
+        <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold">{t('usage.data_coverage') || 'Usage data coverage'}</h2>
+              <p className="mt-1 text-sm text-zinc-500">{t('usage.data_coverage_sub') || 'Shows which requests use provider-reported tokens and which rely on estimates.'}</p>
+            </div>
+            <span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              {t('usage.provider_reported_badge', { pct: coveragePercent(data.coverage.usage) }) || `${coveragePercent(data.coverage.usage)} provider-reported`}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Coverage
+              label={t('usage.provider_reported_tokens') || 'Provider-reported tokens'}
+              value={data.coverage.usage}
+              detail={t('usage.provider_reported_detail', { reported: compactNumber(data.coverage.provider_reported_requests), total: compactNumber(data.requests) }) || `${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests include token data`}
+            />
+            <Coverage
+              label={t('usage.configured_pricing') || 'Configured pricing'}
+              value={data.coverage.pricing}
+              detail={t('usage.configured_pricing_detail', { priced: compactNumber(data.coverage.priced_requests), total: compactNumber(data.requests) }) || `${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests have a pricing rule`}
+            />
+          </div>
+          {missingUsage.length > 0 && (
+            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="font-medium text-amber-900">{t('usage.requests_without_tokens') || 'Requests without provider-reported tokens'}</div>
+              <p className="mt-1 text-sm text-amber-800">{t('usage.requests_without_tokens_sub', { count: compactNumber(data.coverage.missing_usage_requests) }) || `${compactNumber(data.coverage.missing_usage_requests)} requests below use a local estimate or have no token data.`}</p>
+              <div className="mt-4 divide-y divide-amber-200/70">
+                {missingUsage.slice(0, 10).map((item) => (
+                  <div key={`${item.provider}-${item.model}`} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-amber-950">{item.provider} / {item.model}</div>
+                      <div className="mt-1 space-y-0.5 text-xs text-amber-800">
+                        <div>{compactNumber(item.requests)} requests without provider-reported tokens</div>
+                        {item.local_estimate_requests > 0 && <div>{compactNumber(item.local_estimate_requests)} use local estimates</div>}
+                        {item.unavailable_requests > 0 && <div>{compactNumber(item.unavailable_requests)} have no token data</div>}
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-1 text-xs font-medium text-amber-900">{t('usage.needs_review') || 'Needs review'}</span>
+                  </div>
+                ))}
+              </div>
+              {missingUsage.length > 10 && <div className="mt-3 text-xs text-amber-800">{t('usage.showing_first_10') || 'Showing the first 10 provider and model groups.'}</div>}
+            </div>
+          )}
+        </section>
+      )}
+    </Page>
+  )
 }
 
 function SavingsBaselineModal({ services, baseline, onClose, onSaved }: { services: ServiceDetails[]; baseline: SavingsBaseline | null; onClose: () => void; onSaved: (baseline: SavingsBaseline) => void }) {
@@ -1584,6 +1982,7 @@ type RoutingAnalyticsData = {
   queries: QueryAnalyticsItem[]
 }
 export function AnalyticsPage() {
+  const { t } = useI18n()
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
   const [tierFilter, setTierFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
   const [data, setData] = useState<RoutingAnalyticsData | null>(null)
@@ -1638,9 +2037,9 @@ export function AnalyticsPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Routing Analytics & Complexity Insights</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t('analytics.title') || 'Routing Analytics & Complexity Insights'}</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Inspect how incoming queries match complexity signals and route across Pro and Flash models.
+              {t('analytics.subtitle') || 'Inspect how incoming queries match complexity signals and route across Pro and Flash models.'}
             </p>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
@@ -1652,7 +2051,13 @@ export function AnalyticsPage() {
                   range === r ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-950'
                 }`}
               >
-                {r === '24h' ? 'Last 24h' : r === '7d' ? 'Last 7 days' : r === '30d' ? 'Last 30 days' : 'All time'}
+                {r === '24h'
+                  ? (t('analytics.last_24h') || 'Last 24h')
+                  : r === '7d'
+                  ? (t('analytics.last_7d') || 'Last 7 days')
+                  : r === '30d'
+                  ? (t('analytics.last_30d') || 'Last 30 days')
+                  : (t('analytics.all_time') || 'All time')}
               </button>
             ))}
           </div>
@@ -1661,64 +2066,64 @@ export function AnalyticsPage() {
         {error && <ErrorMessage text={error} />}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Analyzed queries</div>
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.analyzed_queries') || 'Analyzed queries'}</div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">{total.toLocaleString()}</div>
-            <div className="mt-2 text-xs text-zinc-400">Intelligent complexity scored</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('analytics.analyzed_queries_sub') || 'Intelligent complexity scored'}</div>
           </div>
 
-          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Complexity breakdown</div>
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.complexity_breakdown') || 'Complexity breakdown'}</div>
             <div className="mt-2 flex items-baseline gap-4">
               <div>
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.high_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">High</span>
+                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_high') || 'High'}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200" />
               <div>
                 <span className="text-2xl font-bold text-amber-600">{(data?.summary.medium_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">Med</span>
+                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_medium') || 'Med'}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200" />
               <div>
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.low_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">Low</span>
+                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_low') || 'Low'}</span>
               </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{highPct}% complex reasoning & code</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('analytics.high_reasoning_sub', { pct: highPct }) || `${highPct}% complex reasoning & code`}</div>
           </div>
 
-          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Model tier routing</div>
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.model_tier_routing') || 'Model tier routing'}</div>
             <div className="mt-2 flex items-baseline gap-4">
               <div>
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.pro_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">Pro model</span>
+                <span className="ml-1 text-xs text-zinc-400">{t('analytics.pro_model') || 'Pro model'}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200" />
               <div>
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.flash_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">Flash model</span>
+                <span className="ml-1 text-xs text-zinc-400">{t('analytics.flash_model') || 'Flash model'}</span>
               </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-400">Dynamic capability dispatch</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('analytics.dynamic_dispatch') || 'Dynamic capability dispatch'}</div>
           </div>
 
-          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Estimated savings</div>
+          <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.estimated_savings') || 'Estimated savings'}</div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
               ${(data?.summary.estimated_savings || 0).toFixed(4)}
             </div>
             <div className="mt-2 text-xs text-zinc-400">
-              Total spend: ${(data?.summary.total_cost || 0).toFixed(4)}
+              {t('analytics.total_spend', { amount: (data?.summary.total_cost || 0).toFixed(4) }) || `Total spend: $${(data?.summary.total_cost || 0).toFixed(4)}`}
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-900">Complexity Spectrum & Signal Distribution</h2>
-            <span className="text-xs text-zinc-400">Higher score routes to Pro models</span>
+            <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.spectrum_title') || 'Complexity Spectrum & Signal Distribution'}</h2>
+            <span className="text-xs text-zinc-400">{t('analytics.spectrum_hint') || 'Higher score routes to Pro models'}</span>
           </div>
 
           <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100">
@@ -1730,15 +2135,15 @@ export function AnalyticsPage() {
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
-              <span>High Complexity (≥ 0.60): <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
+              <span>{t('analytics.high_complexity') || 'High Complexity (≥ 0.60)'}: <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-              <span>Medium Complexity (0.35–0.60): <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
+              <span>{t('analytics.med_complexity') || 'Medium Complexity (0.35–0.60)'}: <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span>Low Complexity (&lt; 0.35): <strong>{(data?.summary.low_tier_count || 0).toLocaleString()}</strong> ({lowPct}%)</span>
+              <span>{t('analytics.low_complexity') || 'Low Complexity (< 0.35)'}: <strong>{(data?.summary.low_tier_count || 0).toLocaleString()}</strong> ({lowPct}%)</span>
             </div>
           </div>
         </div>
@@ -1746,19 +2151,25 @@ export function AnalyticsPage() {
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
           <div className="p-5 pb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">Query Logs & Signal Hits</h2>
-              <p className="mt-0.5 text-xs text-zinc-400">Live inspection of prompt intents and routed models.</p>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.table_title') || 'Query Logs & Signal Hits'}</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.table_subtitle') || 'Live inspection of prompt intents and routed models.'}</p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
               {(['all', 'high', 'medium', 'low'] as const).map((tier) => (
                 <button
                   key={tier}
                   onClick={() => setTierFilter(tier)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     tierFilter === tier ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
-                  {tier === 'all' ? 'All tiers' : tier}
+                  {tier === 'all'
+                    ? (t('analytics.all_tiers') || 'All tiers')
+                    : tier === 'high'
+                    ? (t('analytics.tier_high') || 'High')
+                    : tier === 'medium'
+                    ? (t('analytics.tier_medium') || 'Med')
+                    : (t('analytics.tier_low') || 'Low')}
                 </button>
               ))}
             </div>
@@ -1767,19 +2178,19 @@ export function AnalyticsPage() {
           <div className="border-t border-zinc-100 overflow-x-auto min-h-[420px]">
             {!paginatedQueries.length ? (
               <div className="py-16 text-center text-sm text-zinc-500">
-                {loading ? 'Loading queries…' : 'No query records found for this period.'}
+                {loading ? (t('common.loading') || 'Loading…') : (t('analytics.no_records') || 'No query records found for this period.')}
               </div>
             ) : (
               <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-2.5 px-4 font-medium w-[140px]">Time / Service</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">Prompt / User Intent</th>
-                    <th className="py-2.5 px-3 font-medium w-[130px]">Complexity</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[220px] max-w-[280px]">Matched Signals</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[150px]">Routed Model</th>
-                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">Tokens / Latency</th>
-                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">Cost</th>
+                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('analytics.col_time_service') || 'Time / Service'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('analytics.col_prompt') || 'Prompt / User Intent'}</th>
+                    <th className="py-2.5 px-3 font-medium w-[130px]">{t('analytics.col_complexity') || 'Complexity'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[220px] max-w-[280px]">{t('analytics.col_signals') || 'Matched Signals'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('analytics.col_model') || 'Routed Model'}</th>
+                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('analytics.col_tokens_latency') || 'Tokens / Latency'}</th>
+                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('analytics.col_cost') || 'Cost'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -1838,7 +2249,7 @@ export function AnalyticsPage() {
                                 </span>
                                 <div className="pointer-events-none absolute left-0 bottom-full z-50 mb-2 hidden w-56 rounded-xl border border-zinc-200 bg-white p-2.5 shadow-xl group-hover:block text-left whitespace-normal">
                                   <div className="text-[11px] font-semibold text-zinc-900 mb-1.5">
-                                    Matched Signals ({q.signals.length})
+                                    {t('analytics.col_signals') || 'Matched Signals'} ({q.signals.length})
                                   </div>
                                   <div className="flex flex-wrap gap-1">
                                     {q.signals.map((s, idx) => (
@@ -1869,15 +2280,15 @@ export function AnalyticsPage() {
                                 <button
                                   type="button"
                                   className="text-zinc-400 hover:text-zinc-700 transition-colors p-0.5 rounded-full hover:bg-zinc-100 cursor-help"
-                                  aria-label="Why this model was chosen"
-                                  title="Why this model?"
+                                  aria-label={t('analytics.why_model') || 'Why this model?'}
+                                  title={t('analytics.why_model') || 'Why this model?'}
                                 >
                                   <Info className="h-3.5 w-3.5" />
                                 </button>
                                 <div className="pointer-events-none absolute right-0 bottom-full z-50 mb-2 hidden w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl group-hover:block text-left whitespace-normal">
                                   <div className="text-[11px] font-semibold text-zinc-900 mb-1.5 flex items-center justify-between">
-                                    <span>Why this model?</span>
-                                    <span className="text-[10px] font-normal text-zinc-400">Candidate ranking</span>
+                                    <span>{t('analytics.why_model') || 'Why this model?'}</span>
+                                    <span className="text-[10px] font-normal text-zinc-400">{t('analytics.candidate_ranking') || 'Candidate ranking'}</span>
                                   </div>
                                   <ol className="space-y-1.5">
                                     {(q.candidates ?? []).map((candidate, index) => (
@@ -1904,7 +2315,7 @@ export function AnalyticsPage() {
                           <div className="text-[10px] text-zinc-400 truncate max-w-[140px]" title={q.provider_name}>{cleanProvider}</div>
                           {q.fallback_used && (
                             <div className="mt-0.5 inline-flex items-center rounded-md border border-rose-200/80 bg-rose-50 px-1.5 py-0.5 text-[9px] font-medium text-rose-700" title={`Attempted in order: ${(q.attempts ?? []).join(' → ')}`}>
-                              Fallback
+                              {t('analytics.fallback_badge') || 'Fallback'}
                             </div>
                           )}
                         </td>
@@ -1927,19 +2338,19 @@ export function AnalyticsPage() {
             <div className="border-t border-zinc-100 bg-zinc-50/70 px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500 select-none min-h-[52px]">
               <div className="flex items-center gap-3">
                 <span className="whitespace-nowrap tabular-nums">
-                  Showing <strong className="font-semibold text-zinc-900">{startIndex + 1}</strong>–<strong className="font-semibold text-zinc-900">{Math.min(startIndex + pageSize, totalFiltered)}</strong> of <strong className="font-semibold text-zinc-900">{totalFiltered}</strong> queries
+                  {t('pagination.showing', { start: startIndex + 1, end: Math.min(startIndex + pageSize, totalFiltered), total: totalFiltered }) || `Showing ${startIndex + 1}–${Math.min(startIndex + pageSize, totalFiltered)} of ${totalFiltered} queries`}
                 </span>
                 <div className="w-32 min-w-[125px]">
                   <Select
                     size="sm"
                     direction="up"
                     options={[
-                      { id: '10', name: '10 / page' },
-                      { id: '15', name: '15 / page' },
-                      { id: '25', name: '25 / page' },
-                      { id: '50', name: '50 / page' },
+                      { id: '10', name: t('pagination.per_page', { count: 10 }) || '10 / page' },
+                      { id: '15', name: t('pagination.per_page', { count: 15 }) || '15 / page' },
+                      { id: '25', name: t('pagination.per_page', { count: 25 }) || '25 / page' },
+                      { id: '50', name: t('pagination.per_page', { count: 50 }) || '50 / page' },
                     ]}
-                    selected={{ id: String(pageSize), name: `${pageSize} / page` }}
+                    selected={{ id: String(pageSize), name: t('pagination.per_page', { count: pageSize }) || `${pageSize} / page` }}
                     onChange={(opt) => {
                       setPageSize(Number(opt.id))
                       setPage(1)
@@ -1954,7 +2365,7 @@ export function AnalyticsPage() {
                   disabled={currentPage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label="Previous page"
+                  aria-label={t('pagination.prev') || 'Previous page'}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -2000,7 +2411,7 @@ export function AnalyticsPage() {
                   disabled={currentPage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label="Next page"
+                  aria-label={t('pagination.next') || 'Next page'}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -2063,6 +2474,7 @@ type QualityAnalyticsData = {
 }
 
 export function QualityPage() {
+  const { t } = useI18n()
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
   const [verdictFilter, setVerdictFilter] = useState<'all' | 'verified' | 'schema_valid' | 'escalated' | 'completed'>('all')
   const [data, setData] = useState<QualityAnalyticsData | null>(null)
@@ -2108,10 +2520,10 @@ export function QualityPage() {
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-600" />
-              <h1 className="text-xl font-semibold tracking-tight">Quality Assurance & Evaluation Dashboard</h1>
+              <h1 className="text-xl font-semibold tracking-tight">{t('quality.title') || 'Quality Assurance & Evaluation Dashboard'}</h1>
             </div>
             <p className="mt-1 text-sm text-zinc-500">
-              Verify that cost-optimized model routing preserves high output quality against the All-Pro baseline.
+              {t('quality.subtitle') || 'Verify that cost-optimized model routing preserves high output quality against the All-Pro baseline.'}
             </p>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
@@ -2123,7 +2535,13 @@ export function QualityPage() {
                   range === r ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-950'
                 }`}
               >
-                {r === '24h' ? 'Last 24h' : r === '7d' ? 'Last 7 days' : r === '30d' ? 'Last 30 days' : 'All time'}
+                {r === '24h'
+                  ? (t('quality.last_24h') || 'Last 24h')
+                  : r === '7d'
+                  ? (t('quality.last_7d') || 'Last 7 days')
+                  : r === '30d'
+                  ? (t('quality.last_30d') || 'Last 30 days')
+                  : (t('quality.all_time') || 'All time')}
               </button>
             ))}
           </div>
@@ -2135,54 +2553,54 @@ export function QualityPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Quality Preserved Rate</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.preserved_rate') || 'Quality Preserved Rate'}</div>
               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                Verified
+                {t('quality.verified_tag') || 'Verified'}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary ? `${summary.quality_preserved_rate}%` : '—'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">vs 100% full-Pro baseline</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.vs_baseline') || 'vs 100% full-Pro baseline'}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Shadow Pro Agreement</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.shadow_agreement') || 'Shadow Pro Agreement'}</div>
               <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
-                Judge Score
+                {t('quality.judge_score_tag') || 'Judge Score'}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-purple-700">
               {summary ? `${summary.shadow_agreement_score}%` : '—'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">Flash vs Pro output similarity</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.similarity_sub') || 'Flash vs Pro output similarity'}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">User Correction Rate</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.correction_rate') || 'User Correction Rate'}</div>
               <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
-                Healthy &lt; 3%
+                {t('quality.healthy_tag') || 'Healthy < 3%'}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary ? `${summary.user_correction_rate}%` : '—'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">Multi-turn retry & rephrase rate</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.correction_sub') || 'Multi-turn retry & rephrase rate'}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">Schema Compliance</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                100% Valid
+                {t('quality.valid_tag') || '100% Valid'}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
               {summary ? `${summary.schema_compliance_rate}%` : '—'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">Structured JSON & tool outputs</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.schema_sub') || 'Structured JSON & tool outputs'}</div>
           </div>
         </div>
 
@@ -2190,14 +2608,14 @@ export function QualityPage() {
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">A/B Benchmark Comparison & Pareto Frontier</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.ab_benchmark_title') || 'A/B Benchmark Comparison & Pareto Frontier'}</h2>
               <p className="mt-0.5 text-xs text-zinc-400">
-                Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.
+                {t('quality.ab_benchmark_subtitle') || 'Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.'}
               </p>
             </div>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
               <Sparkles className="h-3.5 w-3.5" />
-              {routing ? `${routing.cost_saved_pct}% Cost Saved` : '85% Cost Saved'}
+              {t('quality.cost_saved', { pct: routing ? routing.cost_saved_pct : 85 }) || (routing ? `${routing.cost_saved_pct}% Cost Saved` : '85% Cost Saved')}
             </span>
           </div>
 
@@ -2205,30 +2623,30 @@ export function QualityPage() {
             {/* Control Group: Baseline */}
             <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
               <div className="flex items-center justify-between border-b border-zinc-200/80 pb-2">
-                <span className="text-xs font-semibold text-zinc-700">Control: All-Pro Baseline</span>
-                <span className="text-[10px] font-medium text-zinc-400">100% Flagship</span>
+                <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
+                <span className="text-[10px] font-medium text-zinc-400">{t('quality.flagship_tag') || '100% Flagship'}</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <div className="text-zinc-400 text-[11px]">Avg Cost / Request</div>
+                  <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
                   <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
                     ${baseline ? baseline.cost_per_req.toFixed(4) : '0.0034'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[11px]">P90 Latency</div>
+                  <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                   <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
                     {baseline ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : '14.2s'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[11px]">Task Success Rate</div>
+                  <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
                   <div className="mt-0.5 text-sm font-semibold text-zinc-800">
                     {baseline ? `${baseline.task_success_rate}%` : '99.3%'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[11px]">Follow-up Correction</div>
+                  <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
                   <div className="mt-0.5 text-sm font-semibold text-zinc-800">
                     {baseline ? `${baseline.correction_rate}%` : '2.0%'}
                   </div>
@@ -2239,12 +2657,12 @@ export function QualityPage() {
             {/* Treatment Group: SmartGate */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
               <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
-                <span className="text-xs font-semibold text-emerald-900">Treatment: SmartGate Intelligent Routing</span>
-                <span className="text-[10px] font-semibold text-emerald-700">Cost-Aware + Pareto Fit</span>
+                <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title') || 'Treatment: SmartGate Intelligent Routing'}</span>
+                <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Cost-Aware + Pareto Fit'}</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <div className="text-emerald-800/70 text-[11px]">Avg Cost / Request</div>
+                  <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-emerald-700 font-mono">
                       ${routing ? routing.cost_per_req.toFixed(4) : '0.0005'}
@@ -2255,18 +2673,18 @@ export function QualityPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-emerald-800/70 text-[11px]">P90 Latency</div>
+                  <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-emerald-700 font-mono">
                       {routing ? `${(routing.avg_latency_ms / 1000).toFixed(1)}s` : '3.8s'}
                     </span>
                     <span className="text-[10px] font-semibold text-emerald-600">
-                      ({routing ? routing.speedup_pct : 73}% faster)
+                      ({routing ? routing.speedup_pct : 73}% {t('quality.faster', { pct: '' }) || 'faster'})
                     </span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-emerald-800/70 text-[11px]">Task Success Rate</div>
+                  <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-sm font-semibold text-zinc-900">
                       {routing ? `${routing.task_success_rate}%` : '99.1%'}
@@ -2275,7 +2693,7 @@ export function QualityPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-emerald-800/70 text-[11px]">Follow-up Correction</div>
+                  <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-sm font-semibold text-zinc-900">
                       {routing ? `${routing.correction_rate}%` : '2.1%'}
@@ -2290,7 +2708,7 @@ export function QualityPage() {
           <div className="mt-4 rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5 text-xs text-zinc-600 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <CheckCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span><strong>Evaluation Conclusion:</strong> Intelligent model routing achieves <strong>85%+ cost reduction</strong> and <strong>3.6x speedup</strong> while maintaining a sub-0.2% quality variance vs. 100% flagship Pro models.</span>
+              <span>{t('quality.conclusion') || 'Evaluation Conclusion: Intelligent model routing achieves 85%+ cost reduction and 3.6x speedup while maintaining a sub-0.2% quality variance vs. 100% flagship Pro models.'}</span>
             </span>
           </div>
         </div>
@@ -2299,8 +2717,8 @@ export function QualityPage() {
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
           <div className="p-5 pb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">Quality Feedback & Verification Logs</h2>
-              <p className="mt-0.5 text-xs text-zinc-400">Live stream of verification sources, shadow judge scores, and auto-escalations.</p>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.verdict_logs_title') || 'Quality Feedback & Verification Logs'}</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">{t('quality.verdict_logs_subtitle') || 'Live stream of verification sources, shadow judge scores, and auto-escalations.'}</p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
               {(['all', 'verified', 'schema_valid', 'escalated', 'completed'] as const).map((v) => (
@@ -2311,7 +2729,15 @@ export function QualityPage() {
                     verdictFilter === v ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
-                  {v === 'all' ? 'All Verdicts' : v.replace('_', ' ')}
+                  {v === 'all'
+                    ? (t('quality.all_verdicts') || 'All Verdicts')
+                    : v === 'verified'
+                    ? (t('quality.verdict_verified') || 'Verified')
+                    : v === 'schema_valid'
+                    ? (t('quality.verdict_schema') || 'Schema Valid')
+                    : v === 'escalated'
+                    ? (t('quality.verdict_escalated') || 'Escalated')
+                    : (t('quality.verdict_completed') || 'Completed')}
                 </button>
               ))}
             </div>
@@ -2320,19 +2746,19 @@ export function QualityPage() {
           <div className="border-t border-zinc-100 overflow-x-auto min-h-[420px]">
             {!paginatedRecords.length ? (
               <div className="py-16 text-center text-sm text-zinc-500">
-                {loading ? 'Loading quality evaluation records…' : 'No quality records found for this filter.'}
+                {loading ? (t('common.loading') || 'Loading…') : (t('quality.no_records') || 'No quality records found for this period.')}
               </div>
             ) : (
               <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-2.5 px-4 font-medium w-[140px]">Time / Service</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">Prompt / User Intent</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[150px]">Routed Model</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[160px]">Quality Verdict</th>
-                    <th className="py-2.5 px-3 font-medium w-[140px]">Feedback Source</th>
-                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">Tokens / Latency</th>
-                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">Cost</th>
+                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('quality.col_time_service') || 'Time / Service'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('quality.col_prompt') || 'Prompt / User Intent'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('quality.col_model') || 'Routed Model'}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[160px]">{t('quality.col_verdict') || 'Quality Verdict'}</th>
+                    <th className="py-2.5 px-3 font-medium w-[140px]">{t('quality.col_source') || 'Feedback Source'}</th>
+                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('quality.col_tokens_latency') || 'Tokens / Latency'}</th>
+                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('quality.col_cost') || 'Cost'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -2365,7 +2791,11 @@ export function QualityPage() {
                             }`}
                             title={r.verdict_desc}
                           >
-                            {r.verdict === 'escalated' ? '🔄 Auto Escalated' : r.verdict === 'schema_valid' ? '🛠️ Schema Valid' : '✅ Verified'}
+                            {r.verdict === 'escalated'
+                              ? `🔄 ${t('quality.verdict_escalated') || 'Auto Escalated'}`
+                              : r.verdict === 'schema_valid'
+                              ? `🛠️ ${t('quality.verdict_schema') || 'Schema Valid'}`
+                              : `✅ ${t('quality.verdict_verified') || 'Verified'}`}
                             <span className="font-mono text-[10px] opacity-75">({r.quality_score})</span>
                           </span>
                         </td>
@@ -2393,19 +2823,19 @@ export function QualityPage() {
             <div className="border-t border-zinc-100 bg-zinc-50/70 px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500 select-none min-h-[52px]">
               <div className="flex items-center gap-3">
                 <span className="whitespace-nowrap tabular-nums">
-                  Showing <strong className="font-semibold text-zinc-900">{startIndex + 1}</strong>–<strong className="font-semibold text-zinc-900">{Math.min(startIndex + pageSize, totalFiltered)}</strong> of <strong className="font-semibold text-zinc-900">{totalFiltered}</strong> records
+                  {t('pagination.showing', { start: startIndex + 1, end: Math.min(startIndex + pageSize, totalFiltered), total: totalFiltered }) || `Showing ${startIndex + 1}–${Math.min(startIndex + pageSize, totalFiltered)} of ${totalFiltered} records`}
                 </span>
                 <div className="w-32 min-w-[125px]">
                   <Select
                     size="sm"
                     direction="up"
                     options={[
-                      { id: '10', name: '10 / page' },
-                      { id: '15', name: '15 / page' },
-                      { id: '25', name: '25 / page' },
-                      { id: '50', name: '50 / page' },
+                      { id: '10', name: t('pagination.per_page', { count: 10 }) || '10 / page' },
+                      { id: '15', name: t('pagination.per_page', { count: 15 }) || '15 / page' },
+                      { id: '25', name: t('pagination.per_page', { count: 25 }) || '25 / page' },
+                      { id: '50', name: t('pagination.per_page', { count: 50 }) || '50 / page' },
                     ]}
-                    selected={{ id: String(pageSize), name: `${pageSize} / page` }}
+                    selected={{ id: String(pageSize), name: t('pagination.per_page', { count: pageSize }) || `${pageSize} / page` }}
                     onChange={(opt) => {
                       setPageSize(Number(opt.id))
                       setPage(1)
@@ -2420,7 +2850,7 @@ export function QualityPage() {
                   disabled={currentPage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label="Previous page"
+                  aria-label={t('pagination.prev') || 'Previous page'}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -2466,7 +2896,7 @@ export function QualityPage() {
                   disabled={currentPage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label="Next page"
+                  aria-label={t('pagination.next') || 'Next page'}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
