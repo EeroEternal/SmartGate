@@ -16,6 +16,50 @@ for request-level policy.
 The first implementation is observational only: it exposes aggregated statistics and
 does not affect routing.
 
+## Converged complexity model
+
+Complexity must remain a single routing signal, not a collection of independently
+weighted dimensions. SmartGate computes one `difficulty` score in `[0.0, 1.0]` and
+maps it to the existing tiers:
+
+| Tier | Score | Meaning |
+| --- | ---: | --- |
+| `low` | `< 0.35` | Standard model capability is usually sufficient |
+| `medium` | `0.35–0.54` | Borderline workload; may require additional evaluation |
+| `high` | `>= 0.55` | Stronger reasoning capability is preferred |
+
+The score is a routing heuristic, not an objective task-difficulty truth. Its inputs
+remain intentionally small and interpretable: request structure, approximate input
+length, code/reasoning signals, conversation depth, and correction cues. These signals
+must not become separate profile dimensions or separate route scores.
+
+Three capability requirements remain outside the difficulty score because they are
+hard constraints rather than evidence that a task needs stronger reasoning:
+
+- `has_tools`: only tool-capable endpoints may be selected;
+- estimated context size: endpoints with insufficient context capacity are excluded;
+- structured-output requirements: endpoints that cannot satisfy the requested format
+  are excluded or ranked behind compatible endpoints.
+
+The optional Judge model has one responsibility: classify the ambiguous boundary range
+(`0.30–0.65`) as `low`, `medium`, or `high`. Clearly simple and clearly complex requests
+use the heuristic directly. A successful Judge result becomes the final complexity tier
+and is recorded with `difficulty_source = "judge"`; timeout, driver failure, or invalid
+output falls back to the heuristic with `difficulty_source = "heuristic"`. Judge calls
+are bounded and dispatched through UniGateway, but Judge does not select providers,
+bypass authorization, change budgets, or produce a quality score.
+
+This keeps the decision path small:
+
+```text
+hard capability constraints
+  -> heuristic triage
+  -> boundary Judge when needed
+  -> one difficulty tier
+  -> existing SmartGate routing strategy
+  -> UniGateway execution
+```
+
 ## Data boundary
 
 The request association already exists in the current pipeline:
@@ -69,11 +113,11 @@ secret or assume that the deleted key can still be joined to display metadata.
 ### Workload signals
 
 - Request count and success/error count.
-- Difficulty tiers from the recorded routing decision.
+- Difficulty tiers from the recorded routing decision, including their source.
 - Input/output/total tokens.
-- Tool request rate.
+- Tool request rate as an observed capability requirement.
 - Session and affinity rates.
-- Long-context rate once a stable token bucket is defined.
+- Context pressure represented by token totals, not as another difficulty score.
 
 ### Reliability signals
 
@@ -96,9 +140,11 @@ fabricated value.
 ### Quality evidence
 
 The profile must not infer quality from HTTP 200, model names, heuristic difficulty, or
-absence of an error. Judge agreement, explicit user feedback, and validator outcomes
-must be separate evidence fields and remain `null`/`unavailable` when no independent
-observation exists.
+absence of an error. The routing Judge is a complexity classifier, not an independent
+quality Judge. Judge complexity decisions may be reported as decision-source telemetry,
+but they must not populate quality metrics. Independent output evaluation, explicit user
+feedback, and validator outcomes must remain separate evidence fields and stay
+`null`/`unavailable` when no independent observation exists.
 
 ## Time windows and confidence
 
@@ -118,39 +164,42 @@ read-only metrics are validated in production.
 
 ## Planned routing integration
 
-When profiles are eventually used by routing, current request features must dominate
-historical behavior. Historical values may only provide a bounded neutral adjustment:
+The read-only Profile API does not affect routing. If historical workload evidence is
+later used, it must remain a weak prior and must not create additional complexity
+scores. The current request's single `difficulty` score remains authoritative; a
+historical profile may only help resolve a medium-tier boundary when confidence is
+sufficient and the adjustment is explicitly bounded.
 
-```text
-effective_difficulty =
-    current_request_difficulty * (1 - profile_weight)
-  + historical_key_difficulty * profile_weight
-```
+The preferred first integration is not to rewrite `difficulty`. It is to expose a
+neutral, versioned hint to the existing SmartGate policy, such as:
 
-The profile weight is zero for cold and low confidence data, limited for medium
-confidence data, and capped for high confidence data. Profile adjustments must not
-override an obvious current high-difficulty request, API key authorization, budget
-checks, or endpoint health.
-
-Only neutral workload hints may cross the control/data-plane boundary, for example:
-
-- historical difficulty distribution;
-- tool-request rate;
-- long-context rate;
-- latency sensitivity;
-- fallback rate;
+- historical `low`/`medium`/`high` distribution;
+- observed tool-request rate as a capability hint;
+- observed token-volume bucket;
 - profile confidence and version.
+
+The hint must have zero influence for `cold_start` and `low_confidence`, a small capped
+influence for `medium_confidence`, and a fixed maximum influence for `high_confidence`.
+It must never override current request capability requirements, an obvious current
+high-difficulty request, API key authorization, budget checks, or endpoint health.
+
+Latency, fallback, error rate, cost, and provider health remain runtime ranking signals;
+they are not complexity dimensions and must not be folded into the historical
+difficulty prior.
 
 ## Implementation sequence
 
 1. Add the read-only profile endpoint using existing `usage_logs.key_id` data.
 2. Add aggregation tests for empty, low-sample, failed, fallback, usage-source, and
    quality-evidence cases.
-3. Add an observation view to the SaaS UI without changing route selection.
-4. Validate metric definitions and confidence behavior with real traffic.
-5. Only then add a bounded profile hint to SmartGate routing strategies.
-6. Add independent Judge quality evidence separately when a real Judge provider is
-   configured.
+3. Keep the complexity contract narrow: one score, three tiers, three hard capability
+   requirements, and an explicit `heuristic`/`judge` source.
+4. Add an observation view to the SaaS UI without changing route selection.
+5. Validate tier stability, Judge agreement, fallback behavior, and confidence with real
+   traffic before using any profile hint.
+6. Only then consider a bounded historical hint for medium-tier decisions.
+7. Add independent Judge quality evidence separately when a real output-evaluation
+   provider is configured.
 
 ## Non-goals
 
@@ -160,3 +209,6 @@ Only neutral workload hints may cross the control/data-plane boundary, for examp
 - No fabricated quality, savings, or baseline metrics.
 - No cost governance change in this phase.
 - No automatic routing change in the read-only phase.
+- No independent profile dimension for reasoning, context, tools, conversation, output,
+  or correction complexity.
+- No use of the routing Judge as a quality score or output-quality evaluator.
