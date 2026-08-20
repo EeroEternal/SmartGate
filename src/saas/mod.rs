@@ -2042,8 +2042,9 @@ async fn get_api_key_profile(
     let total_cost: f64 = rows.iter().map(|row| row.estimated_cost).sum();
     let latencies: Vec<i32> = rows.iter().map(|row| row.latency_ms).collect();
     let ttfts: Vec<i32> = rows.iter().filter_map(|row| row.ttft_ms).collect();
-    let mut difficulty_tiers: BTreeMap<String, i64> = BTreeMap::new();
-    let mut difficulty_sources: BTreeMap<String, i64> = BTreeMap::new();
+    let (difficulty_tiers, difficulty_sources) = profile_difficulty_breakdown(
+        rows.iter().map(|row| row.routing_decision.as_deref()),
+    );
     let mut providers: BTreeMap<String, i64> = BTreeMap::new();
     let mut usage_sources: BTreeMap<String, i64> = BTreeMap::new();
     let mut usage_confidences: BTreeMap<String, i64> = BTreeMap::new();
@@ -2055,11 +2056,6 @@ async fn get_api_key_profile(
     let mut affinity_hits = 0i64;
 
     for row in &rows {
-        let tier = profile_difficulty_tier(row.routing_decision.as_deref())
-            .unwrap_or_else(|| "unknown".to_string());
-        *difficulty_tiers.entry(tier).or_default() += 1;
-        let source = profile_difficulty_source(row.routing_decision.as_deref());
-        *difficulty_sources.entry(source).or_default() += 1;
         *providers.entry(row.provider_type.clone()).or_default() += 1;
         *usage_sources.entry(row.usage_source.clone()).or_default() += 1;
         *usage_confidences
@@ -2206,7 +2202,9 @@ fn profile_difficulty_source(raw: Option<&str>) -> String {
 fn profile_difficulty_tier(raw: Option<&str>) -> Option<String> {
     let value = serde_json::from_str::<Value>(raw?).ok()?;
     if let Some(tier) = profile_json_value(&value, "difficulty_tier").and_then(Value::as_str) {
-        return Some(tier.to_string());
+        if matches!(tier, "low" | "medium" | "high") {
+            return Some(tier.to_string());
+        }
     }
     let difficulty = profile_json_value(&value, "difficulty").and_then(Value::as_f64)?;
     Some(if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
@@ -2217,6 +2215,24 @@ fn profile_difficulty_tier(raw: Option<&str>) -> Option<String> {
         "low"
     }
     .to_string())
+}
+
+fn profile_difficulty_breakdown<'a, I>(
+    raw_values: I,
+) -> (BTreeMap<String, i64>, BTreeMap<String, i64>)
+where
+    I: IntoIterator<Item = Option<&'a str>>,
+{
+    let mut tiers = BTreeMap::new();
+    let mut sources = BTreeMap::new();
+    for raw in raw_values {
+        let tier = profile_difficulty_tier(raw).unwrap_or_else(|| "unknown".to_string());
+        *tiers.entry(tier).or_default() += 1;
+        *sources
+            .entry(profile_difficulty_source(raw))
+            .or_default() += 1;
+    }
+    (tiers, sources)
 }
 
 async fn create_api_key(
@@ -3380,9 +3396,9 @@ fn saas_strategy(raw: &str) -> Result<String, (StatusCode, Json<ApiResponse<()>>
 #[cfg(test)]
 mod tests {
     use super::{
-        calculate_savings, profile_confidence, profile_difficulty_source,
-        profile_difficulty_tier, profile_json_flag, profile_percentile, profile_rate,
-        saas_strategy, validate_verification_code, verification_code_hash,
+        calculate_savings, profile_confidence, profile_difficulty_breakdown,
+        profile_difficulty_source, profile_difficulty_tier, profile_json_flag, profile_percentile,
+        profile_rate, saas_strategy, validate_verification_code, verification_code_hash,
     };
 
     #[test]
@@ -3405,6 +3421,32 @@ mod tests {
             profile_difficulty_source(Some(r#"{"difficulty_source":"unknown"}"#)),
             "heuristic"
         );
+    }
+
+    #[test]
+    fn api_key_profile_difficulty_breakdown_aggregates_sources_and_tiers() {
+        let (tiers, sources) = profile_difficulty_breakdown([
+            Some(r#"{"difficulty_tier":"low","difficulty_source":"heuristic"}"#),
+            Some(r#"{"difficulty_tier":"medium","difficulty_source":"judge"}"#),
+            Some(r#"{"difficulty":0.8,"difficulty_source":"judge"}"#),
+            Some(r#"{"difficulty_tier":"invalid","difficulty_source":"other"}"#),
+            None,
+        ]);
+
+        assert_eq!(tiers.get("low"), Some(&1));
+        assert_eq!(tiers.get("medium"), Some(&1));
+        assert_eq!(tiers.get("high"), Some(&1));
+        assert_eq!(tiers.get("unknown"), Some(&2));
+        assert_eq!(tiers.get("invalid"), None);
+        assert_eq!(sources.get("heuristic"), Some(&3));
+        assert_eq!(sources.get("judge"), Some(&2));
+    }
+
+    #[test]
+    fn api_key_profile_difficulty_breakdown_is_empty_for_no_samples() {
+        let (tiers, sources) = profile_difficulty_breakdown(std::iter::empty());
+        assert!(tiers.is_empty());
+        assert!(sources.is_empty());
     }
 
     #[test]

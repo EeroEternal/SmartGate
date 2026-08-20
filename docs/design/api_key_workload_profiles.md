@@ -45,8 +45,10 @@ The optional Judge model has one responsibility: classify the ambiguous boundary
 (`0.30–0.65`) as `low`, `medium`, or `high`. Clearly simple and clearly complex requests
 use the heuristic directly. A successful Judge result becomes the final complexity tier
 and is recorded with `difficulty_source = "judge"`; timeout, driver failure, or invalid
-output falls back to the heuristic with `difficulty_source = "heuristic"`. Judge calls
-are bounded and dispatched through UniGateway, but Judge does not select providers,
+output falls back to the heuristic with `difficulty_source = "heuristic"`. The read-only
+Profile aggregates this source alongside the tier distribution; absent or unrecognized
+source values are conservatively counted as `heuristic`. Judge calls are bounded and
+dispatched through UniGateway, but Judge does not select providers,
 bypass authorization, change budgets, or produce a quality score.
 
 This keeps the decision path small:
@@ -98,7 +100,7 @@ The response should contain:
 - Average and percentile latency when samples exist.
 - Input, output, and total token totals.
 - Cost totals plus usage and pricing confidence.
-- Difficulty-tier distribution.
+- Difficulty-tier distribution and `difficulty_sources` (`heuristic` versus `judge`). Missing or invalid source metadata is counted as `heuristic`.
 - Tool-request and session/affinity rates.
 - Fallback and provider distributions.
 - Quality evidence fields as unavailable unless independent Judge or explicit feedback
