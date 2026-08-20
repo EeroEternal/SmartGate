@@ -1132,19 +1132,19 @@ export function EvaluationPage() {
         </div>
 
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50/75 text-xs uppercase tracking-wider text-zinc-500">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="border-b border-zinc-200 bg-zinc-50/75 text-[11px] font-semibold text-zinc-500">
               <tr>
-                <th className="py-3 px-4">{t('evaluation.col_model') || 'Model & Provider'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_tier') || 'Tier'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_overall') || 'Capability'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_code') || 'Code'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_math') || 'Math/Reasoning'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_tools') || 'Tools'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_lang') || 'Language'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_context') || 'Max Context'}</th>
-                <th className="py-3 px-4">{t('evaluation.col_price') || 'Price ($/1M)'}</th>
-                <th className="py-3 px-4 text-right">{t('common.actions') || 'Actions'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_model') || 'Model / Provider'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_tier') || 'Tier'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_overall') || 'Overall'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_code') || 'Code'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_math') || 'Reasoning'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_tools') || 'Tools'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_lang') || 'Language'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_context') || 'Context'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_price') || 'Price (In/Out)'}</th>
+                <th className="py-2.5 px-3 text-right">{t('common.actions') || 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -1166,49 +1166,49 @@ export function EvaluationPage() {
                   }
                   return (
                     <tr key={ep.id} className="hover:bg-zinc-50/50 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-zinc-950">{ep.model}</div>
-                        <div className="text-xs text-zinc-400">{ep.provider_name}</div>
+                      <td className="py-2.5 px-3">
+                        <div className="font-semibold text-zinc-950 whitespace-nowrap">{ep.model}</div>
+                        <div className="text-[11px] text-zinc-400 whitespace-nowrap">{ep.provider_name}</div>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         {ep.preferred_for_hard_requests ? (
-                          <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                          <span className="inline-flex items-center rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-semibold text-purple-700 whitespace-nowrap">
                             {t('radar.pro_tier')}
                           </span>
                         ) : (
-                          <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          <span className="inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs font-semibold text-emerald-700 whitespace-nowrap">
                             {t('radar.flash_tier')}
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono font-bold text-zinc-900">{(ep.capability_score ?? 0.5).toFixed(2)}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono font-semibold text-purple-700">{dna.code_logic}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono font-semibold text-amber-600">{dna.reasoning_math}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono text-zinc-700">{dna.agent_tools}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono text-zinc-700">{dna.multilingual_nlp}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="font-mono text-zinc-500">{ep.context_length ? `${(ep.context_length / 1000).toFixed(0)}k` : '128k'}</span>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3">
                         <span className="text-xs font-mono text-zinc-600">
                           ${ep.input_price_per_1m || 0.14} / ${ep.output_price_per_1m || 0.28}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-2.5 px-3 text-right">
                         <button
                           type="button"
                           onClick={() => setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })}
-                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors whitespace-nowrap"
                         >
                           <Sparkles className="h-3.5 w-3.5" /> {t('evaluation.run_probe') || 'Run Probe'}
                         </button>
