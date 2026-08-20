@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, ArrowUpRight, KeyRound, Plus, Route, Sparkles } from 'lucide-react'
+import { Activity, ArrowUpRight, HelpCircle, KeyRound, Plus, Route, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
 import { SaasLayout } from './SaasPages'
@@ -65,9 +65,11 @@ export default function SaasDashboard() {
         <div className="mt-6 grid xl:grid-cols-2 gap-6">
           <section className="bg-white border border-zinc-200 rounded-xl p-5">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex items-center gap-2">
                 <h2 className="font-semibold">{t('services.title') || 'Model services'}</h2>
-                <p className="mt-1 text-xs text-zinc-500">{t('services.private_desc') || 'Your private endpoints and routing.'}</p>
+                <span title={t('services.private_desc') || 'Your private endpoints and routing.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </span>
               </div>
               <Link to="/app/services" className="text-xs text-zinc-500 hover:text-zinc-950">
                 {t('common.view_all') || 'View all'} <ArrowUpRight className="inline w-3 h-3" />
@@ -100,11 +102,15 @@ export default function SaasDashboard() {
             )}
           </section>
           <section className="sg-dark-surface text-white rounded-xl p-5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              <h2 className="font-semibold">{t('usage.title') || 'Usage'}</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <h2 className="font-semibold">{t('usage.title') || 'Usage'}</h2>
+                <span title={t('usage.tracking_desc') || 'Your gateway is tracking spend and routing signals so you can make better model choices.'} className="cursor-help text-zinc-400 hover:text-zinc-200 transition-colors">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </span>
+              </div>
             </div>
-            <p className="mt-2 text-sm text-zinc-400">{t('usage.tracking_desc') || 'Your gateway is tracking spend and routing signals so you can make better model choices.'}</p>
             <div className="mt-7 space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">{t('usage.budget_limit') || 'Budget limit'}</span>

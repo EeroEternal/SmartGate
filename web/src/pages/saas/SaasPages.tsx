@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -124,17 +124,17 @@ experimental_bearer_token = "<project-api-key>"`
 
   return (
     <Page>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium text-primary">
-            <FileCode2 className="h-4 w-4" /> {t('codex.integration_tag') || 'Codex integration'}
-          </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t('codex.title') || 'Use Codex with SmartGate'}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            {t('codex.subtitle') || 'Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.'}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+            <FileCode2 className="h-5 w-5 text-primary" />
+            {t('codex.title') || 'Use Codex with SmartGate'}
+          </h1>
+          <span title={t('codex.subtitle') || 'Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <HelpCircle className="h-4 w-4" />
+          </span>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
           {t('codex.supported_badge') || 'Codex supported'}
         </div>
       </div>
@@ -794,17 +794,15 @@ export function EvaluationPage() {
 
   return (
     <Page>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium text-purple-700">
-            <Sparkles className="h-4 w-4" /> {t('evaluation.title') || 'Model Evaluation'}
-          </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-            {t('evaluation.title') || 'Model Evaluation & DNA Benchmarking'}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-purple-600" />
+            {t('evaluation.title') || 'Model Evaluation'}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
-            {t('evaluation.subtitle') || '5D multi-dimensional capability evaluation across Coding, Reasoning, Agent Tool Calling, Multilingual NLP, and Long Context.'}
-          </p>
+          <span title={t('evaluation.subtitle') || '5D multi-dimensional capability evaluation across Coding, Reasoning, Agent Tool Calling, Multilingual NLP, and Long Context.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <HelpCircle className="h-4 w-4" />
+          </span>
         </div>
       </div>
 
@@ -838,16 +836,14 @@ export function EvaluationPage() {
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-zinc-950">{t('evaluation.radar_title') || t('radar.title')}</h2>
-              <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
-                {t('radar.badge')}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {t('evaluation.radar_desc') || t('radar.subtitle')}
-            </p>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-zinc-950">{t('evaluation.radar_title') || t('radar.title')}</h2>
+            <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
+              {t('radar.badge')}
+            </span>
+            <span title={t('evaluation.radar_desc') || t('radar.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-3.5 w-3.5" />
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1123,11 +1119,11 @@ export function EvaluationPage() {
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="font-semibold text-zinc-950">{t('evaluation.matrix_title') || 'Multi-Dimensional Model Matrix'}</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              {t('evaluation.matrix_subtitle') || 'Full benchmark breakdown and cost-efficiency comparison.'}
-            </p>
+            <span title={t('evaluation.matrix_subtitle') || 'Full benchmark breakdown and cost-efficiency comparison.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-3.5 w-3.5" />
+            </span>
           </div>
         </div>
 
@@ -2241,10 +2237,12 @@ export function UsagePage() {
   return (
     <Page>
       {error && <ErrorMessage text={error} />}
-      <div className="mb-5 flex items-end justify-between gap-4">
-        <div>
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold tracking-tight">{t('usage.title') || 'Usage'}</h1>
-          <p className="mt-1 text-sm text-zinc-500">{t('usage.subtitle') || 'Automatic statistics from your last 30 days of model calls.'}</p>
+          <span title={t('usage.subtitle') || 'Automatic statistics from your last 30 days of model calls.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <HelpCircle className="h-4 w-4" />
+          </span>
         </div>
         <span className="text-xs text-zinc-400">{t('usage.provider_reported_note') || 'Provider-reported usage when available'}</span>
       </div>
@@ -2256,9 +2254,11 @@ export function UsagePage() {
       </div>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-        <div>
+        <div className="flex items-center gap-2">
           <h2 className="font-semibold">{t('usage.prompt_cache') || 'Prompt cache'}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{t('usage.prompt_cache_subtitle') || 'Provider-reported input tokens served from cache. This is separate from context trimming.'}</p>
+          <span title={t('usage.prompt_cache_subtitle') || 'Provider-reported input tokens served from cache. This is separate from context trimming.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <HelpCircle className="h-3.5 w-3.5" />
+          </span>
         </div>
         <div className="mt-5 grid grid-cols-2 items-stretch gap-4 md:grid-cols-3 xl:grid-cols-5">
           <Stat label={t('usage.cache_hit_tokens') || 'Cache hit tokens'} value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} />
@@ -2273,8 +2273,12 @@ export function UsagePage() {
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-        <h2 className="font-semibold">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
-        <p className="mt-1 text-sm text-zinc-500">{t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'}</p>
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
+          <span title={t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <HelpCircle className="h-3.5 w-3.5" />
+          </span>
+        </div>
         {providers.length ? (
           <div className="mt-5 divide-y divide-zinc-100">
             {providers.map((item) => {
@@ -2324,10 +2328,12 @@ export function UsagePage() {
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
             <h2 className="font-semibold">{t('usage.context_savings') || 'Context savings'}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{t('usage.context_savings_sub') || 'Signals produced by context reduction. This is separate from provider billing.'}</p>
+            <span title={t('usage.context_savings_sub') || 'Signals produced by context reduction. This is separate from provider billing.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-3.5 w-3.5" />
+            </span>
           </div>
           <button
             type="button"
@@ -2378,10 +2384,12 @@ export function UsagePage() {
 
       {data?.coverage && (
         <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
               <h2 className="font-semibold">{t('usage.data_coverage') || 'Usage data coverage'}</h2>
-              <p className="mt-1 text-sm text-zinc-500">{t('usage.data_coverage_sub') || 'Shows which requests use provider-reported tokens and which rely on estimates.'}</p>
+              <span title={t('usage.data_coverage_sub') || 'Shows which requests use provider-reported tokens and which rely on estimates.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+                <HelpCircle className="h-3.5 w-3.5" />
+              </span>
             </div>
             <span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               {t('usage.provider_reported_badge', { pct: coveragePercent(data.coverage.usage) }) || `${coveragePercent(data.coverage.usage)} provider-reported`}
@@ -2549,11 +2557,11 @@ export function AnalyticsPage() {
     <Page>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{t('analytics.title') || 'Routing Analytics & Complexity Insights'}</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              {t('analytics.subtitle') || 'Inspect how incoming queries match complexity signals and route across Pro and Flash models.'}
-            </p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">{t('analytics.title') || 'Routing Analytics'}</h1>
+            <span title={t('analytics.subtitle') || 'Inspect how incoming queries match complexity signals and route across Pro and Flash models.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-4 w-4" />
+            </span>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
             {(['24h', '7d', '30d', 'all'] as const).map((r) => (
@@ -3030,14 +3038,12 @@ export function QualityPage() {
     <Page>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
-              <h1 className="text-xl font-semibold tracking-tight">{t('quality.title') || 'Quality Assurance & Evaluation Dashboard'}</h1>
-            </div>
-            <p className="mt-1 text-sm text-zinc-500">
-              {t('quality.subtitle') || 'Verify that cost-optimized model routing preserves high output quality against the All-Pro baseline.'}
-            </p>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            <h1 className="text-xl font-semibold tracking-tight">{t('quality.title') || 'Quality Assurance'}</h1>
+            <span title={t('quality.subtitle') || 'Verify that cost-optimized model routing preserves high output quality against the All-Pro baseline.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-4 w-4" />
+            </span>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
             {(['24h', '7d', '30d', 'all'] as const).map((r) => (
