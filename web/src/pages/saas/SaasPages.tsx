@@ -333,6 +333,7 @@ function callExample(api: CallApi, model: string) {
 }
 
 export function ServiceDetailsPage() {
+  const { t } = useI18n()
   const { id } = useParams()
   const [service, setService] = useState<ServiceDetails | null>(null)
   const [catalog, setCatalog] = useState<CatalogOffering[]>([])
@@ -340,6 +341,7 @@ export function ServiceDetailsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState<ServiceEndpoint | null>(null)
+  const [probingEndpoint, setProbingEndpoint] = useState<ServiceEndpoint | null>(null)
   const [testingEndpoint, setTestingEndpoint] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, 'passed' | 'failed'>>({})
   const [testToast, setTestToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -429,12 +431,13 @@ export function ServiceDetailsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Add provider</button></div>
       <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"><div className="min-w-0"><label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">Model service</label><div className="mt-2 flex items-center gap-2"><span className="truncate text-lg font-medium text-zinc-950">{service.name}</span><button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Copy model service name"><Copy className="h-4 w-4" /></button>{copied && <span className="text-xs text-emerald-600">Copied</span>}</div></div><div className="text-sm text-zinc-600"><div className="flex items-center gap-1"><span className="font-medium text-zinc-950">Routing</span><button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit routing strategy"><Pencil className="h-4 w-4" /></button></div><div className="mt-1 text-zinc-500">{routing?.label}</div>{service.strategy === 'capability_aware' && service.judge_enabled && <div className="mt-1 text-xs text-emerald-600 font-medium">Judge: {service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled'}</div>}</div><div className="text-sm text-zinc-600"><span className="font-medium text-zinc-950">Supported APIs</span><div className="mt-1 space-y-1 text-zinc-500"><div>OpenAI Chat</div><div>OpenAI Responses</div><div>Anthropic Messages</div></div></div></div></section>
       <CallExamplePanel api={callApi} model={service.name} onChange={setCallApi} />
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">Providers</h2><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="font-medium text-zinc-950">{endpoint.provider_name}</div><div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-zinc-400" title="Capability-first routing sends hard requests to the highest capability provider in this service">Capability {(endpoint.capability_score ?? 0.5).toFixed(2)}</span>{endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500" title={`Configured ${endpoint.configured_capability_score.toFixed(2)} did not separate this model from the others in the service, so the model family profile is used for routing.`}>auto</span>}{endpoint.preferred_for_hard_requests && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700" title="Where a high complexity request goes right now. Reflects capability, health, cooldown and tool support, so it moves to another provider when this one is unavailable.">Routes hard requests</span>}{endpoint.enabled === false && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">Disabled</span>}{endpoint.health_status && endpoint.health_status !== 'healthy' && (endpoint.health_observed ? <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700" title={`${endpoint.total_errors ?? 0} errors out of ${endpoint.total_requests ?? 0} requests`}>{endpoint.cooling_down ? 'Cooling down' : endpoint.health_status}</span> : <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700" title="Recorded before the last gateway restart. It clears automatically on the next successful request.">Last known {endpoint.health_status}</span>)}</div></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit provider"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title="Test connection"><Zap className="h-4 w-4" /></button><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="h-4 w-4" /></button></div></div></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add provider</button></div>}</div>
+      <div className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">Providers</h2><span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{service.status === 'draft' ? 'Setup needed' : 'Ready'}</span></div>{service.endpoints.length ? <div className="mt-5 space-y-3">{service.endpoints.map((endpoint) => <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="font-medium text-zinc-950">{endpoint.provider_name}</div><div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-zinc-400" title="Capability-first routing sends hard requests to the highest capability provider in this service">Capability {(endpoint.capability_score ?? 0.5).toFixed(2)}</span>{endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500" title={`Configured ${endpoint.configured_capability_score.toFixed(2)} did not separate this model from the others in the service, so the model family profile is used for routing.`}>auto</span>}{endpoint.preferred_for_hard_requests && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700" title="Where a high complexity request goes right now. Reflects capability, health, cooldown and tool support, so it moves to another provider when this one is unavailable.">Routes hard requests</span>}{endpoint.enabled === false && <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">Disabled</span>}{endpoint.health_status && endpoint.health_status !== 'healthy' && (endpoint.health_observed ? <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700" title={`${endpoint.total_errors ?? 0} errors out of ${endpoint.total_requests ?? 0} requests`}>{endpoint.cooling_down ? 'Cooling down' : endpoint.health_status}</span> : <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700" title="Recorded before the last gateway restart. It clears automatically on the next successful request.">Last known {endpoint.health_status}</span>)}</div></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('probe.probe_button') || 'Probe DNA & Capabilities'}><Sparkles className="h-4 w-4" /></button><button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit provider"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title="Test connection"><Zap className="h-4 w-4" /></button><button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" title="Remove provider"><Trash2 className="w-4 h-4" /></button></div></div></div>)}</div> : <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center"><p className="text-sm text-zinc-500">No providers connected yet.</p><button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">Add provider</button></div>}</div>
       {service.endpoints.length > 0 && <ModelDnaSection service={service} />}
     </div>}
     {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
     {routingOpen && service && <EditRoutingModal service={service} onClose={() => setRoutingOpen(false)} onSaved={() => { setRoutingOpen(false); load() }} />}
     {editingEndpoint && <EditProviderModal endpoint={editingEndpoint} serviceId={id || ''} onClose={() => setEditingEndpoint(null)} onSaved={() => { setEditingEndpoint(null); load() }} />}
+    {probingEndpoint && <ModelProbeModal endpoint={probingEndpoint} serviceId={id || ''} onClose={() => setProbingEndpoint(null)} onSaved={() => { setProbingEndpoint(null); load() }} />}
   </Page>
 }
 
@@ -873,6 +876,200 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Edit provider</h2></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Field label="Provider name" value={providerName} onChange={setProviderName} placeholder="DeepSeek" /><label className="block text-sm font-medium text-zinc-700">Provider ID<input readOnly value={endpoint.provider_id} className="mt-2 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-zinc-500 outline-none" /></label></div><div className="grid gap-5 sm:grid-cols-2"><Field label="Model" value={model} onChange={(val) => { setModel(val); setTestStatus('idle') }} placeholder="deepseek-chat" /><Select label="Protocol" options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => { setProtocol(String(option.id)); setTestStatus('idle') }} /></div><Field label="Provider API base URL" value={baseUrl} onChange={(val) => { setBaseUrl(val); setTestStatus('idle') }} placeholder="https://api.example.com/v1" /><div><div className="flex items-center justify-between"><label className="block text-sm font-medium">New Provider API key (optional)</label><button type="button" onClick={runTest} disabled={testStatus === 'testing' || !baseUrl.trim() || !model.trim()} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed" title="Verify if API key and upstream endpoint are reachable"><Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} /><span>{testStatus === 'testing' ? 'Testing…' : 'Test connection'}</span></button></div><div className="relative mt-2"><Field required={false} label="" value={apiKey} onChange={(val) => { setApiKey(val); setTestStatus('idle') }} placeholder="Leave blank to keep the current key" type="password" /></div>{testStatus === 'passed' && <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5 shrink-0" /><span>{testMsg || 'Connection verified successfully'}</span></div>}{testStatus === 'failed' && <div className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /><span className="break-all">{testMsg || 'Connection failed'}</span></div>}</div><button type="button" onClick={() => setAdvanced((value) => !value)} className="text-sm text-zinc-700 hover:text-zinc-950">{advanced ? 'Hide advanced settings' : 'Price and capability settings'}</button>{advanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3 text-zinc-900"><Field required={false} label="Input $/1M" value={inputPrice} onChange={setInputPrice} placeholder="0.14" /><Field required={false} label="Output $/1M" value={outputPrice} onChange={setOutputPrice} placeholder="0.28" /><Field required={false} label="Capability 0–1" value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" /><Field required={false} label="Context length" value={contextLength} onChange={setContextLength} placeholder="128000" /></div>}</div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button></div></form></div>
+}
+
+function ModelProbeModal({
+  endpoint,
+  serviceId,
+  onClose,
+  onSaved,
+}: {
+  endpoint: ServiceEndpoint
+  serviceId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useI18n()
+  const [probing, setProbing] = useState(false)
+  const [probeResult, setProbeResult] = useState<{
+    endpoint_id: string
+    model: string
+    probed_capability_score: number
+    supports_tools: boolean
+    dna: ModelDna
+    probe_details: Array<{
+      dimension: string
+      name: string
+      passed: boolean
+      latency_ms: number
+      score: number
+      summary: string
+    }>
+  } | null>(null)
+  const [error, setError] = useState('')
+
+  async function runProbe() {
+    setProbing(true)
+    setError('')
+    try {
+      const res = await saasFetch<{
+        endpoint_id: string
+        model: string
+        probed_capability_score: number
+        supports_tools: boolean
+        dna: ModelDna
+        probe_details: Array<{
+          dimension: string
+          name: string
+          passed: boolean
+          latency_ms: number
+          score: number
+          summary: string
+        }>
+      }>(`/api/saas/model-services/${serviceId}/endpoints/${endpoint.id}/probe`, {
+        method: 'POST',
+      })
+      if (res.success && res.data) {
+        setProbeResult(res.data)
+      } else {
+        setError(res.message || 'Capability probe failed')
+      }
+    } catch (e: any) {
+      setError(e.message || 'Probe request failed')
+    } finally {
+      setProbing(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-purple-50 p-2 text-purple-600 border border-purple-100">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-950">{t('probe.probe_modal_title') || '5D Model DNA & Capability Probe'}</h2>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                {endpoint.provider_name} • {endpoint.model}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-xs text-zinc-600 leading-relaxed bg-zinc-50 rounded-lg p-3 border border-zinc-200/70">
+          {t('probe.probe_modal_subtitle') ||
+            'Sends live targeted benchmark tests to evaluate code synthesis, multi-step math logic, tool calling JSON adherence, and constraint obedience to compute an empirical capability rating.'}
+        </p>
+
+        {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
+
+        {!probeResult ? (
+          <div className="mt-6 text-center py-8 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
+            <div className="inline-flex rounded-full bg-purple-100 p-3 text-purple-600 mb-3">
+              <Sparkles className={`h-6 w-6 ${probing ? 'animate-spin' : ''}`} />
+            </div>
+            <h3 className="text-sm font-medium text-zinc-900">
+              {probing ? (t('probe.probe_running') || 'Probing 5D Capabilities…') : 'Ready to Probe Capabilities'}
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500 max-w-sm mx-auto">
+              {probing
+                ? 'Dispatching 5 live benchmark probes to upstream endpoint. This typically takes 5–15 seconds…'
+                : 'Click below to benchmark and automatically calibrate this model for capability-aware intelligent routing.'}
+            </p>
+            <button
+              type="button"
+              onClick={runProbe}
+              disabled={probing}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+              {probing ? (t('probe.probe_running') || 'Probing…') : (t('probe.probe_run') || 'Run 5D Benchmark Probe')}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-5 space-y-4">
+            <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold text-emerald-950">
+                    {t('probe.probe_completed') || 'Capability Probing Completed & Calibrated'}
+                  </div>
+                  <div className="text-xs text-emerald-700 mt-0.5">
+                    Probed Score: <span className="font-mono font-bold">{probeResult.probed_capability_score.toFixed(2)}</span> • Tool Schema:{' '}
+                    {probeResult.supports_tools ? 'Supported ✅' : 'Standard Text Only'}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-bold font-mono text-emerald-700">
+                  {Math.round(probeResult.probed_capability_score * 100)}
+                </span>
+                <span className="text-xs text-emerald-600">/100</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
+                5D Benchmark Breakdown
+              </h4>
+              <div className="space-y-2.5">
+                {probeResult.probe_details.map((detail, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-lg bg-zinc-50 p-2.5 border border-zinc-100 text-xs">
+                    <div className="min-w-0 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block h-2 w-2 rounded-full ${detail.passed ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span className="font-medium text-zinc-900">{detail.name}</span>
+                        <span className="text-zinc-400 font-mono text-[10px]">{detail.latency_ms}ms</span>
+                      </div>
+                      <div className="mt-0.5 text-zinc-500 text-[11px] truncate">{detail.summary}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-mono font-bold text-zinc-800">{detail.score}</span>
+                      <span className="text-zinc-400 text-[10px]">/100</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {probeResult.dna.strengths.map((str, sIdx) => (
+                <span
+                  key={sIdx}
+                  className="inline-flex items-center rounded-md bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 border border-purple-200"
+                >
+                  ✨ {str}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => {
+                  onSaved()
+                }}
+                className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
+              >
+                {t('probe.probe_apply') || 'Done & Calibrated'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function AddModelModal({ catalog, providers, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
