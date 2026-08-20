@@ -1542,7 +1542,7 @@ function ModelProbeModal({
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-zinc-950">{t('probe.probe_modal_title') || '5D Model DNA & Capability Probe'}</h2>
+              <h2 className="text-lg font-semibold text-zinc-950">{t('services.probe_modal_title') || '5D Model DNA & Capability Probe'}</h2>
               <p className="mt-0.5 text-xs text-zinc-500">
                 {endpoint.provider_name} • {endpoint.model}
               </p>
@@ -1559,7 +1559,7 @@ function ModelProbeModal({
         </div>
 
         <p className="mt-4 text-xs text-zinc-600 leading-relaxed bg-zinc-50 rounded-lg p-3 border border-zinc-200/70">
-          {t('probe.probe_modal_subtitle') ||
+          {t('services.probe_modal_subtitle') ||
             'Sends live targeted benchmark tests to evaluate code synthesis, multi-step math logic, tool calling JSON adherence, and constraint obedience to compute an empirical capability rating.'}
         </p>
 
@@ -1571,12 +1571,12 @@ function ModelProbeModal({
               <Sparkles className={`h-6 w-6 ${probing ? 'animate-spin' : ''}`} />
             </div>
             <h3 className="text-sm font-medium text-zinc-900">
-              {probing ? (t('probe.probe_running') || 'Probing 5D Capabilities…') : 'Ready to Probe Capabilities'}
+              {probing ? (t('services.probe_running') || 'Probing 5D Capabilities…') : (t('services.probe_ready_title') || 'Ready to Probe Capabilities')}
             </h3>
             <p className="mt-1 text-xs text-zinc-500 max-w-sm mx-auto">
               {probing
-                ? 'Dispatching 5 live benchmark probes to upstream endpoint. This typically takes 5–15 seconds…'
-                : 'Click below to benchmark and automatically calibrate this model for capability-aware intelligent routing.'}
+                ? (t('services.probe_running_desc') || 'Dispatching 5 live benchmark probes to upstream endpoint. This typically takes 5–15 seconds…')
+                : (t('services.probe_ready_desc') || 'Click below to benchmark and automatically calibrate this model for capability-aware intelligent routing.')}
             </p>
             <button
               type="button"
@@ -1585,7 +1585,7 @@ function ModelProbeModal({
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
             >
               <Sparkles className="h-4 w-4" />
-              {probing ? (t('probe.probe_running') || 'Probing…') : (t('probe.probe_run') || 'Run 5D Benchmark Probe')}
+              {probing ? (t('services.probe_running') || 'Probing…') : (t('services.probe_run') || 'Run 5D Benchmark Probe')}
             </button>
           </div>
         ) : (
@@ -1595,7 +1595,7 @@ function ModelProbeModal({
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                 <div>
                   <div className="text-sm font-semibold text-emerald-950">
-                    {t('probe.probe_completed') || 'Capability Probing Completed & Calibrated'}
+                    {t('services.probe_completed') || 'Capability Probing Completed & Calibrated'}
                   </div>
                   <div className="text-xs text-emerald-700 mt-0.5">
                     Probed Score: <span className="font-mono font-bold">{probeResult.probed_capability_score.toFixed(2)}</span> • Tool Schema:{' '}
@@ -1654,7 +1654,7 @@ function ModelProbeModal({
                 }}
                 className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
               >
-                {t('probe.probe_apply') || 'Done & Calibrated'}
+                {t('services.probe_apply') || 'Done & Calibrated'}
               </button>
             </div>
           </div>
