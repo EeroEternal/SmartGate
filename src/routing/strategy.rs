@@ -161,8 +161,15 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
                 )
             } else {
                 // Easy tasks: any qualified endpoint answers well, so spend less.
-                let capability_bonus = (capability - req) * 100.0;
-                Some(tier * CAPABILITY_TIER_SCALE + normalized_cost + capability_bonus)
+                // Cost is the primary differentiator (cheaper = higher score).
+                let cost_score = if input.profile.price.is_priced() {
+                    (1.0 / (base_cost + 1e-12)).min(CAPABILITY_TIER_SCALE - 1_000_000.0)
+                } else {
+                    UNPRICED_SCORE
+                };
+                // Minor tie-breaker on capability if prices are identical
+                let capability_tiebreaker = capability.clamp(0.0, 1.0) * 10.0;
+                Some(tier * CAPABILITY_TIER_SCALE + cost_score + capability_tiebreaker)
             }
         }
         // round_robin / random / fallback: data plane owns ordering
@@ -338,5 +345,40 @@ mod tests {
         .unwrap();
         // Flash wins on simple task because both meet capability threshold but flash is much cheaper
         assert!(s_flash_simple > s_pro_simple);
+
+        // 3. Ultra-short simple task (tokens < 50, where cost is microscopic)
+        let s_flash_short = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: flash,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 20,
+                output_tokens: 30,
+                difficulty: 0.10,
+                max_pool_capability: 0.95,
+            },
+        )
+        .unwrap();
+        let s_pro_short = score(
+            "capability_aware",
+            ScoreInput {
+                member: &m,
+                profile: pro,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 20,
+                output_tokens: 30,
+                difficulty: 0.10,
+                max_pool_capability: 0.95,
+            },
+        )
+        .unwrap();
+        assert!(s_flash_short > s_pro_short);
     }
 }
