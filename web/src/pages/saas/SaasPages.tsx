@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -10,6 +10,20 @@ import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 
 type Service = { id: string; name: string; model: string; provider_type: string; provider_types?: string[]; endpoint_count?: number; strategy: string; health_status: string }
 type Key = { id: string; name: string; prefix: string; enabled: boolean; daily_spend_limit?: number; created_at: string; last_used_at?: string; model_services?: { id: string; name: string }[] }
+type ApiKeyProfile = {
+  range: string
+  window_start: string | null
+  last_observed_at: string | null
+  sample_count: number
+  confidence: string
+  requests: { total: number; successful: number; failed: number; success_rate: number | null }
+  latency_ms: { average: number | null; p50: number | null; p95: number | null; ttft_average: number | null; ttft_p95: number | null }
+  tokens: { prompt: number; completion: number; total: number; average_per_request: number | null }
+  cost: { total: number; average_per_request: number | null; usage_sources: Record<string, number>; usage_confidences: Record<string, number>; pricing_sources: Record<string, number> }
+  workload: { difficulty_tiers: Record<string, number>; tool_request_rate: number | null; fallback_rate: number | null; session_rate: number | null; affinity_applied_rate: number | null; affinity_hit_rate: number | null }
+  providers: Record<string, number>
+  quality_evidence: { status: string; judge_evaluated_requests: number; judge_agreement_rate: number | null; explicit_feedback_count: number; confidence: string }
+}
 
 export function SaasLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n()
@@ -1881,6 +1895,7 @@ export function KeysPage() {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<Key | null>(null)
+  const [profileKey, setProfileKey] = useState<Key | null>(null)
   const load = () => {
     Promise.all([
       saasFetch<Key[]>('/api/saas/api-keys'),
@@ -2028,7 +2043,15 @@ export function KeysPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end gap-3 border-t border-zinc-100 pt-4 text-xs">
+                <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-100 pt-4 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setProfileKey(key)}
+                    className="inline-flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors"
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    {t('keys.workload_profile') || 'Workload profile'}
+                  </button>
                   {key.enabled && (
                     <button
                       type="button"
@@ -2079,8 +2102,79 @@ export function KeysPage() {
           onUpdate={update}
         />
       )}
+      {profileKey && <ApiKeyProfileModal keyData={profileKey} onClose={() => setProfileKey(null)} />}
     </Page>
   )
+}
+
+function profilePercent(value: number | null | undefined) {
+  return value == null ? 'N/A' : `${(value * 100).toFixed(1)}%`
+}
+
+function profileNumber(value: number | null | undefined, suffix = '') {
+  return value == null ? 'N/A' : `${value.toLocaleString()}${suffix}`
+}
+
+function ProfileMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2"><div className="text-[10px] uppercase tracking-wide text-zinc-400">{label}</div><div className="mt-1 text-sm font-semibold text-zinc-900">{value}</div></div>
+}
+
+function ProfileBreakdown({ title, values }: { title: string; values: Record<string, number> }) {
+  const entries = Object.entries(values)
+  return <div><h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{title}</h3>{entries.length ? <div className="mt-2 space-y-1.5">{entries.map(([name, count]) => <div key={name} className="flex items-center justify-between gap-3 text-xs"><span className="truncate text-zinc-600">{name}</span><span className="font-mono text-zinc-900">{count.toLocaleString()}</span></div>)}</div> : <div className="mt-2 text-xs text-zinc-400">N/A</div>}</div>
+}
+
+function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () => void }) {
+  const { t } = useI18n()
+  const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('7d')
+  const [profile, setProfile] = useState<ApiKeyProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    saasFetch<ApiKeyProfile>(`/api/saas/api-keys/${keyData.id}/profile?range=${range}`)
+      .then((result) => setProfile(result.data || null))
+      .catch((cause: unknown) => setError(errorText(cause)))
+      .finally(() => setLoading(false))
+  }, [keyData.id, range])
+
+  const rate = (value: number | null | undefined) => profilePercent(value)
+  const latency = (value: number | null | undefined) => profileNumber(value, ' ms')
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="flex items-start justify-between gap-4">
+        <div><h2 className="text-lg font-semibold text-zinc-950">{t('keys.profile_title') || 'API key workload profile'}</h2><p className="mt-1 text-sm font-medium text-zinc-600">{keyData.name}</p><p className="mt-1 text-sm text-zinc-500">{t('keys.profile_subtitle') || 'Observed request statistics. This does not change routing.'}</p></div>
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close') || 'Close'}><X className="h-5 w-5" /></button>
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+        <div className="text-xs text-zinc-500">{t('keys.profile_window') || 'Time window'}</div>
+        <Select size="sm" options={[{ id: '24h', name: t('analytics.last_24h') || 'Last 24h' }, { id: '7d', name: t('analytics.last_7d') || 'Last 7 days' }, { id: '30d', name: t('analytics.last_30d') || 'Last 30 days' }, { id: 'all', name: t('analytics.all_time') || 'All time' }]} selected={{ id: range, name: range === '24h' ? (t('analytics.last_24h') || 'Last 24h') : range === '7d' ? (t('analytics.last_7d') || 'Last 7 days') : range === '30d' ? (t('analytics.last_30d') || 'Last 30 days') : (t('analytics.all_time') || 'All time') }} onChange={(option) => setRange(String(option.id) as typeof range)} className="w-40" />
+      </div>
+      {loading && <div className="py-12 text-center text-sm text-zinc-500">{t('keys.profile_loading') || 'Loading workload profile…'}</div>}
+      {error && <div className="mt-5"><ErrorMessage text={error} /></div>}
+      {!loading && !error && profile && <div className="mt-5 space-y-5">
+        <div className="grid gap-3 sm:grid-cols-4">
+          <ProfileMetric label={t('keys.profile_samples') || 'Samples'} value={profile.sample_count.toLocaleString()} />
+          <ProfileMetric label={t('keys.profile_confidence') || 'Confidence'} value={profile.confidence.replace('_', ' ')} />
+          <ProfileMetric label={t('keys.profile_success_rate') || 'Success rate'} value={rate(profile.requests.success_rate)} />
+          <ProfileMetric label={t('keys.profile_last_observed') || 'Last observed'} value={profile.last_observed_at || 'N/A'} />
+        </div>
+        <div className="grid gap-5 md:grid-cols-2">
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_requests') || 'Requests'}</h3><div className="mt-3 grid grid-cols-3 gap-2"><ProfileMetric label={t('keys.profile_total') || 'Total'} value={profile.requests.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_successful') || 'Successful'} value={profile.requests.successful.toLocaleString()} /><ProfileMetric label={t('keys.profile_failed') || 'Failed'} value={profile.requests.failed.toLocaleString()} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_latency') || 'Latency'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label="P50" value={latency(profile.latency_ms.p50)} /><ProfileMetric label="P95" value={latency(profile.latency_ms.p95)} /><ProfileMetric label="TTFT P95" value={latency(profile.latency_ms.ttft_p95)} /><ProfileMetric label={t('keys.profile_average') || 'Average'} value={latency(profile.latency_ms.average)} /></div></section>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2">
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_tokens_cost') || 'Tokens and cost'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_total_tokens') || 'Total tokens'} value={profile.tokens.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_avg_tokens') || 'Average tokens'} value={profileNumber(profile.tokens.average_per_request)} /><ProfileMetric label={t('keys.profile_total_cost') || 'Total cost'} value={`$${profile.cost.total.toFixed(4)}`} /><ProfileMetric label={t('keys.profile_avg_cost') || 'Average cost'} value={profile.cost.average_per_request == null ? 'N/A' : `$${profile.cost.average_per_request.toFixed(4)}`} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_behavior') || 'Workload behavior'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_tools') || 'Tool requests'} value={rate(profile.workload.tool_request_rate)} /><ProfileMetric label={t('keys.profile_fallbacks') || 'Fallbacks'} value={rate(profile.workload.fallback_rate)} /><ProfileMetric label={t('keys.profile_sessions') || 'Sessions'} value={rate(profile.workload.session_rate)} /><ProfileMetric label={t('keys.profile_affinity') || 'Affinity hits'} value={rate(profile.workload.affinity_hit_rate)} /></div></section>
+        </div>
+        <div className="grid gap-5 md:grid-cols-3"><ProfileBreakdown title={t('keys.profile_difficulty') || 'Difficulty tiers'} values={profile.workload.difficulty_tiers} /><ProfileBreakdown title={t('keys.profile_providers') || 'Providers'} values={profile.providers} /><ProfileBreakdown title={t('keys.profile_usage_sources') || 'Usage sources'} values={profile.cost.usage_sources} /></div>
+        <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">{t('keys.profile_quality_unavailable') || 'Independent quality evidence is not available yet. These workload statistics do not represent a quality score.'}</div>
+      </div>}
+    </div>
+  </div>
 }
 
 function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: { keyData: Key; services: Service[]; existingNames: string[]; onClose: () => void; onUpdate: (id: string, name: string, modelServiceIds: string[]) => Promise<void> }) {
