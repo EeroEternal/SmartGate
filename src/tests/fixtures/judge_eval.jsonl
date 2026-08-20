@@ -1,0 +1,16 @@
+{"id":"simple_factual","category":"general","label":"simple","prompt":"What is the capital of France?"}
+{"id":"simple_translation","category":"translation","label":"simple","prompt":"Translate 'hello' to Japanese."}
+{"id":"simple_formatting","category":"formatting","label":"simple","prompt":"Convert this list to CSV: apples, oranges, pears."}
+{"id":"simple_regex","category":"formatting","label":"simple","prompt":"Give me a regular expression that matches a hexadecimal color."}
+{"id":"complex_proof","category":"math","label":"complex","prompt":"Prove that every finite subgroup of the multiplicative group of a field is cyclic, and explain each step."}
+{"id":"complex_concurrency","category":"systems","label":"complex","prompt":"Design a lock-free concurrent queue with memory ordering guarantees and discuss the ABA problem."}
+{"id":"complex_architecture","category":"architecture","label":"complex","prompt":"Design a multi-region event-driven architecture with exactly-once effects, failover, and an auditable consistency model."}
+{"id":"complex_debugging","category":"debugging","label":"complex","prompt":"Find the root cause of this intermittent Rust deadlock and propose a fix with a reproducible test."}
+{"id":"complex_code","category":"coding","label":"complex","prompt":"Implement and prove the correctness of a concurrent B-tree with crash recovery."}
+{"id":"complex_algorithm","category":"algorithms","label":"complex","prompt":"Compare Paxos and Raft under network partitions and derive the liveness trade-offs."}
+{"id":"simple_short_code","category":"coding","label":"simple","prompt":"Write a Python function that adds two numbers."}
+{"id":"simple_json","category":"structured_output","label":"simple","prompt":"Return the following name and age as a JSON object: Ada, 36."}
+{"id":"complex_tool_debug","category":"tools","label":"complex","prompt":"The tool call still fails after the last fix. Trace the dependency and redesign the retry and idempotency flow."}
+{"id":"complex_long_context","category":"long_context","label":"complex","prompt":"Review this long incident report, identify the distributed-system root cause, and produce a prioritized remediation plan with risks."}
+{"id":"simple_multilingual","category":"translation","label":"simple","prompt":"请把这句话翻译成英文：今天天气很好。"}
+{"id":"complex_multilingual","category":"architecture","label":"complex","prompt":"请设计一个支持多活、故障转移和一致性审计的分布式存储架构，并说明取舍。"}

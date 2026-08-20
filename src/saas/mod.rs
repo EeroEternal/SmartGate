@@ -18,7 +18,9 @@ use crate::{
     api::models::ApiResponse,
     auth::hash_token,
     config::AppState,
-    policy::{evaluate_budget, BudgetOutcome},
+    policy::{
+        evaluate_budget, BudgetOutcome, DIFFICULTY_HIGH_THRESHOLD, DIFFICULTY_MEDIUM_THRESHOLD,
+    },
     pricing::effective_capability_score,
     routing::canonicalize_strategy,
 };
@@ -2495,9 +2497,9 @@ async fn get_routing_analytics(
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(d_str) {
                 if let Some(d) = val.get("difficulty").and_then(|v| v.as_f64()) {
                     difficulty = d;
-                    difficulty_tier = if d >= 0.60 {
+                    difficulty_tier = if d >= DIFFICULTY_HIGH_THRESHOLD {
                         "high"
-                    } else if d >= 0.35 {
+                    } else if d >= DIFFICULTY_MEDIUM_THRESHOLD {
                         "medium"
                     } else {
                         "low"
@@ -2687,7 +2689,6 @@ async fn get_quality_analytics(
 
     let mut total_cost = 0.0;
     let mut total_latency = 0i64;
-    let mut total_tokens = 0i64;
     let mut correction_count = 0usize;
     let mut successful_count = 0usize;
     let mut pro_count = 0usize;
@@ -2714,7 +2715,6 @@ async fn get_quality_analytics(
     ) in rows {
         total_cost += cost;
         total_latency += latency_ms as i64;
-        total_tokens += tokens as i64;
 
         let is_pro = model.to_lowercase().contains("pro")
             || model.to_lowercase().contains("reasoner")
@@ -2757,14 +2757,24 @@ async fn get_quality_analytics(
             correction_count += 1;
         }
 
-        let (verdict, feedback_source, quality_score, verdict_desc) = if is_correction {
-            ("escalated", "Multi-Turn Context", 94, "User follow-up correction detected; auto-escalated to Pro")
-        } else if signals.iter().any(|s| s.contains("Schema") || s.contains("JSON") || s.contains("Format")) {
-            ("schema_valid", "Tool Validator", 99, "Output validated against requested JSON Schema")
-        } else if is_pro {
-            ("verified", "Shadow Pro Judge", 99, "Pro flagship accuracy & depth verified")
+        let (verdict, feedback_source, verdict_desc) = if status < 200 || status >= 300 {
+            (
+                "error",
+                "Request telemetry",
+                "Request failed; no independent quality score is available",
+            )
+        } else if is_correction {
+            (
+                "escalated",
+                "Routing telemetry",
+                "A correction signal was observed; this is not independent quality validation",
+            )
         } else {
-            ("completed", "Shadow Pro Judge", 98, "98.7% output alignment with Pro baseline")
+            (
+                "completed",
+                "Request telemetry",
+                "Request completed successfully; no independent quality score is available",
+            )
         };
 
         let clean_service_name = service_name.replace(|c: char| c == '-' && c.is_ascii_punctuation(), "-");
@@ -2784,68 +2794,42 @@ async fn get_quality_analytics(
             "verdict": verdict,
             "verdict_desc": verdict_desc,
             "feedback_source": feedback_source,
-            "quality_score": quality_score,
         }));
     }
 
-    let actual_avg_cost = if total_queries > 0 { total_cost / total_queries as f64 } else { 0.0005 };
-    let actual_avg_latency = if total_queries > 0 { (total_latency as f64 / total_queries as f64).round() as i64 } else { 3800 };
-    
-    // Baseline: If 100% of queries went to Pro models ($0.0034/req, 14200ms latency)
-    let baseline_avg_cost = if total_queries > 0 {
-        let cost_estimate = (total_tokens as f64 / 1_000_000.0 * 2.80) / total_queries as f64;
-        cost_estimate.max(actual_avg_cost * 4.2)
-    } else {
-        0.0034
-    };
-    let baseline_avg_latency = (actual_avg_latency as f64 * 3.6).round() as i64;
-    let cost_saved_pct = if baseline_avg_cost > 0.0 {
-        ((baseline_avg_cost - actual_avg_cost) / baseline_avg_cost * 100.0).clamp(0.0, 99.0)
-    } else {
-        85.0
-    };
-    let speedup_pct = if baseline_avg_latency > 0 {
-        ((baseline_avg_latency - actual_avg_latency) as f64 / baseline_avg_latency as f64 * 100.0).clamp(0.0, 99.0)
-    } else {
-        72.0
-    };
-
-    let user_correction_rate = if total_queries > 0 {
+    let actual_avg_cost = (total_queries > 0)
+        .then(|| (total_cost / total_queries as f64 * 10_000.0).round() / 10_000.0);
+    let actual_avg_latency = (total_queries > 0)
+        .then(|| (total_latency as f64 / total_queries as f64).round() as i64);
+    let user_correction_rate = (total_queries > 0).then(|| {
         (correction_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
-    } else {
-        2.1
-    };
-    let success_rate = if total_queries > 0 {
+    });
+    let success_rate = (total_queries > 0).then(|| {
         (successful_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
-    } else {
-        99.2
-    };
+    });
 
+    // A real baseline requires a configured comparison endpoint or a controlled A/B experiment.
+    // Do not manufacture a 100% flagship baseline from the routed traffic itself.
     Ok(Json(ApiResponse::success(json!({
         "range": range,
         "summary": {
             "total_queries": total_queries,
-            "quality_preserved_rate": 99.4,
+            "comparison_status": "unavailable",
+            "quality_preserved_rate": Value::Null,
             "user_correction_rate": user_correction_rate,
-            "schema_compliance_rate": 99.8,
-            "shadow_agreement_score": 98.7,
+            "schema_compliance_rate": Value::Null,
+            "shadow_agreement_score": Value::Null,
             "pro_count": pro_count,
             "flash_count": flash_count,
-            "baseline": {
-                "name": "All-Pro Baseline (100% Flagship)",
-                "cost_per_req": (baseline_avg_cost * 10000.0).round() / 10000.0,
-                "avg_latency_ms": baseline_avg_latency,
-                "task_success_rate": 99.3,
-                "correction_rate": 2.0,
-            },
+            "baseline": Value::Null,
             "smartgate_routing": {
                 "name": "SmartGate Intelligent Routing",
-                "cost_per_req": (actual_avg_cost * 10000.0).round() / 10000.0,
+                "cost_per_req": actual_avg_cost,
                 "avg_latency_ms": actual_avg_latency,
                 "task_success_rate": success_rate,
                 "correction_rate": user_correction_rate,
-                "cost_saved_pct": (cost_saved_pct * 10.0).round() / 10.0,
-                "speedup_pct": (speedup_pct * 10.0).round() / 10.0,
+                "cost_saved_pct": Value::Null,
+                "speedup_pct": Value::Null,
             }
         },
         "records": quality_records,

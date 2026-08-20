@@ -265,6 +265,64 @@ fn map_provider(
     }
 }
 
+/// Load one enabled endpoint in the same UniGateway representation used by pool sync.
+///
+/// This is a control-plane lookup only. Request execution, protocol rendering, credentials,
+/// retries, timeout handling, and provider health reporting remain inside UniGateway.
+pub async fn load_endpoint_for_dispatch(
+    db: &PgPool,
+    endpoint_id: &str,
+) -> anyhow::Result<Option<Endpoint>> {
+    let row = sqlx::query_as::<_, SyncEndpointRow>(
+        "SELECT e.id, e.account_id, e.upstream_model_id, e.enabled,
+                0 AS pool_priority, 0 AS pool_weight,
+                pa.provider_type, pa.protocol, pa.base_url, pa.api_key, pa.name AS account_name,
+                e.input_price_per_1m, e.output_price_per_1m,
+                e.capability_score, e.supports_tools, e.context_length,
+                e.health_status, e.cooldown_until
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE e.id = $1 AND e.enabled = TRUE AND pa.status = 'active'",
+    )
+    .bind(endpoint_id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let (provider_kind, driver_id, family) = map_provider(&row.protocol, &row.provider_type);
+    let mut model_mapping = HashMap::new();
+    model_mapping.insert("*".to_string(), row.upstream_model_id.clone());
+    model_mapping.insert(row.upstream_model_id.clone(), row.upstream_model_id.clone());
+
+    Ok(Some(Endpoint {
+        endpoint_id: row.id,
+        provider_name: Some(row.account_name.clone()),
+        source_endpoint_id: Some(row.upstream_model_id.clone()),
+        provider_family: family,
+        provider_kind,
+        driver_id: driver_id.to_string(),
+        base_url: normalize_base_url(&row.base_url),
+        api_key: SecretString::new(row.api_key),
+        model_policy: ModelPolicy {
+            default_model: Some(row.upstream_model_id),
+            model_mapping,
+        },
+        enabled: row.enabled,
+        max_concurrency: None,
+        forward_metadata_as_headers: None,
+        capabilities: EndpointCapabilities::default(),
+        metadata: HashMap::from([
+            ("account_id".to_string(), row.account_id),
+            ("account_name".to_string(), row.account_name),
+            ("provider_type".to_string(), row.provider_type),
+            ("protocol".to_string(), row.protocol),
+        ]),
+    }))
+}
+
 fn normalize_base_url(url: &str) -> String {
     let trimmed = url.trim().trim_end_matches('/');
     if trimmed.is_empty() {

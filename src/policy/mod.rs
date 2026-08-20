@@ -1,5 +1,16 @@
 //! Control-plane policy: tokens, budgets, context trim, route hints.
 
+/// Difficulty score at or above which a request is classified as high complexity.
+pub const DIFFICULTY_HIGH_THRESHOLD: f64 = 0.55;
+/// Difficulty score at or above which a request is classified as medium complexity.
+pub const DIFFICULTY_MEDIUM_THRESHOLD: f64 = 0.35;
+/// Lower bound of the ambiguous range that may invoke the auxiliary Judge.
+pub const JUDGE_TRIGGER_MIN: f64 = 0.30;
+/// Upper bound of the ambiguous range that may invoke the auxiliary Judge.
+pub const JUDGE_TRIGGER_MAX: f64 = 0.65;
+/// Maximum duration for one auxiliary Judge request, in milliseconds.
+pub const JUDGE_TIMEOUT_MS: u64 = 250;
+
 pub mod budget;
 pub mod context;
 pub mod route_hint;

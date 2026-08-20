@@ -122,9 +122,11 @@ impl GatewayHooks for SmartGateHooks {
         let profiles = self.profiles.clone();
 
         Box::pin(async move {
-            if let Some(key_id) = report.metadata.get("key_id") {
-                let project_id = report.metadata.get("project_id").map(|s| s.as_str());
-                quotas.release(key_id, project_id);
+            if report.metadata.get("quota_release").map(String::as_str) != Some("0") {
+                if let Some(key_id) = report.metadata.get("key_id") {
+                    let project_id = report.metadata.get("project_id").map(|s| s.as_str());
+                    quotas.release(key_id, project_id);
+                }
             }
 
             let endpoint_id = report

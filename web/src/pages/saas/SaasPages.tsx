@@ -2656,11 +2656,11 @@ export function AnalyticsPage() {
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
-              <span>{t('analytics.high_complexity') || 'High Complexity (≥ 0.60)'}: <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
+              <span>{t('analytics.high_complexity') || 'High Complexity (≥ 0.55)'}: <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-              <span>{t('analytics.med_complexity') || 'Medium Complexity (0.35–0.60)'}: <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
+              <span>{t('analytics.med_complexity') || 'Medium Complexity (0.35–0.55)'}: <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -2958,20 +2958,20 @@ type QualityRecord = {
   status_code: number
   cost: number
   prompt_preview: string
-  verdict: 'verified' | 'schema_valid' | 'escalated' | 'completed'
+  verdict: 'verified' | 'schema_valid' | 'escalated' | 'completed' | 'error'
   verdict_desc: string
   feedback_source: string
-  quality_score: number
 }
 
 type QualityAnalyticsData = {
   range: string
   summary: {
     total_queries: number
-    quality_preserved_rate: number
-    user_correction_rate: number
-    schema_compliance_rate: number
-    shadow_agreement_score: number
+    comparison_status: 'available' | 'unavailable'
+    quality_preserved_rate: number | null
+    user_correction_rate: number | null
+    schema_compliance_rate: number | null
+    shadow_agreement_score: number | null
     pro_count: number
     flash_count: number
     baseline: {
@@ -2980,15 +2980,15 @@ type QualityAnalyticsData = {
       avg_latency_ms: number
       task_success_rate: number
       correction_rate: number
-    }
+    } | null
     smartgate_routing: {
       name: string
-      cost_per_req: number
-      avg_latency_ms: number
-      task_success_rate: number
-      correction_rate: number
-      cost_saved_pct: number
-      speedup_pct: number
+      cost_per_req: number | null
+      avg_latency_ms: number | null
+      task_success_rate: number | null
+      correction_rate: number | null
+      cost_saved_pct: number | null
+      speedup_pct: number | null
     }
   }
   records: QualityRecord[]
@@ -2997,7 +2997,7 @@ type QualityAnalyticsData = {
 export function QualityPage() {
   const { t } = useI18n()
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
-  const [verdictFilter, setVerdictFilter] = useState<'all' | 'verified' | 'schema_valid' | 'escalated' | 'completed'>('all')
+  const [verdictFilter, setVerdictFilter] = useState<'all' | 'verified' | 'schema_valid' | 'escalated' | 'completed' | 'error'>('all')
   const [data, setData] = useState<QualityAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -3033,6 +3033,7 @@ export function QualityPage() {
   const summary = data?.summary
   const baseline = summary?.baseline
   const routing = summary?.smartgate_routing
+  const comparisonUnavailable = summary?.comparison_status !== 'available'
 
   return (
     <Page>
@@ -3074,11 +3075,11 @@ export function QualityPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.preserved_rate') || 'Quality Preserved Rate'}</div>
               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                {t('quality.verified_tag') || 'Verified'}
+                {summary?.quality_preserved_rate != null ? (t('quality.verified_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
-              {summary ? `${summary.quality_preserved_rate}%` : '—'}
+              {summary?.quality_preserved_rate != null ? `${summary.quality_preserved_rate}%` : 'N/A'}
             </div>
             <div className="mt-2 text-xs text-zinc-400">{t('quality.vs_baseline') || 'vs 100% full-Pro baseline'}</div>
           </div>
@@ -3087,11 +3088,11 @@ export function QualityPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.shadow_agreement') || 'Shadow Pro Agreement'}</div>
               <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
-                {t('quality.judge_score_tag') || 'Judge Score'}
+                {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-purple-700">
-              {summary ? `${summary.shadow_agreement_score}%` : '—'}
+              {summary?.shadow_agreement_score != null ? `${summary.shadow_agreement_score}%` : 'N/A'}
             </div>
             <div className="mt-2 text-xs text-zinc-400">{t('quality.similarity_sub') || 'Flash vs Pro output similarity'}</div>
           </div>
@@ -3100,11 +3101,11 @@ export function QualityPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.correction_rate') || 'User Correction Rate'}</div>
               <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
-                {t('quality.healthy_tag') || 'Healthy < 3%'}
+                {summary?.user_correction_rate != null ? (t('quality.healthy_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
-              {summary ? `${summary.user_correction_rate}%` : '—'}
+              {summary?.user_correction_rate != null ? `${summary.user_correction_rate}%` : 'N/A'}
             </div>
             <div className="mt-2 text-xs text-zinc-400">{t('quality.correction_sub') || 'Multi-turn retry & rephrase rate'}</div>
           </div>
@@ -3113,11 +3114,11 @@ export function QualityPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                {t('quality.valid_tag') || '100% Valid'}
+                {summary?.schema_compliance_rate != null ? (t('quality.valid_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
               </span>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
-              {summary ? `${summary.schema_compliance_rate}%` : '—'}
+              {summary?.schema_compliance_rate != null ? `${summary.schema_compliance_rate}%` : 'N/A'}
             </div>
             <div className="mt-2 text-xs text-zinc-400">{t('quality.schema_sub') || 'Structured JSON & tool outputs'}</div>
           </div>
@@ -3127,14 +3128,14 @@ export function QualityPage() {
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.ab_benchmark_title') || 'A/B Benchmark Comparison & Pareto Frontier'}</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.ab_benchmark_title') || 'Routing Comparison'}</h2>
               <p className="mt-0.5 text-xs text-zinc-400">
                 {t('quality.ab_benchmark_subtitle') || 'Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.'}
               </p>
             </div>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
               <Sparkles className="h-3.5 w-3.5" />
-              {t('quality.cost_saved', { pct: routing ? routing.cost_saved_pct : 85 }) || (routing ? `${routing.cost_saved_pct}% Cost Saved` : '85% Cost Saved')}
+              {routing?.cost_saved_pct != null ? (t('quality.cost_saved', { pct: routing.cost_saved_pct }) || `${routing.cost_saved_pct}% Cost Saved`) : 'N/A'}
             </span>
           </div>
 
@@ -3143,31 +3144,31 @@ export function QualityPage() {
             <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
               <div className="flex items-center justify-between border-b border-zinc-200/80 pb-2">
                 <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
-                <span className="text-[10px] font-medium text-zinc-400">{t('quality.flagship_tag') || '100% Flagship'}</span>
+                <span className="text-[10px] font-medium text-zinc-400">{t('quality.flagship_tag') || 'Configured baseline'}</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
                   <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                    ${baseline ? baseline.cost_per_req.toFixed(4) : '0.0034'}
+                    {baseline ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
                   </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                   <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                    {baseline ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : '14.2s'}
+                    {baseline ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                   </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
                   <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                    {baseline ? `${baseline.task_success_rate}%` : '99.3%'}
+                    {baseline ? `${baseline.task_success_rate}%` : 'N/A'}
                   </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
                   <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                    {baseline ? `${baseline.correction_rate}%` : '2.0%'}
+                    {baseline ? `${baseline.correction_rate}%` : 'N/A'}
                   </div>
                 </div>
               </div>
@@ -3177,17 +3178,17 @@ export function QualityPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
               <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
                 <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title') || 'Treatment: SmartGate Intelligent Routing'}</span>
-                <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Cost-Aware + Pareto Fit'}</span>
+                <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Observed routing'}</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-emerald-700 font-mono">
-                      ${routing ? routing.cost_per_req.toFixed(4) : '0.0005'}
+                      {routing?.cost_per_req != null ? `$${routing.cost_per_req.toFixed(4)}` : 'N/A'}
                     </span>
                     <span className="text-[10px] font-semibold text-emerald-600">
-                      (-{routing ? routing.cost_saved_pct : 85}%)
+                      {routing?.cost_saved_pct != null ? `(-${routing.cost_saved_pct}%)` : ''}
                     </span>
                   </div>
                 </div>
@@ -3195,10 +3196,10 @@ export function QualityPage() {
                   <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-emerald-700 font-mono">
-                      {routing ? `${(routing.avg_latency_ms / 1000).toFixed(1)}s` : '3.8s'}
+                      {routing?.avg_latency_ms != null ? `${(routing.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                     </span>
                     <span className="text-[10px] font-semibold text-emerald-600">
-                      ({routing ? routing.speedup_pct : 73}% {t('quality.faster', { pct: '' }) || 'faster'})
+                      {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' }) || 'faster'})` : ''}
                     </span>
                   </div>
                 </div>
@@ -3206,28 +3207,33 @@ export function QualityPage() {
                   <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-sm font-semibold text-zinc-900">
-                      {routing ? `${routing.task_success_rate}%` : '99.1%'}
+                      {routing?.task_success_rate != null ? `${routing.task_success_rate}%` : 'N/A'}
                     </span>
-                    <span className="text-[10px] text-zinc-500 font-mono">(-0.2% delta)</span>
+                    {routing?.task_success_rate != null && baseline ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.task_success_rate - baseline.task_success_rate).toFixed(1)}% delta)</span> : null}
                   </div>
                 </div>
                 <div>
                   <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-sm font-semibold text-zinc-900">
-                      {routing ? `${routing.correction_rate}%` : '2.1%'}
+                      {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
                     </span>
-                    <span className="text-[10px] text-zinc-500 font-mono">(+0.1% delta)</span>
+                    {routing?.correction_rate != null && baseline ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
+          {comparisonUnavailable && (
+            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-2.5 text-xs text-amber-800">
+              {t('quality.comparison_unavailable') || 'No independent baseline is configured. Quality and savings comparisons are unavailable.'}
+            </div>
+          )}
           <div className="mt-4 rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5 text-xs text-zinc-600 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <CheckCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>{t('quality.conclusion') || 'Evaluation Conclusion: Intelligent model routing achieves 85%+ cost reduction and 3.6x speedup while maintaining a sub-0.2% quality variance vs. 100% flagship Pro models.'}</span>
+              <span>{t('quality.conclusion') || 'Observed comparison for the selected time range. Results are telemetry-based and are not a guarantee of future cost, latency, or quality.'}</span>
             </span>
           </div>
         </div>
@@ -3240,7 +3246,7 @@ export function QualityPage() {
               <p className="mt-0.5 text-xs text-zinc-400">{t('quality.verdict_logs_subtitle') || 'Live stream of verification sources, shadow judge scores, and auto-escalations.'}</p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
-              {(['all', 'verified', 'schema_valid', 'escalated', 'completed'] as const).map((v) => (
+              {(['all', 'verified', 'schema_valid', 'escalated', 'completed', 'error'] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => setVerdictFilter(v)}
@@ -3256,6 +3262,8 @@ export function QualityPage() {
                     ? (t('quality.verdict_schema') || 'Schema Valid')
                     : v === 'escalated'
                     ? (t('quality.verdict_escalated') || 'Escalated')
+                    : v === 'error'
+                    ? (t('quality.verdict_error') || 'Error')
                     : (t('quality.verdict_completed') || 'Completed')}
                 </button>
               ))}
@@ -3306,16 +3314,19 @@ export function QualityPage() {
                                 ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                 : r.verdict === 'schema_valid'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : r.verdict === 'error'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
                                 : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             }`}
                             title={r.verdict_desc}
                           >
                             {r.verdict === 'escalated'
-                              ? `🔄 ${t('quality.verdict_escalated') || 'Auto Escalated'}`
+                              ? `🔄 ${t('quality.verdict_escalated') || 'Escalated'}`
                               : r.verdict === 'schema_valid'
                               ? `🛠️ ${t('quality.verdict_schema') || 'Schema Valid'}`
-                              : `✅ ${t('quality.verdict_verified') || 'Verified'}`}
-                            <span className="font-mono text-[10px] opacity-75">({r.quality_score})</span>
+                              : r.verdict === 'error'
+                              ? `⚠️ ${t('quality.verdict_error') || 'Error'}`
+                              : `✓ ${t('quality.verdict_completed') || 'Completed'}`}
                           </span>
                         </td>
                         <td className="py-3 px-3 align-middle whitespace-nowrap">
