@@ -1980,6 +1980,106 @@ struct ApiKeyProfileRow {
     affinity_hit: i32,
 }
 
+struct ApiKeyProfileAggregation {
+    sample_count: i64,
+    successful_count: i64,
+    total_prompt_tokens: i64,
+    total_completion_tokens: i64,
+    total_tokens: i64,
+    total_cost: f64,
+    latencies: Vec<i32>,
+    ttfts: Vec<i32>,
+    difficulty_tiers: BTreeMap<String, i64>,
+    difficulty_sources: BTreeMap<String, i64>,
+    providers: BTreeMap<String, i64>,
+    usage_sources: BTreeMap<String, i64>,
+    usage_confidences: BTreeMap<String, i64>,
+    pricing_sources: BTreeMap<String, i64>,
+    tool_requests: i64,
+    fallback_requests: i64,
+    session_requests: i64,
+    affinity_applied: i64,
+    affinity_hits: i64,
+}
+
+fn aggregate_api_key_profile(rows: &[ApiKeyProfileRow]) -> ApiKeyProfileAggregation {
+    let mut aggregation = ApiKeyProfileAggregation {
+        sample_count: rows.len() as i64,
+        successful_count: 0,
+        total_prompt_tokens: 0,
+        total_completion_tokens: 0,
+        total_tokens: 0,
+        total_cost: 0.0,
+        latencies: Vec::with_capacity(rows.len()),
+        ttfts: Vec::new(),
+        difficulty_tiers: BTreeMap::new(),
+        difficulty_sources: BTreeMap::new(),
+        providers: BTreeMap::new(),
+        usage_sources: BTreeMap::new(),
+        usage_confidences: BTreeMap::new(),
+        pricing_sources: BTreeMap::new(),
+        tool_requests: 0,
+        fallback_requests: 0,
+        session_requests: 0,
+        affinity_applied: 0,
+        affinity_hits: 0,
+    };
+
+    for row in rows {
+        if row
+            .status_code
+            .is_some_and(|status| (200..300).contains(&status))
+        {
+            aggregation.successful_count += 1;
+        }
+        aggregation.total_prompt_tokens += row.prompt_tokens as i64;
+        aggregation.total_completion_tokens += row.completion_tokens as i64;
+        aggregation.total_tokens += row.total_tokens as i64;
+        aggregation.total_cost += row.estimated_cost;
+        aggregation.latencies.push(row.latency_ms);
+        if let Some(ttft) = row.ttft_ms {
+            aggregation.ttfts.push(ttft);
+        }
+
+        let tier = profile_difficulty_tier(row.routing_decision.as_deref())
+            .unwrap_or_else(|| "unknown".to_string());
+        *aggregation.difficulty_tiers.entry(tier).or_default() += 1;
+        *aggregation
+            .difficulty_sources
+            .entry(profile_difficulty_source(row.routing_decision.as_deref()))
+            .or_default() += 1;
+        *aggregation
+            .providers
+            .entry(row.provider_type.clone())
+            .or_default() += 1;
+        *aggregation
+            .usage_sources
+            .entry(row.usage_source.clone())
+            .or_default() += 1;
+        *aggregation
+            .usage_confidences
+            .entry(row.usage_confidence.clone())
+            .or_default() += 1;
+        *aggregation
+            .pricing_sources
+            .entry(row.pricing_source.clone())
+            .or_default() += 1;
+        aggregation.tool_requests += i64::from(profile_json_flag(
+            [row.routing_decision.as_ref(), row.metadata.as_ref()],
+            "has_tools",
+        ));
+        aggregation.fallback_requests += i64::from(profile_json_flag(
+            [row.routing_decision.as_ref(), row.metadata.as_ref()],
+            "fallback",
+        ));
+        aggregation.session_requests += i64::from(row.session_id.is_some());
+        aggregation.affinity_applied += i64::from(row.affinity_applied != 0);
+        aggregation.affinity_hits += i64::from(row.affinity_hit != 0);
+    }
+
+    aggregation
+}
+
 async fn get_api_key_profile(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -2030,60 +2130,13 @@ async fn get_api_key_profile(
     }
     .map_err(db_error)?;
 
-    let sample_count = rows.len() as i64;
-    let successful_count = rows
-        .iter()
-        .filter(|row| row.status_code.is_some_and(|status| (200..300).contains(&status)))
-        .count() as i64;
+    let aggregation = aggregate_api_key_profile(&rows);
+    let sample_count = aggregation.sample_count;
+    let successful_count = aggregation.successful_count;
     let failed_count = sample_count - successful_count;
-    let total_prompt_tokens: i64 = rows.iter().map(|row| row.prompt_tokens as i64).sum();
-    let total_completion_tokens: i64 = rows.iter().map(|row| row.completion_tokens as i64).sum();
-    let total_tokens: i64 = rows.iter().map(|row| row.total_tokens as i64).sum();
-    let total_cost: f64 = rows.iter().map(|row| row.estimated_cost).sum();
-    let latencies: Vec<i32> = rows.iter().map(|row| row.latency_ms).collect();
-    let ttfts: Vec<i32> = rows.iter().filter_map(|row| row.ttft_ms).collect();
-    let (difficulty_tiers, difficulty_sources) = profile_difficulty_breakdown(
-        rows.iter().map(|row| row.routing_decision.as_deref()),
-    );
-    let mut providers: BTreeMap<String, i64> = BTreeMap::new();
-    let mut usage_sources: BTreeMap<String, i64> = BTreeMap::new();
-    let mut usage_confidences: BTreeMap<String, i64> = BTreeMap::new();
-    let mut pricing_sources: BTreeMap<String, i64> = BTreeMap::new();
-    let mut tool_requests = 0i64;
-    let mut fallback_requests = 0i64;
-    let mut session_requests = 0i64;
-    let mut affinity_applied = 0i64;
-    let mut affinity_hits = 0i64;
-
-    for row in &rows {
-        *providers.entry(row.provider_type.clone()).or_default() += 1;
-        *usage_sources.entry(row.usage_source.clone()).or_default() += 1;
-        *usage_confidences
-            .entry(row.usage_confidence.clone())
-            .or_default() += 1;
-        *pricing_sources.entry(row.pricing_source.clone()).or_default() += 1;
-        tool_requests += i64::from(profile_json_flag(
-            [row.routing_decision.as_ref(), row.metadata.as_ref()],
-            "has_tools",
-        ));
-        fallback_requests += i64::from(profile_json_flag(
-            [row.routing_decision.as_ref(), row.metadata.as_ref()],
-            "fallback",
-        ));
-        session_requests += i64::from(row.session_id.is_some());
-        affinity_applied += i64::from(row.affinity_applied != 0);
-        affinity_hits += i64::from(row.affinity_hit != 0);
-    }
-
-    let average_latency = profile_average(&latencies);
-    let average_ttft = profile_average(&ttfts);
-    let quality_evidence = json!({
-        "status": "unavailable",
-        "judge_evaluated_requests": 0,
-        "judge_agreement_rate": Value::Null,
-        "explicit_feedback_count": 0,
-        "confidence": "none",
-    });
+    let average_latency = profile_average(&aggregation.latencies);
+    let average_ttft = profile_average(&aggregation.ttfts);
+    let quality_evidence = unavailable_quality_evidence();
 
     Ok(Json(ApiResponse::success(json!({
         "key": {
@@ -2106,36 +2159,46 @@ async fn get_api_key_profile(
         },
         "latency_ms": {
             "average": average_latency,
-            "p50": profile_percentile(&latencies, 0.50),
-            "p95": profile_percentile(&latencies, 0.95),
+            "p50": profile_percentile(&aggregation.latencies, 0.50),
+            "p95": profile_percentile(&aggregation.latencies, 0.95),
             "ttft_average": average_ttft,
-            "ttft_p95": profile_percentile(&ttfts, 0.95),
+            "ttft_p95": profile_percentile(&aggregation.ttfts, 0.95),
         },
         "tokens": {
-            "prompt": total_prompt_tokens,
-            "completion": total_completion_tokens,
-            "total": total_tokens,
-            "average_per_request": profile_rate(total_tokens, sample_count),
+            "prompt": aggregation.total_prompt_tokens,
+            "completion": aggregation.total_completion_tokens,
+            "total": aggregation.total_tokens,
+            "average_per_request": profile_rate(aggregation.total_tokens, sample_count),
         },
         "cost": {
-            "total": total_cost,
-            "average_per_request": profile_rate_f64(total_cost, sample_count),
-            "usage_sources": usage_sources,
-            "usage_confidences": usage_confidences,
-            "pricing_sources": pricing_sources,
+            "total": aggregation.total_cost,
+            "average_per_request": profile_rate_f64(aggregation.total_cost, sample_count),
+            "usage_sources": aggregation.usage_sources,
+            "usage_confidences": aggregation.usage_confidences,
+            "pricing_sources": aggregation.pricing_sources,
         },
         "workload": {
-            "difficulty_tiers": difficulty_tiers,
-            "difficulty_sources": difficulty_sources,
-            "tool_request_rate": profile_rate(tool_requests, sample_count),
-            "fallback_rate": profile_rate(fallback_requests, sample_count),
-            "session_rate": profile_rate(session_requests, sample_count),
-            "affinity_applied_rate": profile_rate(affinity_applied, sample_count),
-            "affinity_hit_rate": profile_rate(affinity_hits, sample_count),
+            "difficulty_tiers": aggregation.difficulty_tiers,
+            "difficulty_sources": aggregation.difficulty_sources,
+            "tool_request_rate": profile_rate(aggregation.tool_requests, sample_count),
+            "fallback_rate": profile_rate(aggregation.fallback_requests, sample_count),
+            "session_rate": profile_rate(aggregation.session_requests, sample_count),
+            "affinity_applied_rate": profile_rate(aggregation.affinity_applied, sample_count),
+            "affinity_hit_rate": profile_rate(aggregation.affinity_hits, sample_count),
         },
-        "providers": providers,
+        "providers": aggregation.providers,
         "quality_evidence": quality_evidence,
     }))))
+}
+
+fn unavailable_quality_evidence() -> Value {
+    json!({
+        "status": "unavailable",
+        "judge_evaluated_requests": 0,
+        "judge_agreement_rate": Value::Null,
+        "explicit_feedback_count": 0,
+        "confidence": "none",
+    })
 }
 
 fn profile_confidence(sample_count: i64) -> &'static str {
@@ -2215,24 +2278,6 @@ fn profile_difficulty_tier(raw: Option<&str>) -> Option<String> {
         "low"
     }
     .to_string())
-}
-
-fn profile_difficulty_breakdown<'a, I>(
-    raw_values: I,
-) -> (BTreeMap<String, i64>, BTreeMap<String, i64>)
-where
-    I: IntoIterator<Item = Option<&'a str>>,
-{
-    let mut tiers = BTreeMap::new();
-    let mut sources = BTreeMap::new();
-    for raw in raw_values {
-        let tier = profile_difficulty_tier(raw).unwrap_or_else(|| "unknown".to_string());
-        *tiers.entry(tier).or_default() += 1;
-        *sources
-            .entry(profile_difficulty_source(raw))
-            .or_default() += 1;
-    }
-    (tiers, sources)
 }
 
 async fn create_api_key(
@@ -3395,11 +3440,42 @@ fn saas_strategy(raw: &str) -> Result<String, (StatusCode, Json<ApiResponse<()>>
 
 #[cfg(test)]
 mod tests {
+    use axum::http::StatusCode;
+
     use super::{
-        calculate_savings, profile_confidence, profile_difficulty_breakdown,
-        profile_difficulty_source, profile_difficulty_tier, profile_json_flag, profile_percentile,
-        profile_rate, saas_strategy, validate_verification_code, verification_code_hash,
+        aggregate_api_key_profile, calculate_savings, profile_confidence, profile_difficulty_source,
+        profile_difficulty_tier, profile_json_flag, profile_percentile, profile_rate, range_since,
+        saas_strategy, unavailable_quality_evidence, validate_verification_code,
+        verification_code_hash, ApiKeyProfileRow,
     };
+
+    #[test]
+    fn api_key_profile_range_windows_are_supported() {
+        assert!(range_since("24h").unwrap().is_some());
+        assert!(range_since("7d").unwrap().is_some());
+        assert!(range_since("30d").unwrap().is_some());
+        assert!(range_since("all").unwrap().is_none());
+    }
+
+    #[test]
+    fn api_key_profile_rejects_unknown_range() {
+        let error = range_since("90d").expect_err("unknown range must fail");
+        assert_eq!(error.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn api_key_profile_quality_evidence_is_explicitly_unavailable() {
+        assert_eq!(
+            unavailable_quality_evidence(),
+            serde_json::json!({
+                "status": "unavailable",
+                "judge_evaluated_requests": 0,
+                "judge_agreement_rate": serde_json::Value::Null,
+                "explicit_feedback_count": 0,
+                "confidence": "none",
+            })
+        );
+    }
 
     #[test]
     fn api_key_profile_confidence_uses_sample_count() {
@@ -3423,30 +3499,93 @@ mod tests {
         );
     }
 
-    #[test]
-    fn api_key_profile_difficulty_breakdown_aggregates_sources_and_tiers() {
-        let (tiers, sources) = profile_difficulty_breakdown([
-            Some(r#"{"difficulty_tier":"low","difficulty_source":"heuristic"}"#),
-            Some(r#"{"difficulty_tier":"medium","difficulty_source":"judge"}"#),
-            Some(r#"{"difficulty":0.8,"difficulty_source":"judge"}"#),
-            Some(r#"{"difficulty_tier":"invalid","difficulty_source":"other"}"#),
-            None,
-        ]);
-
-        assert_eq!(tiers.get("low"), Some(&1));
-        assert_eq!(tiers.get("medium"), Some(&1));
-        assert_eq!(tiers.get("high"), Some(&1));
-        assert_eq!(tiers.get("unknown"), Some(&2));
-        assert_eq!(tiers.get("invalid"), None);
-        assert_eq!(sources.get("heuristic"), Some(&3));
-        assert_eq!(sources.get("judge"), Some(&2));
+    fn profile_row(
+        status_code: Option<i32>,
+        routing_decision: Option<&str>,
+        metadata: Option<&str>,
+        session_id: Option<&str>,
+        ttft_ms: Option<i32>,
+        affinity_applied: i32,
+        affinity_hit: i32,
+    ) -> ApiKeyProfileRow {
+        ApiKeyProfileRow {
+            timestamp: chrono::Utc::now(),
+            prompt_tokens: 100,
+            completion_tokens: 25,
+            total_tokens: 125,
+            latency_ms: 400,
+            status_code,
+            estimated_cost: 0.125,
+            provider_type: "openai".to_string(),
+            routing_decision: routing_decision.map(str::to_string),
+            metadata: metadata.map(str::to_string),
+            usage_source: "provider".to_string(),
+            usage_confidence: "high".to_string(),
+            pricing_source: "configured".to_string(),
+            session_id: session_id.map(str::to_string),
+            ttft_ms,
+            affinity_applied,
+            affinity_hit,
+        }
     }
 
     #[test]
-    fn api_key_profile_difficulty_breakdown_is_empty_for_no_samples() {
-        let (tiers, sources) = profile_difficulty_breakdown(std::iter::empty());
-        assert!(tiers.is_empty());
-        assert!(sources.is_empty());
+    fn api_key_profile_aggregation_is_empty_for_no_samples() {
+        let aggregation = aggregate_api_key_profile(&[]);
+        assert_eq!(aggregation.sample_count, 0);
+        assert_eq!(aggregation.successful_count, 0);
+        assert_eq!(aggregation.total_tokens, 0);
+        assert!(aggregation.latencies.is_empty());
+        assert!(aggregation.providers.is_empty());
+        assert!(aggregation.difficulty_tiers.is_empty());
+        assert!(aggregation.difficulty_sources.is_empty());
+    }
+
+    #[test]
+    fn api_key_profile_aggregation_covers_full_observation_contract() {
+        let rows = vec![
+            profile_row(
+                Some(200),
+                Some(r#"{"difficulty_tier":"medium","difficulty_source":"judge","has_tools":true,"fallback":true}"#),
+                None,
+                Some("session-1"),
+                Some(100),
+                1,
+                1,
+            ),
+            profile_row(
+                Some(503),
+                Some(r#"{"difficulty":0.2,"difficulty_source":"heuristic"}"#),
+                Some(r#"{"has_tools":true}"#),
+                None,
+                None,
+                0,
+                0,
+            ),
+        ];
+        let aggregation = aggregate_api_key_profile(&rows);
+
+        assert_eq!(aggregation.sample_count, 2);
+        assert_eq!(aggregation.successful_count, 1);
+        assert_eq!(aggregation.total_prompt_tokens, 200);
+        assert_eq!(aggregation.total_completion_tokens, 50);
+        assert_eq!(aggregation.total_tokens, 250);
+        assert!((aggregation.total_cost - 0.25).abs() < f64::EPSILON);
+        assert_eq!(aggregation.latencies, vec![400, 400]);
+        assert_eq!(aggregation.ttfts, vec![100]);
+        assert_eq!(aggregation.difficulty_tiers.get("low"), Some(&1));
+        assert_eq!(aggregation.difficulty_tiers.get("medium"), Some(&1));
+        assert_eq!(aggregation.difficulty_sources.get("heuristic"), Some(&1));
+        assert_eq!(aggregation.difficulty_sources.get("judge"), Some(&1));
+        assert_eq!(aggregation.providers.get("openai"), Some(&2));
+        assert_eq!(aggregation.usage_sources.get("provider"), Some(&2));
+        assert_eq!(aggregation.usage_confidences.get("high"), Some(&2));
+        assert_eq!(aggregation.pricing_sources.get("configured"), Some(&2));
+        assert_eq!(aggregation.tool_requests, 2);
+        assert_eq!(aggregation.fallback_requests, 1);
+        assert_eq!(aggregation.session_requests, 1);
+        assert_eq!(aggregation.affinity_applied, 1);
+        assert_eq!(aggregation.affinity_hits, 1);
     }
 
     #[test]
