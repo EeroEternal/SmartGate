@@ -266,18 +266,9 @@ fn map_provider(
 }
 
 fn normalize_base_url(url: &str) -> String {
-    let mut normalized = url.trim().to_string();
-    if normalized.is_empty() {
-        return normalized;
+    let trimmed = url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return String::new();
     }
-    let trimmed = normalized.trim_end_matches('/');
-    if let Some(stripped) = trimmed.strip_suffix("/v1") {
-        normalized = stripped.to_string();
-    } else {
-        normalized = trimmed.to_string();
-    }
-    if !normalized.ends_with('/') {
-        normalized.push('/');
-    }
-    normalized
+    format!("{}/", trimmed)
 }

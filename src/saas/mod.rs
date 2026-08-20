@@ -3188,12 +3188,7 @@ fn cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
 }
 
 fn clean_base_url(url: &str) -> String {
-    let trimmed = url.trim().trim_end_matches('/');
-    if let Some(stripped) = trimmed.strip_suffix("/v1") {
-        stripped.to_string()
-    } else {
-        trimmed.to_string()
-    }
+    url.trim().trim_end_matches('/').to_string()
 }
 
 fn normalize_email(email: &str) -> String {
