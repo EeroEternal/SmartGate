@@ -39,6 +39,41 @@ use unigateway_sdk::host::{
 const JUDGE_TIMEOUT: Duration = Duration::from_millis(JUDGE_TIMEOUT_MS);
 const JUDGE_POOL_PREFIX: &str = "smartgate:judge:";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DifficultyTier {
+    Low,
+    Medium,
+    High,
+}
+
+impl DifficultyTier {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
+    fn score(self) -> f64 {
+        match self {
+            Self::Low => 0.20,
+            Self::Medium => 0.50,
+            Self::High => 0.85,
+        }
+    }
+}
+
+fn difficulty_tier(difficulty: f64) -> DifficultyTier {
+    if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
+        DifficultyTier::High
+    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
+        DifficultyTier::Medium
+    } else {
+        DifficultyTier::Low
+    }
+}
+
 /// Classify a borderline request through UniGateway's normal protocol and driver pipeline.
 ///
 /// The endpoint is loaded by the control plane, but credentials, provider protocol rendering,
@@ -52,7 +87,7 @@ async fn classify_with_judge(
     key_id: &str,
     virtual_model_id: &str,
     source_pool_id: &str,
-) -> Option<bool> {
+) -> Option<DifficultyTier> {
     let endpoint = crate::sync::load_endpoint_for_dispatch(&state.db, judge_endpoint_id)
         .await
         .ok()??;
@@ -137,7 +172,7 @@ fn build_judge_request(
         "messages": [
             {
                 "role": "system",
-                "content": "You are a prompt complexity classifier. If the user's prompt requires complex reasoning, advanced math/proofs, complex architecture/algorithms, or deep debugging, answer ONLY 'COMPLEX'. Otherwise answer ONLY 'SIMPLE'."
+                "content": "You are a prompt complexity classifier. Answer ONLY one label: LOW, MEDIUM, or HIGH. Use HIGH for advanced reasoning, proofs, complex architecture or algorithms, or deep debugging. Use MEDIUM for non-trivial implementation, comparison, design, or analysis. Use LOW for simple questions, formatting, translation, or direct extraction."
             },
             { "role": "user", "content": preview }
         ]
@@ -163,7 +198,7 @@ fn build_judge_request(
     }
 }
 
-fn classify_judge_response(response: &serde_json::Value) -> Option<bool> {
+fn classify_judge_response(response: &serde_json::Value) -> Option<DifficultyTier> {
     let content = response
         .get("choices")
         .and_then(|choices| choices.get(0))
@@ -182,11 +217,17 @@ fn classify_judge_response(response: &serde_json::Value) -> Option<bool> {
                     })
                 })
         })?;
-    let upper = content.to_ascii_uppercase();
-    if upper.contains("COMPLEX") {
-        Some(true)
+    let upper = content.trim().to_ascii_uppercase();
+    if upper == "HIGH" || upper.contains("HIGH") {
+        Some(DifficultyTier::High)
+    } else if upper == "MEDIUM" || upper.contains("MEDIUM") {
+        Some(DifficultyTier::Medium)
+    } else if upper == "LOW" || upper.contains("LOW") {
+        Some(DifficultyTier::Low)
+    } else if upper.contains("COMPLEX") {
+        Some(DifficultyTier::High)
     } else if upper.contains("SIMPLE") {
-        Some(false)
+        Some(DifficultyTier::Low)
     } else {
         None
     }
@@ -194,7 +235,10 @@ fn classify_judge_response(response: &serde_json::Value) -> Option<bool> {
 
 #[cfg(test)]
 mod judge_tests {
-    use super::{build_judge_request, classify_judge_response, JUDGE_TIMEOUT};
+    use super::{
+        build_judge_request, classify_judge_response, difficulty_tier, DifficultyTier,
+        JUDGE_TIMEOUT,
+    };
     use futures_util::future::BoxFuture;
     use serde_json::json;
     use std::collections::HashMap;
@@ -370,7 +414,7 @@ mod judge_tests {
                 "id": "chatcmpl-judge",
                 "object": "chat.completion",
                 "model": "judge-model",
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": "COMPLEX"}, "finish_reason": "stop"}],
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "HIGH"}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 20, "completion_tokens": 1, "total_tokens": 21}
             })),
             seen: seen.clone(),
@@ -383,7 +427,7 @@ mod judge_tests {
             .await
             .expect("OpenAI Judge dispatch");
 
-        assert_eq!(classify_judge_response(&response), Some(true));
+        assert_eq!(classify_judge_response(&response), Some(DifficultyTier::High));
         let requests = seen.lock().expect("transport request lock");
         assert_eq!(requests.len(), 1);
         let body: serde_json::Value = serde_json::from_slice(
@@ -403,7 +447,7 @@ mod judge_tests {
                 "id": "msg-judge",
                 "type": "message",
                 "model": "judge-model",
-                "content": [{"type": "text", "text": "SIMPLE"}],
+                "content": [{"type": "text", "text": "LOW"}],
                 "stop_reason": "end_turn",
                 "usage": {"input_tokens": 18, "output_tokens": 1}
             })),
@@ -417,7 +461,7 @@ mod judge_tests {
             .await
             .expect("Anthropic Judge dispatch");
 
-        assert_eq!(classify_judge_response(&response), Some(false));
+        assert_eq!(classify_judge_response(&response), Some(DifficultyTier::Low));
         let requests = seen.lock().expect("transport request lock");
         let body: serde_json::Value = serde_json::from_slice(
             requests[0].body.as_deref().expect("Judge request body"),
@@ -465,15 +509,15 @@ mod judge_tests {
     fn parses_complex_and_simple_labels_from_unigateway_response() {
         assert_eq!(
             classify_judge_response(&json!({
-                "choices": [{"message": {"content": "COMPLEX"}}]
+                "choices": [{"message": {"content": "HIGH"}}]
             })),
-            Some(true)
+            Some(DifficultyTier::High)
         );
         assert_eq!(
             classify_judge_response(&json!({
-                "choices": [{"message": {"content": "simple"}}]
+                "choices": [{"message": {"content": "medium"}}]
             })),
-            Some(false)
+            Some(DifficultyTier::Medium)
         );
     }
 
@@ -481,9 +525,28 @@ mod judge_tests {
     fn parses_anthropic_text_blocks() {
         assert_eq!(
             classify_judge_response(&json!({
-                "content": [{"type": "text", "text": "COMPLEX"}]
+                "content": [{"type": "text", "text": "LOW"}]
             })),
-            Some(true)
+            Some(DifficultyTier::Low)
+        );
+    }
+
+    #[test]
+    fn maps_heuristic_scores_to_one_of_three_tiers() {
+        assert_eq!(difficulty_tier(0.20), DifficultyTier::Low);
+        assert_eq!(difficulty_tier(0.40), DifficultyTier::Medium);
+        assert_eq!(difficulty_tier(0.80), DifficultyTier::High);
+    }
+
+    #[test]
+    fn accepts_legacy_binary_judge_labels() {
+        assert_eq!(
+            classify_judge_response(&json!({"choices": [{"message": {"content": "COMPLEX"}}]})),
+            Some(DifficultyTier::High)
+        );
+        assert_eq!(
+            classify_judge_response(&json!({"choices": [{"message": {"content": "SIMPLE"}}]})),
+            Some(DifficultyTier::Low)
         );
     }
 
@@ -640,6 +703,8 @@ async fn chat_proxy(
     let input_tokens = estimate_tokens_from_text(&prompt_text);
     let output_tokens = expected_output_tokens(&payload, 512);
     let mut difficulty = heuristic_difficulty(&payload);
+    let mut difficulty_source = "heuristic";
+    let mut judge_used = false;
     let mut signals = extract_complexity_signals(&payload);
     let has_tools = request_has_tools(&payload);
 
@@ -679,7 +744,7 @@ async fn chat_proxy(
         if p.judge_enabled != 0 {
             if let Some(ref judge_ep_id) = p.judge_endpoint_id {
                 if difficulty >= JUDGE_TRIGGER_MIN && difficulty <= JUDGE_TRIGGER_MAX {
-                    if let Some(is_complex) = classify_with_judge(
+                    if let Some(judge_tier) = classify_with_judge(
                         &state,
                         judge_ep_id,
                         &prompt_text,
@@ -691,13 +756,10 @@ async fn chat_proxy(
                     )
                     .await
                     {
-                        if is_complex {
-                            difficulty = 0.85;
-                            signals.push("Auxiliary Judge: COMPLEX".to_string());
-                        } else {
-                            difficulty = 0.20;
-                            signals.push("Auxiliary Judge: SIMPLE".to_string());
-                        }
+                        difficulty = judge_tier.score();
+                        difficulty_source = "judge";
+                        judge_used = true;
+                        signals.push(format!("Auxiliary Judge: {}", judge_tier.as_str().to_uppercase()));
                     }
                 }
             }
@@ -782,13 +844,7 @@ async fn chat_proxy(
         .explain(&virtual_model.pool_id, route_hint.clone());
 
     let prompt_preview = extract_user_prompt_preview(&payload);
-    let difficulty_tier = if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
-        "high"
-    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
-        "medium"
-    } else {
-        "low"
-    };
+    let difficulty_tier = difficulty_tier(difficulty);
 
     let decision = serde_json::json!({
         "product": "smartgate",
@@ -797,7 +853,9 @@ async fn chat_proxy(
         "input_tokens_est": input_tokens,
         "output_tokens_est": output_tokens,
         "difficulty": difficulty,
-        "difficulty_tier": difficulty_tier,
+        "difficulty_tier": difficulty_tier.as_str(),
+        "difficulty_source": difficulty_source,
+        "judge_used": judge_used,
         "prompt_preview": prompt_preview,
         "signals": signals,
         "has_tools": has_tools,
@@ -1093,6 +1151,8 @@ pub async fn responses(
     let input_tokens = estimate_tokens_from_text(&prompt_text);
     let output_tokens = expected_output_tokens(&payload, 512);
     let difficulty = heuristic_difficulty(&payload);
+    let difficulty_source = "heuristic";
+    let judge_used = false;
     let has_tools = request_has_tools(&payload);
     let downshift = budget.should_downshift();
     set_hint(RouteHint {
@@ -1174,13 +1234,7 @@ pub async fn responses(
         .insert("output_tokens_est".to_string(), output_tokens.to_string());
     let signals = extract_complexity_signals(&payload);
     let prompt_preview = prompt_text.chars().take(200).collect::<String>();
-    let difficulty_tier = if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
-        "high"
-    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
-        "medium"
-    } else {
-        "low"
-    };
+    let difficulty_tier = difficulty_tier(difficulty);
     proxy_request.metadata.insert(
         "routing_decision".to_string(),
         serde_json::json!({
@@ -1189,7 +1243,9 @@ pub async fn responses(
             "input_tokens_est": input_tokens,
             "output_tokens_est": output_tokens,
             "difficulty": difficulty,
-            "difficulty_tier": difficulty_tier,
+            "difficulty_tier": difficulty_tier.as_str(),
+            "difficulty_source": difficulty_source,
+            "judge_used": judge_used,
             "prompt_preview": prompt_preview,
             "signals": signals,
             "has_tools": has_tools,

@@ -2043,6 +2043,7 @@ async fn get_api_key_profile(
     let latencies: Vec<i32> = rows.iter().map(|row| row.latency_ms).collect();
     let ttfts: Vec<i32> = rows.iter().filter_map(|row| row.ttft_ms).collect();
     let mut difficulty_tiers: BTreeMap<String, i64> = BTreeMap::new();
+    let mut difficulty_sources: BTreeMap<String, i64> = BTreeMap::new();
     let mut providers: BTreeMap<String, i64> = BTreeMap::new();
     let mut usage_sources: BTreeMap<String, i64> = BTreeMap::new();
     let mut usage_confidences: BTreeMap<String, i64> = BTreeMap::new();
@@ -2057,6 +2058,8 @@ async fn get_api_key_profile(
         let tier = profile_difficulty_tier(row.routing_decision.as_deref())
             .unwrap_or_else(|| "unknown".to_string());
         *difficulty_tiers.entry(tier).or_default() += 1;
+        let source = profile_difficulty_source(row.routing_decision.as_deref());
+        *difficulty_sources.entry(source).or_default() += 1;
         *providers.entry(row.provider_type.clone()).or_default() += 1;
         *usage_sources.entry(row.usage_source.clone()).or_default() += 1;
         *usage_confidences
@@ -2127,6 +2130,7 @@ async fn get_api_key_profile(
         },
         "workload": {
             "difficulty_tiers": difficulty_tiers,
+            "difficulty_sources": difficulty_sources,
             "tool_request_rate": profile_rate(tool_requests, sample_count),
             "fallback_rate": profile_rate(fallback_requests, sample_count),
             "session_rate": profile_rate(session_requests, sample_count),
@@ -2183,6 +2187,19 @@ fn profile_json_value<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
         Value::Object(object) => object.get(key).or_else(|| object.values().find_map(|item| profile_json_value(item, key))),
         Value::Array(items) => items.iter().find_map(|item| profile_json_value(item, key)),
         _ => None,
+    }
+}
+
+fn profile_difficulty_source(raw: Option<&str>) -> String {
+    let source = raw.and_then(|raw| {
+        let value = serde_json::from_str::<Value>(raw).ok()?;
+        profile_json_value(&value, "difficulty_source")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    });
+    match source.as_deref() {
+        Some("judge") => "judge".to_string(),
+        _ => "heuristic".to_string(),
     }
 }
 
@@ -3363,9 +3380,9 @@ fn saas_strategy(raw: &str) -> Result<String, (StatusCode, Json<ApiResponse<()>>
 #[cfg(test)]
 mod tests {
     use super::{
-        calculate_savings, profile_confidence, profile_difficulty_tier, profile_json_flag,
-        profile_percentile, profile_rate, saas_strategy, validate_verification_code,
-        verification_code_hash,
+        calculate_savings, profile_confidence, profile_difficulty_source,
+        profile_difficulty_tier, profile_json_flag, profile_percentile, profile_rate,
+        saas_strategy, validate_verification_code, verification_code_hash,
     };
 
     #[test]
@@ -3375,6 +3392,19 @@ mod tests {
         assert_eq!(profile_confidence(19), "low_confidence");
         assert_eq!(profile_confidence(20), "medium_confidence");
         assert_eq!(profile_confidence(100), "high_confidence");
+    }
+
+    #[test]
+    fn api_key_profile_sources_default_to_heuristic_and_accept_judge() {
+        assert_eq!(profile_difficulty_source(None), "heuristic");
+        assert_eq!(
+            profile_difficulty_source(Some(r#"{"difficulty_source":"judge"}"#)),
+            "judge"
+        );
+        assert_eq!(
+            profile_difficulty_source(Some(r#"{"difficulty_source":"unknown"}"#)),
+            "heuristic"
+        );
     }
 
     #[test]

@@ -258,6 +258,7 @@
     "profile_sessions": "セッション",
     "profile_affinity": "アフィニティヒット",
     "profile_difficulty": "難易度分布",
+    "profile_difficulty_sources": "難易度の判定元",
     "profile_providers": "プロバイダー",
     "profile_usage_sources": "使用量ソース",
     "profile_quality_unavailable": "独立した品質エビデンスはまだ利用できません。これらのワークロード統計は品質スコアを表しません。"

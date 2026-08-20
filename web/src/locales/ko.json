@@ -258,6 +258,7 @@
     "profile_sessions": "세션",
     "profile_affinity": "어피니티 적중",
     "profile_difficulty": "난이도 분포",
+    "profile_difficulty_sources": "난이도 출처",
     "profile_providers": "프로바이더",
     "profile_usage_sources": "사용량 소스",
     "profile_quality_unavailable": "독립적인 품질 근거를 아직 사용할 수 없습니다. 이 워크로드 통계는 품질 점수를 의미하지 않습니다."

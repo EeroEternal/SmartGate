@@ -258,6 +258,7 @@
     "profile_sessions": "会话",
     "profile_affinity": "Affinity 命中",
     "profile_difficulty": "难度分布",
+    "profile_difficulty_sources": "难度来源",
     "profile_providers": "Provider",
     "profile_usage_sources": "用量来源",
     "profile_quality_unavailable": "独立质量证据尚不可用。这些工作负载统计不代表质量评分。"

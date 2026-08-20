@@ -258,6 +258,7 @@
     "profile_sessions": "Sessions",
     "profile_affinity": "Affinity hits",
     "profile_difficulty": "Difficulty tiers",
+    "profile_difficulty_sources": "Difficulty sources",
     "profile_providers": "Providers",
     "profile_usage_sources": "Usage sources",
     "profile_quality_unavailable": "Independent quality evidence is not available yet. These workload statistics do not represent a quality score."
