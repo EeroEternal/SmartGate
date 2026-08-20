@@ -373,13 +373,14 @@ export function ServiceDetailsPage() {
     try {
       await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'POST' })
       setTestResults((results) => ({ ...results, [endpointId]: 'passed' }))
-      setTestToast({ type: 'success', message: 'Connection passed' })
+      setTestToast({ type: 'success', message: 'Connection verified successfully' })
+      window.setTimeout(() => setTestToast(null), 5000)
     } catch (e) {
       setTestResults((results) => ({ ...results, [endpointId]: 'failed' }))
       setTestToast({ type: 'error', message: `Connection failed: ${errorText(e)}` })
+      window.setTimeout(() => setTestToast(null), 12000)
     } finally {
       setTestingEndpoint(null)
-      window.setTimeout(() => setTestToast(null), 3500)
     }
   }
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
@@ -387,7 +388,43 @@ export function ServiceDetailsPage() {
   return <Page>
     {dialog}
     {error && <ErrorMessage text={error} />}
-    {testToast && <div className={`fixed right-6 top-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${testToast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`} role="status"><span className={`h-2.5 w-2.5 rounded-full ${testToast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />{testToast.message}</div>}
+    {testToast && (
+      <div
+        className={`fixed right-6 top-6 z-50 flex max-w-md items-start justify-between gap-3 rounded-xl border p-4 shadow-xl backdrop-blur transition-all ${
+          testToast.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50/95 text-emerald-900'
+            : 'border-rose-200 bg-rose-50/95 text-rose-900'
+        }`}
+        role="status"
+      >
+        <div className="flex items-start gap-2.5 min-w-0">
+          <span
+            className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+              testToast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'
+            }`}
+          />
+          <div className="text-xs leading-5 break-words font-medium">{testToast.message}</div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0 -mr-1">
+          <button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(testToast.message)}
+            className="rounded-md p-1 text-zinc-500 hover:bg-black/5 hover:text-zinc-900 transition-colors"
+            title="Copy message"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTestToast(null)}
+            className="rounded-md p-1 text-zinc-500 hover:bg-black/5 hover:text-zinc-900 transition-colors"
+            title="Close"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    )}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">Loading model service…</div> : <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← Model services</Link><h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white"><Plus className="h-4 w-4" /> Add provider</button></div>
       <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"><div className="min-w-0"><label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">Model service</label><div className="mt-2 flex items-center gap-2"><span className="truncate text-lg font-medium text-zinc-950">{service.name}</span><button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Copy model service name"><Copy className="h-4 w-4" /></button>{copied && <span className="text-xs text-emerald-600">Copied</span>}</div></div><div className="text-sm text-zinc-600"><div className="flex items-center gap-1"><span className="font-medium text-zinc-950">Routing</span><button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title="Edit routing strategy"><Pencil className="h-4 w-4" /></button></div><div className="mt-1 text-zinc-500">{routing?.label}</div>{service.strategy === 'capability_aware' && service.judge_enabled && <div className="mt-1 text-xs text-emerald-600 font-medium">Judge: {service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled'}</div>}</div><div className="text-sm text-zinc-600"><span className="font-medium text-zinc-950">Supported APIs</span><div className="mt-1 space-y-1 text-zinc-500"><div>OpenAI Chat</div><div>OpenAI Responses</div><div>Anthropic Messages</div></div></div></div></section>

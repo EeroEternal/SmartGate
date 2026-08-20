@@ -116,7 +116,14 @@
     "cooling_down": "Cooling down",
     "degraded": "Degraded",
     "unavailable": "Unavailable",
-    "last_known": "Last known {status}"
+    "last_known": "Last known {status}",
+    "probe_button": "Probe DNA",
+    "probe_modal_title": "Active Capability Exploration & Benchmark Probe",
+    "probe_modal_subtitle": "Sends live targeted test cases to evaluate syntax logic, multi-step math, tool-calling schema, and constraint adherence.",
+    "probe_run": "Run 5D Benchmark Probe",
+    "probe_running": "Probing 5D Capabilities…",
+    "probe_completed": "Capability Probing Completed & Calibrated",
+    "probe_apply": "Apply & Calibrate Radar"
   },
   "keys": {
     "title": "API keys",

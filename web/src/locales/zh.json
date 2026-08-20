@@ -116,7 +116,14 @@
     "cooling_down": "熔断冷却中",
     "degraded": "降级受损",
     "unavailable": "不可用",
-    "last_known": "历史状态: {status}"
+    "last_known": "历史状态: {status}",
+    "probe_button": "探索能力",
+    "probe_modal_title": "主动能力探索与基准评测 (5D Model DNA Probe)",
+    "probe_modal_subtitle": "实时发送覆盖代码、多步推理、工具调用 Schema 与指令约束的基准探针，自适应度量并校准该模型的真实能力水平与雷达图谱。",
+    "probe_run": "开始 5D 能力基准评测",
+    "probe_running": "正在进行多维能力探针测试…",
+    "probe_completed": "能力评测完成并已动态校准",
+    "probe_apply": "应用并校准雷达图"
   },
   "keys": {
     "title": "API 密钥",
