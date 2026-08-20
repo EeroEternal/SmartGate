@@ -256,6 +256,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
                 .delete(delete_model_service),
         )
         .route("/api-keys", get(list_api_keys).post(create_api_key))
+        .route("/api-keys/:id/profile", get(get_api_key_profile))
         .route(
             "/api-keys/:id",
             patch(update_api_key).delete(delete_api_key),
@@ -1958,6 +1959,249 @@ async fn list_api_keys(
     Ok(Json(ApiResponse::success(keys)))
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct ApiKeyProfileRow {
+    timestamp: chrono::DateTime<Utc>,
+    prompt_tokens: i32,
+    completion_tokens: i32,
+    total_tokens: i32,
+    latency_ms: i32,
+    status_code: Option<i32>,
+    estimated_cost: f64,
+    provider_type: String,
+    routing_decision: Option<String>,
+    metadata: Option<String>,
+    usage_source: String,
+    usage_confidence: String,
+    pricing_source: String,
+    session_id: Option<String>,
+    ttft_ms: Option<i32>,
+    affinity_applied: i32,
+    affinity_hit: i32,
+}
+
+async fn get_api_key_profile(
+    State(state): State<Arc<AppState>>,
+    ctx: SaasContext,
+    Path(key_id): Path<String>,
+    Query(query): Query<RangeQuery>,
+) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let range = query.range.as_deref().unwrap_or("7d");
+    let since = range_since(range)?;
+    let key: Option<(String, String, String, bool, chrono::DateTime<Utc>)> = sqlx::query_as(
+        "SELECT id, name, key_prefix, enabled, created_at
+         FROM api_keys WHERE id = $1 AND project_id = $2",
+    )
+    .bind(&key_id)
+    .bind(&ctx.project_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_error)?;
+    let Some((id, name, prefix, enabled, created_at)) = key else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("API key not found")),
+        ));
+    };
+
+    let base_sql = "SELECT u.timestamp, u.prompt_tokens, u.completion_tokens,
+                           u.total_tokens, u.latency_ms, u.status_code,
+                           u.estimated_cost,
+                           COALESCE(pa.provider_type, 'unknown'),
+                           u.routing_decision, u.metadata,
+                           u.usage_source, u.usage_confidence, u.pricing_source,
+                           u.session_id, u.ttft_ms, u.affinity_applied, u.affinity_hit
+                    FROM usage_logs u
+                    LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
+                    WHERE u.project_id = $1 AND u.key_id = $2";
+    let rows: Vec<ApiKeyProfileRow> = if let Some(value) = since {
+        sqlx::query_as(&format!("{base_sql} AND u.timestamp >= $3 ORDER BY u.timestamp ASC"))
+            .bind(&ctx.project_id)
+            .bind(&key_id)
+            .bind(value)
+            .fetch_all(&state.db)
+            .await
+    } else {
+        sqlx::query_as(&format!("{base_sql} ORDER BY u.timestamp ASC"))
+            .bind(&ctx.project_id)
+            .bind(&key_id)
+            .fetch_all(&state.db)
+            .await
+    }
+    .map_err(db_error)?;
+
+    let sample_count = rows.len() as i64;
+    let successful_count = rows
+        .iter()
+        .filter(|row| row.status_code.is_some_and(|status| (200..300).contains(&status)))
+        .count() as i64;
+    let failed_count = sample_count - successful_count;
+    let total_prompt_tokens: i64 = rows.iter().map(|row| row.prompt_tokens as i64).sum();
+    let total_completion_tokens: i64 = rows.iter().map(|row| row.completion_tokens as i64).sum();
+    let total_tokens: i64 = rows.iter().map(|row| row.total_tokens as i64).sum();
+    let total_cost: f64 = rows.iter().map(|row| row.estimated_cost).sum();
+    let latencies: Vec<i32> = rows.iter().map(|row| row.latency_ms).collect();
+    let ttfts: Vec<i32> = rows.iter().filter_map(|row| row.ttft_ms).collect();
+    let mut difficulty_tiers: BTreeMap<String, i64> = BTreeMap::new();
+    let mut providers: BTreeMap<String, i64> = BTreeMap::new();
+    let mut usage_sources: BTreeMap<String, i64> = BTreeMap::new();
+    let mut usage_confidences: BTreeMap<String, i64> = BTreeMap::new();
+    let mut pricing_sources: BTreeMap<String, i64> = BTreeMap::new();
+    let mut tool_requests = 0i64;
+    let mut fallback_requests = 0i64;
+    let mut session_requests = 0i64;
+    let mut affinity_applied = 0i64;
+    let mut affinity_hits = 0i64;
+
+    for row in &rows {
+        let tier = profile_difficulty_tier(row.routing_decision.as_deref())
+            .unwrap_or_else(|| "unknown".to_string());
+        *difficulty_tiers.entry(tier).or_default() += 1;
+        *providers.entry(row.provider_type.clone()).or_default() += 1;
+        *usage_sources.entry(row.usage_source.clone()).or_default() += 1;
+        *usage_confidences
+            .entry(row.usage_confidence.clone())
+            .or_default() += 1;
+        *pricing_sources.entry(row.pricing_source.clone()).or_default() += 1;
+        tool_requests += i64::from(profile_json_flag(
+            [row.routing_decision.as_ref(), row.metadata.as_ref()],
+            "has_tools",
+        ));
+        fallback_requests += i64::from(profile_json_flag(
+            [row.routing_decision.as_ref(), row.metadata.as_ref()],
+            "fallback",
+        ));
+        session_requests += i64::from(row.session_id.is_some());
+        affinity_applied += i64::from(row.affinity_applied != 0);
+        affinity_hits += i64::from(row.affinity_hit != 0);
+    }
+
+    let average_latency = profile_average(&latencies);
+    let average_ttft = profile_average(&ttfts);
+    let quality_evidence = json!({
+        "status": "unavailable",
+        "judge_evaluated_requests": 0,
+        "judge_agreement_rate": Value::Null,
+        "explicit_feedback_count": 0,
+        "confidence": "none",
+    });
+
+    Ok(Json(ApiResponse::success(json!({
+        "key": {
+            "id": id,
+            "name": name,
+            "prefix": prefix,
+            "enabled": enabled,
+            "created_at": created_at,
+        },
+        "range": range,
+        "window_start": since,
+        "last_observed_at": rows.last().map(|row| row.timestamp),
+        "sample_count": sample_count,
+        "confidence": profile_confidence(sample_count),
+        "requests": {
+            "total": sample_count,
+            "successful": successful_count,
+            "failed": failed_count,
+            "success_rate": profile_rate(successful_count, sample_count),
+        },
+        "latency_ms": {
+            "average": average_latency,
+            "p50": profile_percentile(&latencies, 0.50),
+            "p95": profile_percentile(&latencies, 0.95),
+            "ttft_average": average_ttft,
+            "ttft_p95": profile_percentile(&ttfts, 0.95),
+        },
+        "tokens": {
+            "prompt": total_prompt_tokens,
+            "completion": total_completion_tokens,
+            "total": total_tokens,
+            "average_per_request": profile_rate(total_tokens, sample_count),
+        },
+        "cost": {
+            "total": total_cost,
+            "average_per_request": profile_rate_f64(total_cost, sample_count),
+            "usage_sources": usage_sources,
+            "usage_confidences": usage_confidences,
+            "pricing_sources": pricing_sources,
+        },
+        "workload": {
+            "difficulty_tiers": difficulty_tiers,
+            "tool_request_rate": profile_rate(tool_requests, sample_count),
+            "fallback_rate": profile_rate(fallback_requests, sample_count),
+            "session_rate": profile_rate(session_requests, sample_count),
+            "affinity_applied_rate": profile_rate(affinity_applied, sample_count),
+            "affinity_hit_rate": profile_rate(affinity_hits, sample_count),
+        },
+        "providers": providers,
+        "quality_evidence": quality_evidence,
+    }))))
+}
+
+fn profile_confidence(sample_count: i64) -> &'static str {
+    match sample_count {
+        0 => "cold_start",
+        1..=19 => "low_confidence",
+        20..=99 => "medium_confidence",
+        _ => "high_confidence",
+    }
+}
+
+fn profile_rate(numerator: i64, denominator: i64) -> Option<f64> {
+    (denominator > 0).then(|| numerator as f64 / denominator as f64)
+}
+
+fn profile_rate_f64(numerator: f64, denominator: i64) -> Option<f64> {
+    (denominator > 0).then(|| numerator / denominator as f64)
+}
+
+fn profile_average(values: &[i32]) -> Option<f64> {
+    (!values.is_empty()).then(|| values.iter().map(|value| *value as f64).sum::<f64>() / values.len() as f64)
+}
+
+fn profile_percentile(values: &[i32], fraction: f64) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    let index = ((sorted.len() - 1) as f64 * fraction).round() as usize;
+    Some(sorted[index.min(sorted.len() - 1)] as f64)
+}
+
+fn profile_json_flag<const N: usize>(raw_values: [Option<&String>; N], key: &str) -> bool {
+    raw_values
+        .into_iter()
+        .filter_map(|raw| raw.and_then(|value| serde_json::from_str::<Value>(value).ok()))
+        .any(|value| profile_json_value(&value, key).is_some_and(|item| {
+            item.as_bool().unwrap_or_else(|| item.as_str().is_some_and(|text| matches!(text, "true" | "1")))
+        }))
+}
+
+fn profile_json_value<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+    match value {
+        Value::Object(object) => object.get(key).or_else(|| object.values().find_map(|item| profile_json_value(item, key))),
+        Value::Array(items) => items.iter().find_map(|item| profile_json_value(item, key)),
+        _ => None,
+    }
+}
+
+fn profile_difficulty_tier(raw: Option<&str>) -> Option<String> {
+    let value = serde_json::from_str::<Value>(raw?).ok()?;
+    if let Some(tier) = profile_json_value(&value, "difficulty_tier").and_then(Value::as_str) {
+        return Some(tier.to_string());
+    }
+    let difficulty = profile_json_value(&value, "difficulty").and_then(Value::as_f64)?;
+    Some(if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
+        "high"
+    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
+        "medium"
+    } else {
+        "low"
+    }
+    .to_string())
+}
+
 async fn create_api_key(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -3119,8 +3363,38 @@ fn saas_strategy(raw: &str) -> Result<String, (StatusCode, Json<ApiResponse<()>>
 #[cfg(test)]
 mod tests {
     use super::{
-        calculate_savings, saas_strategy, validate_verification_code, verification_code_hash,
+        calculate_savings, profile_confidence, profile_difficulty_tier, profile_json_flag,
+        profile_percentile, profile_rate, saas_strategy, validate_verification_code,
+        verification_code_hash,
     };
+
+    #[test]
+    fn api_key_profile_confidence_uses_sample_count() {
+        assert_eq!(profile_confidence(0), "cold_start");
+        assert_eq!(profile_confidence(1), "low_confidence");
+        assert_eq!(profile_confidence(19), "low_confidence");
+        assert_eq!(profile_confidence(20), "medium_confidence");
+        assert_eq!(profile_confidence(100), "high_confidence");
+    }
+
+    #[test]
+    fn api_key_profile_helpers_are_null_aware_and_ignore_raw_prompt_fields() {
+        assert_eq!(profile_rate(0, 0), None);
+        assert_eq!(profile_rate(1, 4), Some(0.25));
+        assert_eq!(profile_percentile(&[400, 100, 200, 300], 0.95), Some(400.0));
+
+        let decision = serde_json::json!({
+            "difficulty": 0.6,
+            "has_tools": true,
+            "nested": {"fallback": "true"},
+            "prompt_preview": "must not be returned"
+        })
+        .to_string();
+        assert_eq!(profile_difficulty_tier(Some(&decision)).as_deref(), Some("high"));
+        assert!(profile_json_flag([Some(&decision)], "has_tools"));
+        assert!(profile_json_flag([Some(&decision)], "fallback"));
+        assert!(!profile_json_flag([Some(&decision)], "prompt_preview"));
+    }
 
     #[test]
     fn verification_code_hash_is_bound_to_email() {
