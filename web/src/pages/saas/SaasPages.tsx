@@ -81,6 +81,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
 }
 
 export function CodexPage() {
+  const { t } = useI18n()
   const profileConfig = `model = "fusion"
 model_provider = "smartgate"
 preferred_auth_method = "apikey"
@@ -120,42 +121,105 @@ experimental_bearer_token = "<project-api-key>"`
   }]
 }`
 
-  return <Page>
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2 text-sm font-medium text-primary"><FileCode2 className="h-4 w-4" /> Codex integration</div>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Use Codex with SmartGate</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.</p>
+  return (
+    <Page>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+            <FileCode2 className="h-4 w-4" /> {t('codex.integration_tag') || 'Codex integration'}
+          </div>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t('codex.title') || 'Use Codex with SmartGate'}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
+            {t('codex.subtitle') || 'Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+          {t('codex.supported_badge') || 'Codex supported'}
+        </div>
       </div>
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">Codex supported</div>
-    </div>
 
-    <section className="mt-8 grid gap-4 md:grid-cols-3">
-      {[
-        ['1', 'Create a model service', 'Connect providers and choose the routing strategy for Codex requests.', '/app/services', 'Open model services'],
-        ['2', 'Create an API key', 'Authorize the model service so Codex can call it using its service name.', '/app/keys', 'Open API keys'],
-        ['3', 'Configure Codex', 'Add the Profile and model catalog below, then restart Codex with the Profile.', null, null],
-      ].map(([number, title, text, href, action]) => <div key={number} className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{number}</div><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{text}</p>{href && action && <Link to={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">{action} <ExternalLink className="h-3.5 w-3.5" /></Link>}</div>)}
-    </section>
+      <section className="mt-8 grid gap-4 md:grid-cols-3">
+        {[
+          ['1', t('codex.step1_title') || 'Create a model service', t('codex.step1_desc') || 'Connect providers and choose the routing strategy for Codex requests.', '/app/services', t('codex.step1_action') || 'Open model services'],
+          ['2', t('codex.step2_title') || 'Create an API key', t('codex.step2_desc') || 'Authorize the model service so Codex can call it using its service name.', '/app/keys', t('codex.step2_action') || 'Open API keys'],
+          ['3', t('codex.step3_title') || 'Configure Codex', t('codex.step3_desc') || 'Add the Profile and model catalog below, then restart Codex with the Profile.', null, null],
+        ].map(([number, title, text, href, action]) => (
+          <div key={number} className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{number}</div>
+            <h2 className="mt-4 font-semibold">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">{text}</p>
+            {href && action && (
+              <Link to={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover">
+                {action} <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
+        ))}
+      </section>
 
-    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5">
-      <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Codex Profile</h2><p className="mt-1 text-sm text-zinc-500">Save this as <code>~/.codex/fusion.config.toml</code>. Replace the path, endpoint, model name, and API key with values from this workspace.</p></div><span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">Profile</span></div>
-      <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
-      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Why Chat Completions?</strong> Codex uses the OpenAI Responses API, while SmartGate translates the request for the configured upstream. For the Fusion Profile, use <code>wire_api = "chat_completions"</code> when the upstream does not accept the Responses API <code>thinking_budget</code> parameter.</div>
-    </section>
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">{t('codex.profile_title') || 'Codex Profile'}</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              {t('codex.profile_desc', { path: '~/.codex/fusion.config.toml' }) || 'Save this as ~/.codex/fusion.config.toml. Replace the path, endpoint, model name, and API key with values from this workspace.'}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">
+            {t('codex.profile_badge') || 'Profile'}
+          </span>
+        </div>
+        <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+          <strong>{t('codex.why_chat_title') || 'Why Chat Completions?'}</strong> {t('codex.why_chat_desc', { code: 'wire_api = "chat_completions"', param: 'thinking_budget' }) || 'Codex uses the OpenAI Responses API, while SmartGate translates the request for the configured upstream. For the Fusion Profile, use wire_api = "chat_completions" when the upstream does not accept the Responses API thinking_budget parameter.'}
+        </div>
+      </section>
 
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-      <div><h2 className="font-semibold">Model catalog</h2><p className="mt-1 text-sm text-zinc-500">Save this as <code>~/.codex/models.json</code>. The <code>slug</code> must match the model service name authorized for the API key.</p></div>
-      <pre className="mt-5 max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
-    </section>
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <div>
+          <h2 className="font-semibold">{t('codex.catalog_title') || 'Model catalog'}</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            {t('codex.catalog_desc', { path: '~/.codex/models.json', code: 'slug' }) || 'Save this as ~/.codex/models.json. The slug must match the model service name authorized for the API key.'}
+          </p>
+        </div>
+        <pre className="mt-5 max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
+      </section>
 
-    <section className="mt-6 grid gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Start Codex</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Use the standalone Profile so Codex does not try to load the model catalog from the base configuration.</p><pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre><p className="mt-3 text-xs leading-5 text-zinc-500">Restart Codex after changing the Profile or model catalog.</p></div>
-      <div className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Troubleshooting</h2><div className="mt-4 space-y-3 text-sm"><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>401 Unauthorized:</strong> check the project API key and service grant.</p></div><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>Reasoning preset error:</strong> use objects with <code>effort</code> and <code>description</code>, not strings.</p></div><div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p><strong>AbsolutePathBuf error:</strong> keep <code>model_catalog_json</code> in the standalone Profile.</p></div></div></div>
-    </section>
+      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <h2 className="font-semibold">{t('codex.start_title') || 'Start Codex'}</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            {t('codex.start_desc') || 'Use the standalone Profile so Codex does not try to load the model catalog from the base configuration.'}
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre>
+          <p className="mt-3 text-xs leading-5 text-zinc-500">
+            {t('codex.restart_hint') || 'Restart Codex after changing the Profile or model catalog.'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <h2 className="font-semibold">{t('codex.troubleshooting_title') || 'Troubleshooting'}</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex gap-3">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <p><strong>{t('codex.err_401_title') || '401 Unauthorized:'}</strong> {t('codex.err_401_desc') || 'check the project API key and service grant.'}</p>
+            </div>
+            <div className="flex gap-3">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <p><strong>{t('codex.err_reasoning_title') || 'Reasoning preset error:'}</strong> {t('codex.err_reasoning_desc', { effort: 'effort', description: 'description' }) || 'use objects with effort and description, not strings.'}</p>
+            </div>
+            <div className="flex gap-3">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <p><strong>{t('codex.err_path_title') || 'AbsolutePathBuf error:'}</strong> {t('codex.err_path_desc', { config: 'model_catalog_json' }) || 'keep model_catalog_json in the standalone Profile.'}</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 p-4 text-xs leading-5 text-zinc-600">Keep <code>experimental_bearer_token</code> private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed.</div>
-  </Page>
+      <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 p-4 text-xs leading-5 text-zinc-600">
+        {t('codex.security_warning', { token: 'experimental_bearer_token' }) || 'Keep experimental_bearer_token private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed.'}
+      </div>
+    </Page>
+  )
 }
 
 export function ServicesPage() {
@@ -2067,54 +2131,54 @@ export function AnalyticsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.analyzed_queries') || 'Analyzed queries'}</div>
-            <div className="mt-2 text-2xl font-bold text-zinc-950">{total.toLocaleString()}</div>
-            <div className="mt-2 text-xs text-zinc-400">{t('analytics.analyzed_queries_sub') || 'Intelligent complexity scored'}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.analyzed_queries') || 'Analyzed queries'}</div>
+            <div className="mt-2 text-2xl font-bold text-zinc-950 whitespace-nowrap">{total.toLocaleString()}</div>
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.analyzed_queries_sub') || 'Intelligent complexity scored'}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.complexity_breakdown') || 'Complexity breakdown'}</div>
-            <div className="mt-2 flex items-baseline gap-4">
-              <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.complexity_breakdown') || 'Complexity breakdown'}</div>
+            <div className="mt-2 flex items-baseline gap-2.5 sm:gap-3 flex-nowrap">
+              <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.high_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_high') || 'High'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_high_short') || t('analytics.tier_high') || 'High'}</span>
               </div>
-              <div className="h-4 w-px bg-zinc-200" />
-              <div>
+              <div className="h-4 w-px bg-zinc-200 shrink-0" />
+              <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-amber-600">{(data?.summary.medium_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_medium') || 'Med'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_medium_short') || t('analytics.tier_medium') || 'Med'}</span>
               </div>
-              <div className="h-4 w-px bg-zinc-200" />
-              <div>
+              <div className="h-4 w-px bg-zinc-200 shrink-0" />
+              <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.low_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">{t('analytics.tier_low') || 'Low'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_low_short') || t('analytics.tier_low') || 'Low'}</span>
               </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('analytics.high_reasoning_sub', { pct: highPct }) || `${highPct}% complex reasoning & code`}</div>
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.high_reasoning_sub', { pct: highPct }) || `${highPct}% complex reasoning & code`}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.model_tier_routing') || 'Model tier routing'}</div>
-            <div className="mt-2 flex items-baseline gap-4">
-              <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.model_tier_routing') || 'Model tier routing'}</div>
+            <div className="mt-2 flex items-baseline gap-3 sm:gap-4 flex-nowrap">
+              <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.pro_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">{t('analytics.pro_model') || 'Pro model'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.pro_model_short') || t('analytics.pro_model') || 'Pro'}</span>
               </div>
-              <div className="h-4 w-px bg-zinc-200" />
-              <div>
+              <div className="h-4 w-px bg-zinc-200 shrink-0" />
+              <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.flash_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400">{t('analytics.flash_model') || 'Flash model'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.flash_model_short') || t('analytics.flash_model') || 'Flash'}</span>
               </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('analytics.dynamic_dispatch') || 'Dynamic capability dispatch'}</div>
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.dynamic_dispatch') || 'Dynamic capability dispatch'}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">{t('analytics.estimated_savings') || 'Estimated savings'}</div>
-            <div className="mt-2 text-2xl font-bold text-emerald-600">
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.estimated_savings') || 'Estimated savings'}</div>
+            <div className="mt-2 text-2xl font-bold text-emerald-600 whitespace-nowrap">
               ${(data?.summary.estimated_savings || 0).toFixed(4)}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">
               {t('analytics.total_spend', { amount: (data?.summary.total_cost || 0).toFixed(4) }) || `Total spend: $${(data?.summary.total_cost || 0).toFixed(4)}`}
             </div>
           </div>
