@@ -2284,6 +2284,79 @@ const compactTokens = (value: number | undefined) => {
   return v.toLocaleString()
 }
 
+const cleanDisplayName = (name: string | undefined) => {
+  if (!name) return ''
+  return name.replace(/^[0-9a-fA-F-]{36,37}-/, '').replace(/^saas-[0-9a-fA-F-]{36}/, 'DeepSeek').replace(/^saas-/, '')
+}
+
+function MissingTokensModal({
+  missingUsage,
+  totalMissing,
+  onClose,
+}: {
+  missingUsage: MissingUsageBreakdown[]
+  totalMissing: number
+  onClose: () => void
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('usage.missing_modal_title') || 'Requests without Provider-Reported Tokens'}</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {t('usage.requests_without_tokens_sub', { count: compactNumber(totalMissing) }) || `${compactNumber(totalMissing)} requests use local estimates or lack upstream token reporting.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-5 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-zinc-50/50 p-4">
+          {missingUsage.map((item) => (
+            <div key={`${item.provider}-${item.model}`} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-zinc-900">
+                  {cleanDisplayName(item.provider)} <span className="font-normal text-zinc-400">/</span> {item.model}
+                </div>
+                <div className="mt-1 space-y-0.5 text-xs text-zinc-500">
+                  <div>{t('usage.missing_tokens_count', { count: compactNumber(item.requests) }) || `${compactNumber(item.requests)} requests without provider tokens`}</div>
+                  {item.local_estimate_requests > 0 && (
+                    <div className="text-amber-700">{t('usage.local_estimates_count', { count: compactNumber(item.local_estimate_requests) }) || `${compactNumber(item.local_estimate_requests)} use local byte/char estimation`}</div>
+                  )}
+                  {item.unavailable_requests > 0 && (
+                    <div className="text-rose-600">{t('usage.unavailable_count', { count: compactNumber(item.unavailable_requests) }) || `${compactNumber(item.unavailable_requests)} have no token data`}</div>
+                  )}
+                </div>
+              </div>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 border border-amber-200">
+                {t('usage.needs_review') || 'Needs Review'}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
+          >
+            {t('common.close') || 'Close'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function UsagePage() {
   const { t } = useI18n()
   const [data, setData] = useState<UsageData | null>(null)
@@ -2291,6 +2364,7 @@ export function UsagePage() {
   const [baseline, setBaseline] = useState<SavingsBaseline | null>(null)
   const [baselineOptions, setBaselineOptions] = useState<ServiceDetails[]>([])
   const [baselineOpen, setBaselineOpen] = useState(false)
+  const [missingTokensModalOpen, setMissingTokensModalOpen] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -2325,6 +2399,7 @@ export function UsagePage() {
     groups.set(provider, providerModels)
     return groups
   }, new Map())
+  const totalSpend = (data?.estimated_spend || 0) > 0 ? (data?.estimated_spend || 0) : Math.max(providers.reduce((acc, p) => acc + p.estimated_spend, 0), 0.0001)
   const maxProviderSpend = Math.max(...providers.map((item) => item.estimated_spend), 0.000001)
   const missingUsage = data?.coverage?.missing_usage_breakdown || []
 
@@ -2347,9 +2422,9 @@ export function UsagePage() {
         <Stat label={t('usage.success_rate') || 'Success rate'} value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
       </div>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold">{t('usage.prompt_cache') || 'Prompt cache'}</h2>
+          <h2 className="font-semibold text-zinc-900">{t('usage.prompt_cache') || 'Prompt cache'}</h2>
           <span title={t('usage.prompt_cache_subtitle') || 'Provider-reported input tokens served from cache. This is separate from context trimming.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
             <HelpCircle className="h-3.5 w-3.5" />
           </span>
@@ -2366,52 +2441,78 @@ export function UsagePage() {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
-          <span title={t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
-            <HelpCircle className="h-3.5 w-3.5" />
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-zinc-900">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
+            <span title={t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <HelpCircle className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <span className="text-xs text-zinc-400">
+            {providers.length} {t('usage.providers_count') || 'Providers'} • {models.length} {t('usage.models_count') || 'Models'}
           </span>
         </div>
         {providers.length ? (
-          <div className="mt-5 divide-y divide-zinc-100">
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             {providers.map((item) => {
               const providerModels = modelsByProvider.get(item.provider || '') || []
+              const spendShare = totalSpend > 0 ? (item.estimated_spend / totalSpend) * 100 : 0
               return (
-                <div key={item.provider} className="py-5 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="font-medium">{item.provider}</span>
-                    <span className="font-mono text-zinc-600">{money(item.estimated_spend)}</span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-zinc-100">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 2)}%` }} />
-                  </div>
-                  <div className="mt-1 space-y-1 text-xs text-zinc-500">
-                    <div>{compactNumber(item.requests)} {t('usage.requests') || 'requests'}</div>
-                    <div>{compactNumber(item.total_tokens)} {t('usage.total_tokens') || 'tokens'}</div>
-                    {item.cache_hit_tokens ? <div>{compactNumber(item.cache_hit_tokens)} {t('usage.cache_hit_tokens') || 'cache hit tokens'}</div> : null}
-                    {item.cache_write_tokens ? <div>{compactNumber(item.cache_write_tokens)} {t('usage.cache_write_tokens') || 'cache write tokens'}</div> : null}
-                  </div>
-                  {providerModels.length ? (
-                    <div className="mt-5 border-l-2 border-zinc-100 pl-4">
-                      <div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">{t('usage.models_label') || 'Models'}</div>
-                      <div className="space-y-3">
-                        {providerModels.slice(0, 10).map((model) => (
-                          <div key={`${model.provider}-${model.model}`} className="flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm">{model.model}</div>
-                              <div className="mt-1 text-xs text-zinc-500">
-                                {compactNumber(model.requests)} {t('usage.requests') || 'requests'} <span className="mx-1">/</span> {compactNumber(model.total_tokens)} {t('usage.total_tokens') || 'tokens'}
-                                {model.cache_hit_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_hit_tokens)} {t('usage.cached_suffix') || 'cached'}</> : null}
-                                {model.cache_write_tokens ? <><span className="mx-1">/</span> {compactNumber(model.cache_write_tokens)} {t('usage.written_suffix') || 'written'}</> : null}
+                <div key={item.provider} className="flex flex-col justify-between rounded-xl border border-zinc-200/80 bg-zinc-50/40 p-4 shadow-sm">
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-zinc-900 truncate">{cleanDisplayName(item.provider)}</span>
+                        <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-mono text-zinc-600 border border-zinc-200 shrink-0">
+                          {spendShare.toFixed(1)}% {t('usage.share') || 'share'}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-zinc-900 shrink-0">{money(item.estimated_spend)}</span>
+                    </div>
+
+                    <div className="mt-2.5 h-1.5 w-full rounded-full bg-zinc-200/60 overflow-hidden">
+                      <div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.max((item.estimated_spend / maxProviderSpend) * 100, 3)}%` }} />
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 border-b border-zinc-200/60 pb-3">
+                      <div><strong className="text-zinc-800 font-medium">{compactNumber(item.requests)}</strong> {t('usage.requests') || 'requests'}</div>
+                      <div><strong className="text-zinc-800 font-medium">{compactTokens(item.total_tokens)}</strong> {t('usage.total_tokens') || 'tokens'}</div>
+                      {item.cache_hit_tokens ? (
+                        <div className="text-emerald-700 font-medium">⚡ {compactTokens(item.cache_hit_tokens)} cached</div>
+                      ) : null}
+                    </div>
+
+                    {providerModels.length ? (
+                      <div className="mt-3 space-y-2">
+                        {providerModels.slice(0, 8).map((model) => {
+                          const modelShare = item.estimated_spend > 0 ? (model.estimated_spend / item.estimated_spend) * 100 : 0
+                          return (
+                            <div key={`${model.provider}-${model.model}`} className="flex items-center justify-between gap-3 rounded-lg bg-white p-2.5 border border-zinc-200/60 text-xs">
+                              <div className="min-w-0">
+                                <div className="font-medium text-zinc-900 truncate">{model.model}</div>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+                                  <span>{compactNumber(model.requests)} reqs</span>
+                                  <span>•</span>
+                                  <span>{compactTokens(model.total_tokens)} tok</span>
+                                  {model.cache_hit_tokens ? (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-emerald-600 font-medium">{compactTokens(model.cache_hit_tokens)} cached</span>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="font-mono font-semibold text-zinc-800">{money(model.estimated_spend)}</div>
+                                <div className="text-[10px] text-zinc-400">{modelShare.toFixed(0)}%</div>
                               </div>
                             </div>
-                            <span className="shrink-0 font-mono text-sm text-zinc-600">{money(model.estimated_spend)}</span>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
               )
             })}
@@ -2421,10 +2522,10 @@ export function UsagePage() {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold">{t('usage.context_savings') || 'Context savings'}</h2>
+            <h2 className="font-semibold text-zinc-900">{t('usage.context_savings') || 'Context savings'}</h2>
             <span title={t('usage.context_savings_sub') || 'Signals produced by context reduction. This is separate from provider billing.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
             </span>
@@ -2443,11 +2544,15 @@ export function UsagePage() {
           <Stat label={t('usage.dollar_savings') || 'Estimated dollar savings'} value={savings?.estimated_savings == null ? (t('usage.not_available') || 'Not available') : money(Number(savings.estimated_savings))} />
         </div>
         {baseline && (
-          <p className="mt-4 text-xs text-zinc-500">
-            {t('usage.compared_with', { service: baseline.model_service_name, model: baseline.model, provider: baseline.provider_name }) || `Compared with ${baseline.model_service_name} / ${baseline.model} (${baseline.provider_name}).`}
+          <p className="mt-4 text-xs text-zinc-600">
+            {t('usage.compared_with', {
+              service: cleanDisplayName(baseline.model_service_name),
+              model: baseline.model,
+              provider: cleanDisplayName(baseline.provider_name),
+            }) || `Compared with ${cleanDisplayName(baseline.model_service_name)} / ${baseline.model} (${cleanDisplayName(baseline.provider_name)}).`}
           </p>
         )}
-        <p className="mt-2 text-xs text-zinc-500">{baseline ? (t('usage.savings_basis_desc') || savings?.basis) : (t('usage.config_baseline') || 'Configure a model service baseline to estimate dollar savings.')}</p>
+        <p className="mt-2 text-xs text-zinc-400">{baseline ? (t('usage.savings_basis_desc') || savings?.basis) : (t('usage.config_baseline') || 'Configure a model service baseline to estimate dollar savings.')}</p>
       </section>
 
       {baselineOpen && (
@@ -2463,8 +2568,16 @@ export function UsagePage() {
         />
       )}
 
+      {missingTokensModalOpen && (
+        <MissingTokensModal
+          missingUsage={missingUsage}
+          totalMissing={data?.coverage?.missing_usage_requests || 0}
+          onClose={() => setMissingTokensModalOpen(false)}
+        />
+      )}
+
       {data?.budget && (
-        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex justify-between text-sm">
             <span>{t('usage.todays_budget') || 'Today’s budget'}</span>
             <span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : (t('usage.no_limit') || 'No limit set')}</span>
@@ -2477,17 +2590,29 @@ export function UsagePage() {
       )}
 
       {data?.coverage && (
-        <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+        <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold">{t('usage.data_coverage') || 'Usage data coverage'}</h2>
+              <h2 className="font-semibold text-zinc-900">{t('usage.data_coverage') || 'Usage data coverage'}</h2>
               <span title={t('usage.data_coverage_sub') || 'Shows which requests use provider-reported tokens and which rely on estimates.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
                 <HelpCircle className="h-3.5 w-3.5" />
               </span>
             </div>
-            <span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              {t('usage.provider_reported_badge', { pct: coveragePercent(data.coverage.usage) }) || `${coveragePercent(data.coverage.usage)} provider-reported`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                {t('usage.provider_reported_badge', { pct: coveragePercent(data.coverage.usage) }) || `${coveragePercent(data.coverage.usage)} provider-reported`}
+              </span>
+              {missingUsage.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMissingTokensModalOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                >
+                  <span>{compactNumber(data.coverage.missing_usage_requests)} {t('usage.unreported') || 'Unreported'}</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Coverage
@@ -2501,28 +2626,6 @@ export function UsagePage() {
               detail={t('usage.configured_pricing_detail', { priced: compactNumber(data.coverage.priced_requests), total: compactNumber(data.requests) }) || `${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests have a pricing rule`}
             />
           </div>
-          {missingUsage.length > 0 && (
-            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <div className="font-medium text-amber-900">{t('usage.requests_without_tokens') || 'Requests without provider-reported tokens'}</div>
-              <p className="mt-1 text-sm text-amber-800">{t('usage.requests_without_tokens_sub', { count: compactNumber(data.coverage.missing_usage_requests) }) || `${compactNumber(data.coverage.missing_usage_requests)} requests below use a local estimate or have no token data.`}</p>
-              <div className="mt-4 divide-y divide-amber-200/70">
-                {missingUsage.slice(0, 10).map((item) => (
-                  <div key={`${item.provider}-${item.model}`} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-amber-950">{item.provider} / {item.model}</div>
-                      <div className="mt-1 space-y-0.5 text-xs text-amber-800">
-                        <div>{t('usage.missing_tokens_count', { count: compactNumber(item.requests) }) || `${compactNumber(item.requests)} requests without provider-reported tokens`}</div>
-                        {item.local_estimate_requests > 0 && <div>{t('usage.local_estimates_count', { count: compactNumber(item.local_estimate_requests) }) || `${compactNumber(item.local_estimate_requests)} use local estimates`}</div>}
-                        {item.unavailable_requests > 0 && <div>{t('usage.unavailable_count', { count: compactNumber(item.unavailable_requests) }) || `${compactNumber(item.unavailable_requests)} have no token data`}</div>}
-                      </div>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-1 text-xs font-medium text-amber-900">{t('usage.needs_review') || 'Needs review'}</span>
-                  </div>
-                ))}
-              </div>
-              {missingUsage.length > 10 && <div className="mt-3 text-xs text-amber-800">{t('usage.showing_first_10') || 'Showing the first 10 provider and model groups.'}</div>}
-            </div>
-          )}
         </section>
       )}
     </Page>
@@ -3097,8 +3200,11 @@ export function QualityPage() {
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(15)
+  const [baselineModalOpen, setBaselineModalOpen] = useState(false)
+  const [baselineOptions, setBaselineOptions] = useState<ServiceDetails[]>([])
+  const [baselineData, setBaselineData] = useState<SavingsBaseline | null>(null)
 
-  useEffect(() => {
+  const fetchQualityData = () => {
     setLoading(true)
     saasFetch<QualityAnalyticsData>(`/api/saas/analytics/quality?range=${range}`)
       .then((res) => {
@@ -3107,7 +3213,30 @@ export function QualityPage() {
       })
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchQualityData()
   }, [range])
+
+  useEffect(() => {
+    saasFetch<Service[]>('/api/saas/model-services')
+      .then(async (res) => {
+        const details = await Promise.all((res.data || []).map(async (service) => {
+          try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
+        }))
+        setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
+      })
+      .catch(() => {})
+
+    saasFetch<{ configured?: boolean } & Partial<SavingsBaseline>>('/api/saas/savings-baseline')
+      .then((res) => {
+        if (res.data?.configured) {
+          setBaselineData(res.data as SavingsBaseline)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     setPage(1)
@@ -3168,9 +3297,19 @@ export function QualityPage() {
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.preserved_rate') || 'Quality Preserved Rate'}</div>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                {summary?.quality_preserved_rate != null ? (t('quality.verified_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
+                  {summary?.quality_preserved_rate != null ? (t('quality.verified_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                </span>
+                {summary?.quality_preserved_rate == null && (
+                  <span
+                    title={t('quality.preserved_rate_unavailable_tip') || 'Requires an independent All-Pro baseline to be configured for comparative fidelity measurement.'}
+                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary?.quality_preserved_rate != null ? `${summary.quality_preserved_rate}%` : 'N/A'}
@@ -3181,9 +3320,19 @@ export function QualityPage() {
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.shadow_agreement') || 'Shadow Pro Agreement'}</div>
-              <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
-                {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
+                  {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                </span>
+                {summary?.shadow_agreement_score == null && (
+                  <span
+                    title={t('quality.shadow_agreement_unavailable_tip') || 'No active shadow inference runs were sampled in this time period.'}
+                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-purple-700">
               {summary?.shadow_agreement_score != null ? `${summary.shadow_agreement_score}%` : 'N/A'}
@@ -3207,9 +3356,19 @@ export function QualityPage() {
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                {summary?.schema_compliance_rate != null ? (t('quality.valid_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
+                  {summary?.schema_compliance_rate != null ? (t('quality.valid_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                </span>
+                {summary?.schema_compliance_rate == null && (
+                  <span
+                    title={t('quality.schema_compliance_unavailable_tip') || 'No requests containing tool calls or structured JSON schemas were recorded in this period.'}
+                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
               {summary?.schema_compliance_rate != null ? `${summary.schema_compliance_rate}%` : 'N/A'}
@@ -3227,44 +3386,75 @@ export function QualityPage() {
                 {t('quality.ab_benchmark_subtitle') || 'Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.'}
               </p>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-              <Sparkles className="h-3.5 w-3.5" />
-              {routing?.cost_saved_pct != null ? (t('quality.cost_saved', { pct: routing.cost_saved_pct }) || `${routing.cost_saved_pct}% Cost Saved`) : 'N/A'}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBaselineModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950 transition-colors"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                <span>{baseline ? (t('usage.change_baseline') || 'Change baseline') : (t('usage.config_baseline') || 'Configure baseline')}</span>
+              </button>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
+                <Sparkles className="h-3.5 w-3.5" />
+                {routing?.cost_saved_pct != null ? (t('quality.cost_saved', { pct: routing.cost_saved_pct }) || `${routing.cost_saved_pct}% Cost Saved`) : 'N/A'}
+              </span>
+            </div>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {/* Control Group: Baseline */}
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
-              <div className="flex items-center justify-between border-b border-zinc-200/80 pb-2">
-                <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
-                <span className="text-[10px] font-medium text-zinc-400">{t('quality.flagship_tag') || 'Configured baseline'}</span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
-                  <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                    {baseline ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
-                  </div>
+            <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+              <div>
+                <div className="flex items-center justify-between border-b border-zinc-200/80 pb-2">
+                  <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
+                  <span className="text-[10px] font-medium text-zinc-400">{baseline ? (t('quality.flagship_tag') || 'Configured baseline') : (t('quality.not_configured_tag') || 'Not configured')}</span>
                 </div>
-                <div>
-                  <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
-                  <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                    {baseline ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
+                {baseline ? (
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
+                      <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
+                        ${baseline.cost_per_req.toFixed(4)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
+                      <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
+                        {(baseline.avg_latency_ms / 1000).toFixed(1)}s
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
+                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                        {baseline.task_success_rate}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
+                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                        {baseline.correction_rate}%
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
-                  <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                    {baseline ? `${baseline.task_success_rate}%` : 'N/A'}
+                ) : (
+                  <div className="mt-4 text-center py-4 px-3 rounded-lg border border-dashed border-zinc-200 bg-white/70">
+                    <p className="text-xs text-zinc-600 font-medium">
+                      {t('quality.no_baseline_guide') || 'No comparison baseline is configured yet.'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-400">
+                      {t('quality.no_baseline_guide_desc') || 'Select a flagship model (e.g. Pro) to enable real-time cost savings and latency speedup calculation.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBaselineModalOpen(true)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors"
+                    >
+                      <Settings2 className="h-3 w-3" />
+                      <span>{t('quality.configure_baseline_now') || 'Configure Baseline Now'}</span>
+                    </button>
                   </div>
-                </div>
-                <div>
-                  <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
-                  <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                    {baseline ? `${baseline.correction_rate}%` : 'N/A'}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -3319,11 +3509,6 @@ export function QualityPage() {
             </div>
           </div>
 
-          {comparisonUnavailable && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-2.5 text-xs text-amber-800">
-              {t('quality.comparison_unavailable') || 'No independent baseline is configured. Quality and savings comparisons are unavailable.'}
-            </div>
-          )}
           <div className="mt-4 rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5 text-xs text-zinc-600 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <CheckCheck className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -3331,6 +3516,19 @@ export function QualityPage() {
             </span>
           </div>
         </div>
+
+        {baselineModalOpen && (
+          <SavingsBaselineModal
+            services={baselineOptions}
+            baseline={baselineData}
+            onClose={() => setBaselineModalOpen(false)}
+            onSaved={(next) => {
+              setBaselineData(next)
+              setBaselineModalOpen(false)
+              fetchQualityData()
+            }}
+          />
+        )}
 
         {/* Quality Stream & Evaluation Logs Table */}
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
