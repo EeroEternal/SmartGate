@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -2120,6 +2120,7 @@ export function KeysPage() {
   const [services, setServices] = useState<Service[]>([])
   const { dialog, showConfirm } = useDialog()
   const [raw, setRaw] = useState('')
+  const [createdServiceNames, setCreatedServiceNames] = useState<string[]>([])
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -2141,6 +2142,7 @@ export function KeysPage() {
       body: JSON.stringify({ name, model_service_ids: modelServiceIds }),
     })
     setRaw(result.data?.key || '')
+    setCreatedServiceNames(services.filter((service) => modelServiceIds.includes(service.id)).map((service) => service.name))
     setModalOpen(false)
     load()
   }
@@ -2180,24 +2182,11 @@ export function KeysPage() {
     >
       {dialog}
       {raw && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 mb-6">
-          <div className="text-sm font-medium text-amber-900">
-            {t('keys.copy_notice') || 'Copy this key now. It will not be shown again.'}
-          </div>
-          <div className="mt-3 flex gap-2">
-            <code className="flex-1 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-sm">
-              {raw}
-            </code>
-            <button
-              type="button"
-              onClick={() => copyKeyText(raw, 'raw')}
-              className="rounded-lg border border-amber-300 p-2 text-amber-900 hover:bg-amber-100 transition-colors"
-              title="Copy"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <KeyCreatedModal
+          rawKey={raw}
+          serviceNames={createdServiceNames}
+          onClose={() => { setRaw(''); setCreatedServiceNames([]) }}
+        />
       )}
       {error && <ErrorMessage text={error} />}
       {!keys.length ? (
@@ -2440,6 +2429,100 @@ function CreateKeyModal({ services, existingNames, onClose, onCreate }: { servic
     try { await onCreate(normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Create API key</h2><p className="mt-1 text-sm text-zinc-500">This key can call the selected model services.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><Field label="Key name" value={name} onChange={setName} placeholder="Production app" /><fieldset><legend className="text-sm font-medium text-zinc-700">Model services</legend><p className="mt-1 text-xs text-zinc-500">In each request, use the selected service name as the <code>model</code> value.</p><div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">{services.length ? services.map((service) => <label key={service.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-zinc-50"><input type="checkbox" checked={selected.includes(service.id)} onChange={() => toggle(service.id)} className="h-4 w-4 accent-zinc-950" /><span className="text-sm text-zinc-700">{service.name}</span></label>) : <p className="px-3 py-2 text-sm text-zinc-500">Create a model service before creating an API key.</p>}</div></fieldset></div>{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create key'}</button></div></form></div>
+}
+
+/// Success dialog shown right after an API key is created: reveal-once key with
+/// copy/download actions and a ready-to-run request example.
+function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; serviceNames: string[]; onClose: () => void }) {
+  const { t } = useI18n()
+  const [copied, setCopied] = useState(false)
+  const exampleModel = serviceNames[0] || 'your-model-service'
+  const baseUrl = window.location.origin
+  const curlExample = [
+    `curl ${baseUrl}/v1/chat/completions \\`,
+    `  -H "Authorization: Bearer ${rawKey}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"model": "${exampleModel}", "messages": [{"role": "user", "content": "Hello"}]}'`,
+  ].join('\n')
+
+  function copyKey() {
+    navigator.clipboard.writeText(rawKey)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function downloadKey() {
+    const content = [
+      'SmartGate API Key',
+      '=================',
+      '',
+      `Key: ${rawKey}`,
+      `Base URL: ${baseUrl}`,
+      `Authorized model services: ${serviceNames.join(', ') || 'n/a'}`,
+      '',
+      'Example request:',
+      '',
+      curlExample,
+      '',
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'smartgate-api-key.txt'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('keys.created_title') || 'API key created'}</h2>
+            <p className="mt-1 text-sm text-amber-700">{t('keys.created_notice') || 'Copy or download this key now. It will not be shown again.'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close') || 'Close'}><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-5 flex gap-2">
+          <code className="flex-1 break-all rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 font-mono text-sm text-zinc-900">{rawKey}</code>
+          <button
+            type="button"
+            onClick={copyKey}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            {copied ? <CheckCheck className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={downloadKey}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            <Download className="h-4 w-4" /> {t('keys.download_key') || 'Download key'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800"
+          >
+            {t('keys.done') || 'Done'}
+          </button>
+        </div>
+
+        <div className="mt-6 border-t border-zinc-100 pt-5">
+          <h3 className="text-sm font-semibold text-zinc-900">{t('keys.usage_title') || 'How to use it'}</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            {t('keys.usage_desc') || 'Use this key with any OpenAI-compatible client. Set the base URL to this gateway and pass the model service name as the model.'}
+          </p>
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-[11px] leading-relaxed text-zinc-100"><code>{curlExample}</code></pre>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 type UsageBreakdown = {
