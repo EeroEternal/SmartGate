@@ -367,6 +367,7 @@
     "faster": "{pct} faster",
     "task_success": "Task Success Rate",
     "followup_correction": "Follow-up Correction",
+    "baseline_est_note": "Cost is estimated from the configured baseline endpoint pricing; latency and quality metrics appear after real baseline traffic or a controlled A/B experiment.",
     "conclusion": "Observed comparison for the selected time range. Results are telemetry-based and are not a guarantee of future cost, latency, or quality.",
     "verdict_logs_title": "Quality Feedback & Verification Logs",
     "verdict_logs_subtitle": "Live stream of verification sources, shadow judge scores, and auto-escalations.",
@@ -456,36 +457,6 @@
     "current_password_placeholder": "Required to save changes"
   },
   "codex": {
-    "title": "Developer Codex & SDK Integration",
-    "subtitle": "Seamless integration examples for OpenAI, Anthropic, Python, and TypeScript SDKs.",
-    "quick_install": "Quick Install",
-    "copy_code": "Copy Code",
-    "compatible_notice": "SmartGate endpoints are 100% wire-compatible with standard OpenAI Chat, Responses, and Anthropic Messages protocols."
-  },
-  "auth": {
-    "sign_in": "Sign in to SmartGate",
-    "sign_up": "Create your SmartGate account",
-    "email_label": "Work Email",
-    "password_label": "Password",
-    "code_label": "6-Digit Verification Code",
-    "send_code": "Send verification code",
-    "sending": "Sending…",
-    "sign_in_btn": "Sign in",
-    "sign_up_btn": "Sign up",
-    "have_account": "Already have an account? Sign in",
-    "no_account": "Don't have an account? Sign up",
-    "code_sent": "Verification code sent to your email",
-    "auth_failed": "Authentication failed. Please check your credentials."
-  },
-  "errors": {
-    "network_error": "Network request failed. Please check your connection.",
-    "unauthorized": "Invalid or expired credentials. Please sign in again.",
-    "forbidden": "You do not have permission to perform this action.",
-    "not_found": "The requested resource was not found.",
-    "server_error": "An internal server error occurred. Please try again later.",
-    "upstream_error": "Upstream model provider error: {message}"
-  },
-  "codex": {
     "integration_tag": "Codex integration",
     "title": "Use Codex with SmartGate",
     "subtitle": "Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.",
@@ -516,5 +487,28 @@
     "err_path_title": "AbsolutePathBuf error:",
     "err_path_desc": "keep {config} in the standalone Profile.",
     "security_warning": "Keep {token} private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed."
+  },
+  "auth": {
+    "sign_in": "Sign in to SmartGate",
+    "sign_up": "Create your SmartGate account",
+    "email_label": "Work Email",
+    "password_label": "Password",
+    "code_label": "6-Digit Verification Code",
+    "send_code": "Send verification code",
+    "sending": "Sending…",
+    "sign_in_btn": "Sign in",
+    "sign_up_btn": "Sign up",
+    "have_account": "Already have an account? Sign in",
+    "no_account": "Don't have an account? Sign up",
+    "code_sent": "Verification code sent to your email",
+    "auth_failed": "Authentication failed. Please check your credentials."
+  },
+  "errors": {
+    "network_error": "Network request failed. Please check your connection.",
+    "unauthorized": "Invalid or expired credentials. Please sign in again.",
+    "forbidden": "You do not have permission to perform this action.",
+    "not_found": "The requested resource was not found.",
+    "server_error": "An internal server error occurred. Please try again later.",
+    "upstream_error": "Upstream model provider error: {message}"
   }
 }

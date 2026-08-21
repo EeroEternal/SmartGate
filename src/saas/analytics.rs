@@ -502,7 +502,7 @@ pub(super) async fn get_quality_analytics(
                 COALESCE(pa.name, pa.provider_type, 'unknown'),
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
                 u.latency_ms, u.status_code, u.estimated_cost,
-                u.routing_strategy, u.routing_decision, u.metadata
+                u.routing_strategy, u.routing_decision, u.metadata, u.trimmed_chars
          FROM usage_logs u
          JOIN projects p ON p.id = u.project_id
          LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
@@ -528,6 +528,7 @@ pub(super) async fn get_quality_analytics(
         Option<String>,
         Option<String>,
         Option<String>,
+        i32,
     )> = if let Some(value) = since_value {
         sqlx::query_as(&logs_sql)
             .bind(&ctx.org_id)
@@ -544,6 +545,9 @@ pub(super) async fn get_quality_analytics(
 
     let mut total_cost = 0.0;
     let mut total_latency = 0i64;
+    let mut total_prompt_tokens = 0i64;
+    let mut total_completion_tokens = 0i64;
+    let mut total_trimmed_chars = 0i64;
     let mut correction_count = 0usize;
     let mut successful_count = 0usize;
     let mut pro_count = 0usize;
@@ -567,9 +571,13 @@ pub(super) async fn get_quality_analytics(
         _strategy,
         decision_str,
         _metadata_str,
+        trimmed_chars,
     ) in rows {
         total_cost += cost;
         total_latency += latency_ms as i64;
+        total_prompt_tokens += prompt_tokens as i64;
+        total_completion_tokens += completion_tokens as i64;
+        total_trimmed_chars += trimmed_chars as i64;
 
         let is_pro = model.to_lowercase().contains("pro")
             || model.to_lowercase().contains("reasoner")
@@ -663,27 +671,73 @@ pub(super) async fn get_quality_analytics(
         (successful_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
 
-    // A real baseline requires a configured comparison endpoint or a controlled A/B experiment.
-    // Do not manufacture a 100% flagship baseline from the routed traffic itself.
+    // Compare against the operator-configured baseline endpoint. Cost is estimated from
+    // the baseline's configured prices applied to observed traffic; latency and quality
+    // are not manufactured and require real baseline traffic or a controlled A/B experiment.
+    let baseline_config = load_savings_baseline(&state, &ctx)
+        .await
+        .map_err(db_error)?;
+    let comparison_status = if baseline_config.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
+    let (baseline_summary, cost_saved_pct) = match &baseline_config {
+        Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) => {
+            let priced = *input_price > 0.0 || *output_price > 0.0;
+            let (cost_per_req, saved_pct) = if priced && total_queries > 0 {
+                let (baseline_total_cost, _) = calculate_savings(
+                    total_prompt_tokens,
+                    total_completion_tokens,
+                    total_trimmed_chars,
+                    total_cost,
+                    *input_price,
+                    *output_price,
+                );
+                (
+                    Some((baseline_total_cost / total_queries as f64 * 10_000.0).round() / 10_000.0),
+                    cost_saved_percentage(total_cost, baseline_total_cost),
+                )
+            } else {
+                (None, None)
+            };
+            (
+                json!({
+                    "name": format!("{service_name} · {model}"),
+                    "virtual_model_id": virtual_model_id,
+                    "endpoint_id": endpoint_id,
+                    "model": model,
+                    "provider_name": provider_name,
+                    "cost_per_req": cost_per_req,
+                    "avg_latency_ms": Value::Null,
+                    "task_success_rate": Value::Null,
+                    "correction_rate": Value::Null,
+                }),
+                saved_pct,
+            )
+        }
+        None => (Value::Null, None),
+    };
+
     Ok(Json(ApiResponse::success(json!({
         "range": range,
         "summary": {
             "total_queries": total_queries,
-            "comparison_status": "unavailable",
+            "comparison_status": comparison_status,
             "quality_preserved_rate": Value::Null,
             "user_correction_rate": user_correction_rate,
             "schema_compliance_rate": Value::Null,
             "shadow_agreement_score": Value::Null,
             "pro_count": pro_count,
             "flash_count": flash_count,
-            "baseline": Value::Null,
+            "baseline": baseline_summary,
             "smartgate_routing": {
                 "name": "SmartGate Intelligent Routing",
                 "cost_per_req": actual_avg_cost,
                 "avg_latency_ms": actual_avg_latency,
                 "task_success_rate": success_rate,
                 "correction_rate": user_correction_rate,
-                "cost_saved_pct": Value::Null,
+                "cost_saved_pct": cost_saved_pct,
                 "speedup_pct": Value::Null,
             }
         },
@@ -941,14 +995,29 @@ fn calculate_savings(
     (baseline_cost, baseline_cost - estimated_spend)
 }
 
+/// Percentage of spend saved by actual routing versus the baseline, rounded to one decimal.
+fn cost_saved_percentage(actual_spend: f64, baseline_spend: f64) -> Option<f64> {
+    (baseline_spend > 0.0).then(|| {
+        (((1.0 - actual_spend / baseline_spend) * 100.0) * 10.0).round() / 10.0
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::calculate_savings;
+    use super::{calculate_savings, cost_saved_percentage};
 
     #[test]
     fn savings_baseline_restores_trimmed_prompt_context() {
         let (baseline, savings) = calculate_savings(1_000_000, 100_000, 4_000, 1.0, 2.0, 3.0);
         assert!((baseline - 2.302).abs() < 1e-9);
         assert!((savings - 1.302).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cost_saved_percentage_handles_zero_and_negative_savings() {
+        assert_eq!(cost_saved_percentage(1.0, 2.0), Some(50.0));
+        assert_eq!(cost_saved_percentage(1.5, 2.0), Some(25.0));
+        assert_eq!(cost_saved_percentage(2.0, 1.0), Some(-100.0));
+        assert_eq!(cost_saved_percentage(1.0, 0.0), None);
     }
 }

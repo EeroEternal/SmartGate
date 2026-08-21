@@ -3402,10 +3402,10 @@ type QualityAnalyticsData = {
     flash_count: number
     baseline: {
       name: string
-      cost_per_req: number
-      avg_latency_ms: number
-      task_success_rate: number
-      correction_rate: number
+      cost_per_req: number | null
+      avg_latency_ms: number | null
+      task_success_rate: number | null
+      correction_rate: number | null
     } | null
     smartgate_routing: {
       name: string
@@ -3485,7 +3485,6 @@ export function QualityPage() {
   const summary = data?.summary
   const baseline = summary?.baseline
   const routing = summary?.smartgate_routing
-  const comparisonUnavailable = summary?.comparison_status !== 'available'
 
   return (
     <Page>
@@ -3644,27 +3643,30 @@ export function QualityPage() {
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
                       <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                        ${baseline.cost_per_req.toFixed(4)}
+                        {baseline.cost_per_req != null ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                       <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                        {(baseline.avg_latency_ms / 1000).toFixed(1)}s
+                        {baseline.avg_latency_ms != null ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                        {baseline.task_success_rate}%
+                        {baseline.task_success_rate != null ? `${baseline.task_success_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-800">
-                        {baseline.correction_rate}%
+                        {baseline.correction_rate != null ? `${baseline.correction_rate}%` : 'N/A'}
                       </div>
                     </div>
+                    <p className="col-span-2 text-[11px] leading-relaxed text-zinc-400">
+                      {t('quality.baseline_est_note') || 'Cost is estimated from the configured baseline endpoint pricing; latency and quality metrics appear after real baseline traffic or a controlled A/B experiment.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="mt-4 text-center py-4 px-3 rounded-lg border border-dashed border-zinc-200 bg-white/70">
@@ -3722,7 +3724,7 @@ export function QualityPage() {
                     <span className="text-sm font-semibold text-zinc-900">
                       {routing?.task_success_rate != null ? `${routing.task_success_rate}%` : 'N/A'}
                     </span>
-                    {routing?.task_success_rate != null && baseline ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.task_success_rate - baseline.task_success_rate).toFixed(1)}% delta)</span> : null}
+                    {routing?.task_success_rate != null && baseline?.task_success_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.task_success_rate - baseline.task_success_rate).toFixed(1)}% delta)</span> : null}
                   </div>
                 </div>
                 <div>
@@ -3731,7 +3733,7 @@ export function QualityPage() {
                     <span className="text-sm font-semibold text-zinc-900">
                       {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
                     </span>
-                    {routing?.correction_rate != null && baseline ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
+                    {routing?.correction_rate != null && baseline?.correction_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
                   </div>
                 </div>
               </div>
