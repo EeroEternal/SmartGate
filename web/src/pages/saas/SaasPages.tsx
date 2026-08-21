@@ -1215,7 +1215,7 @@ export function EvaluationPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[380px] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {endpoints.map((ep, idx) => {
               const isSelected = selectedIds.includes(ep.id)
               const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
@@ -1231,7 +1231,7 @@ export function EvaluationPage() {
                 <div
                   key={ep.id}
                   onClick={() => toggleEndpoint(ep.id)}
-                  className={`cursor-pointer rounded-xl border p-4 transition-all ${
+                  className={`cursor-pointer rounded-xl border p-3 transition-all ${
                     isSelected
                       ? 'border-zinc-300 bg-white shadow-xs'
                       : 'border-zinc-200 bg-zinc-50/50 opacity-60 hover:opacity-100'
@@ -1253,17 +1253,6 @@ export function EvaluationPage() {
                         </span>
                       )}
                     </div>
-                  </div>
-
-                  <div className="mt-2.5 flex flex-wrap gap-1">
-                    {dna.strengths.map((str, sIdx) => (
-                      <span
-                        key={sIdx}
-                        className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700 border border-zinc-200/70"
-                      >
-                        ✨ {str}
-                      </span>
-                    ))}
                   </div>
 
                   <div className="mt-3 grid grid-cols-5 gap-1 text-center text-[10px]">
