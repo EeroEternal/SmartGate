@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -418,11 +418,181 @@ function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[]) {
   return [provider || (endpoint.custom_provider_id || 'Provider not selected'), endpoint.upstream_model_id || 'Model not selected']
 }
 
+interface StrategyMatrixCardSelectorProps {
+  selectedStrategy: string
+  onSelect: (strategy: string) => void
+}
+
+function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatrixCardSelectorProps) {
+  const { t } = useI18n()
+
+  const strategyCards = [
+    {
+      id: 'cost_aware',
+      title: t('services.strategy_cost_title') || 'Cost-Efficient Pareto',
+      desc: t('services.strategy_cost_desc') || 'Automatically downshifts low-complexity queries to high-throughput Flash models, reserving flagship Pro models for complex tasks.',
+      badge: 'Auto Downshift',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: TrendingDown,
+    },
+    {
+      id: 'capability_aware',
+      title: t('services.strategy_dna_title') || '5D Capability-Weighted',
+      desc: t('services.strategy_dna_desc') || 'Dynamically scores endpoints based on calibrated 5D capability benchmarks tailored to your workload intent.',
+      badge: '5D Model DNA',
+      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+      icon: Sparkles,
+    },
+    {
+      id: 'load_aware',
+      title: t('services.strategy_load_title') || 'Load-Balanced & Low-Latency',
+      desc: t('services.strategy_load_desc') || 'Sends traffic toward providers with lowest active load and fastest response latency.',
+      badge: 'Low Latency',
+      badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+      icon: Activity,
+    },
+    {
+      id: 'round_robin',
+      title: t('services.strategy_round_robin_title') || 'Even Distribution',
+      desc: t('services.strategy_round_robin_desc') || 'Distributes requests sequentially across all healthy connected providers with automatic fallback.',
+      badge: 'Equal Weight',
+      badgeClass: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+      icon: CheckCheck,
+    },
+  ]
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          {t('services.strategy_hub_title') || 'Routing Strategy Matrix'}
+        </label>
+        <span className="text-xs text-zinc-400">
+          {t('services.strategy_hub_desc') || 'Choose how SmartGate optimizes cost, latency, and quality.'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {strategyCards.map((card) => {
+          const isSelected = selectedStrategy === card.id
+          const Icon = card.icon
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => onSelect(card.id)}
+              className={`relative flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+                isSelected
+                  ? 'border-zinc-950 bg-zinc-50/90 ring-1 ring-zinc-950 shadow-sm'
+                  : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/40'
+              }`}
+            >
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="font-semibold text-sm text-zinc-950 leading-snug">{card.title}</span>
+                  </div>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium shrink-0 ${card.badgeClass}`}>
+                    {card.badge}
+                  </span>
+                </div>
+                <p className="mt-2.5 text-xs leading-relaxed text-zinc-500">{card.desc}</p>
+              </div>
+              <div className="mt-3 flex items-center justify-between pt-2 border-t border-zinc-100">
+                <div className="flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${isSelected ? 'bg-zinc-950' : 'bg-zinc-300'}`} />
+                  <span className={`text-xs ${isSelected ? 'font-medium text-zinc-900' : 'text-zinc-400'}`}>
+                    {isSelected ? (t('services.active_strategy') || 'Selected') : (t('services.configure_strategy') || 'Select')}
+                  </span>
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+interface WorkloadPresetSelectorProps {
+  selectedPreset: string
+  onSelectPreset: (presetId: string) => void
+}
+
+function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPresetSelectorProps) {
+  const { t } = useI18n()
+
+  const presets = [
+    {
+      id: 'coding',
+      name: t('services.preset_coding') || 'Coding Agent (90% Code + 10% Tools)',
+      icon: '💻',
+      desc: 'SWE benchmarks, syntax synthesis, patch tools',
+    },
+    {
+      id: 'reasoning',
+      name: t('services.preset_reasoning') || 'Reasoning & Math (85% Reasoning + 15% Code)',
+      icon: '🧠',
+      desc: 'Multi-step logic, math proofs, deep chain-of-thought',
+    },
+    {
+      id: 'tools',
+      name: t('services.preset_tools') || 'Autonomous Agent (60% Tools + 40% Reasoning)',
+      icon: '🛠️',
+      desc: 'Schema adherence, tool execution, multi-agent workflow',
+    },
+    {
+      id: 'general',
+      name: t('services.preset_general') || 'General Assistant (70% NLP + 30% Context)',
+      icon: '🌐',
+      desc: 'Balanced conversational NLP and context retention',
+    },
+  ]
+
+  return (
+    <div className="rounded-xl border border-purple-200/80 bg-purple-50/40 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+          {t('services.workload_presets') || 'Workload Intent Presets'}
+        </label>
+        <span className="text-[11px] text-purple-700/80">Auto-calibrates 5D weights</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {presets.map((preset) => {
+          const isSelected = selectedPreset === preset.id
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => onSelectPreset(preset.id)}
+              className={`flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all ${
+                isSelected
+                  ? 'border-purple-600 bg-white ring-1 ring-purple-600 shadow-xs'
+                  : 'border-purple-200/60 bg-white/70 hover:border-purple-300 hover:bg-white'
+              }`}
+            >
+              <span className="text-base leading-none mt-0.5">{preset.icon}</span>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-zinc-900 truncate">{preset.name}</div>
+                <div className="text-[11px] text-zinc-500 leading-tight mt-0.5">{preset.desc}</div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function NewServicePage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState('cost_aware')
+  const [preset, setPreset] = useState('coding')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -438,14 +608,22 @@ export function NewServicePage() {
   }
 
   return <Page>
-    <form onSubmit={submit} className="max-w-2xl space-y-5">
-      <div className="rounded-xl border border-zinc-200 bg-white p-6">
-        <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title') || 'Create a model service'}</h1>
-        <div className="mt-6 space-y-5">
-          <Field label={t('services.name_label') || 'Model service name'} value={name} onChange={setName} placeholder="fusion" />
-          <Select label={t('services.routing_label') || 'Routing strategy'} options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
+    <form onSubmit={submit} className="max-w-3xl space-y-5">
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title') || 'Create a model service'}</h1>
+          <p className="mt-1 text-sm text-zinc-500">Configure your model service entry point and visual routing strategy.</p>
         </div>
-        <div className="mt-6 flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600">
+
+        <Field label={t('services.name_label') || 'Model service name'} value={name} onChange={setName} placeholder="fusion" />
+
+        <StrategyMatrixCardSelector selectedStrategy={strategy} onSelect={setStrategy} />
+
+        {strategy === 'capability_aware' && (
+          <WorkloadPresetSelector selectedPreset={preset} onSelectPreset={setPreset} />
+        )}
+
+        <div className="flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <span>{t('services.create_tip') || 'Add provider connections after creating the service. They will all use this model name.'}</span>
         </div>
@@ -1314,12 +1492,13 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
 function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetails; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
   const [nextStrategy, setNextStrategy] = useState(service.strategy)
+  const [preset, setPreset] = useState('coding')
   const [judgeEnabled, setJudgeEnabled] = useState(Boolean(service.judge_enabled))
   const [judgeEndpointId, setJudgeEndpointId] = useState(service.judge_endpoint_id || service.endpoints[0]?.id || '')
+  const [shadowEnabled, setShadowEnabled] = useState(false)
+  const [shadowSampleRate, setShadowSampleRate] = useState(5)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const selected = STRATEGIES.find((item) => item.id === nextStrategy) || STRATEGIES[0]
-  const info = routingInfo(nextStrategy)
 
   const judgeOptions = service.endpoints.map((ep) => ({
     id: ep.id,
@@ -1341,25 +1520,34 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
       onSaved()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
-      <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-xs overflow-y-auto" role="dialog" aria-modal="true">
+      <form onSubmit={submit} className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-4">
           <div>
-            <h2 className="text-lg font-semibold">{t('services.edit_routing_title') || 'Edit routing strategy'}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{t('services.edit_routing_desc') || 'This applies to new requests for this model service.'}</p>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('services.edit_routing_title') || 'Edit routing strategy'}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{t('services.edit_routing_desc') || 'Select optimal strategy and tuning presets for incoming queries.'}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-6 space-y-4">
-          <Select label={t('services.routing_label') || 'Routing strategy'} options={STRATEGIES} selected={selected} onChange={(option) => setNextStrategy(String(option.id))} />
-          <p className="text-xs text-zinc-500">{info.description}</p>
-          {nextStrategy === 'capability_aware' && (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
-              <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-900 cursor-pointer">
-                <input type="checkbox" checked={judgeEnabled} onChange={(e) => setJudgeEnabled(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950" />
+
+        <StrategyMatrixCardSelector selectedStrategy={nextStrategy} onSelect={setNextStrategy} />
+
+        {nextStrategy === 'capability_aware' && (
+          <div className="space-y-4">
+            <WorkloadPresetSelector selectedPreset={preset} onSelectPreset={setPreset} />
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-3">
+              <label className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={judgeEnabled}
+                  onChange={(e) => setJudgeEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+                />
                 <span>{t('services.judge_label') || 'Use auxiliary judge model for complexity'}</span>
               </label>
               {judgeEnabled && (
@@ -1373,10 +1561,51 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={shadowEnabled}
+                onChange={(e) => setShadowEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+              />
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-zinc-700" />
+                {t('services.shadow_flighting_title') || 'Shadow Quality Flighting'}
+              </span>
+            </label>
+            {shadowEnabled && (
+              <span className="text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                {shadowSampleRate}% Sample
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500">
+            {t('services.shadow_flighting_desc') || 'Asynchronously mirrors a configurable percentage of live queries to shadow models in the background. Zero user latency overhead.'}
+          </p>
+          {shadowEnabled && (
+            <div className="pt-2 flex items-center gap-4">
+              <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate') || 'Sample Rate'}:</span>
+              <input
+                type="range"
+                min="1"
+                max="25"
+                step="1"
+                value={shadowSampleRate}
+                onChange={(e) => setShadowSampleRate(Number(e.target.value))}
+                className="w-full accent-zinc-950"
+              />
+              <span className="text-xs font-mono font-bold text-zinc-900 w-10 text-right">{shadowSampleRate}%</span>
+            </div>
           )}
         </div>
+
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex justify-end gap-3 border-t border-zinc-100 pt-4">
           <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
             {t('common.cancel') || 'Cancel'}
           </button>
