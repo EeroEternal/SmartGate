@@ -1,4 +1,6 @@
-// API modules: proxy, admin, etc.
+// API modules: proxy, judge, host, warm, admin, etc.
+mod host;
+mod judge;
 pub mod admin;
 pub mod models;
 pub mod proxy;
