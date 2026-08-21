@@ -71,8 +71,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (text === undefined) {
       text = getNestedTranslation(translations.en, key)
     }
+    // Return an empty string (not the raw key) when a key is missing so the
+    // codebase-wide `t(key) || 'fallback'` pattern can act as a safety net.
     if (text === undefined) {
-      return key
+      return ''
     }
     if (vars) {
       Object.entries(vars).forEach(([k, v]) => {
