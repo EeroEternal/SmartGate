@@ -3502,9 +3502,6 @@ export function QualityPage() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-600" />
             <h1 className="text-xl font-semibold tracking-tight">{t('quality.title') || 'Quality Assurance'}</h1>
-            <span title={t('quality.subtitle') || 'Verify that cost-optimized model routing preserves high output quality against the All-Pro baseline.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
-              <HelpCircle className="h-4 w-4" />
-            </span>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
             {(['24h', '7d', '30d', 'all'] as const).map((r) => (
