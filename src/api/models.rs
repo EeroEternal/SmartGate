@@ -1,4 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+use crate::auth::AuthContext;
+use crate::config::AppState;
+use axum::{extract::State, http::StatusCode, Json};
+use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse<T> {
@@ -195,4 +201,51 @@ pub struct ProjectGrantView {
 pub struct RevokeModelFromProjectReq {
     pub project_id: String,
     pub virtual_model_id: String,
+}
+
+/// OpenAI-compatible `GET /v1/models` for gateway clients.
+///
+/// Lists the model services this API key may call; the `id` is the model
+/// name clients use in their `model` field.
+pub async fn list_models(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<serde_json::Value>, (StatusCode, &'static str)> {
+    let rows: Vec<(String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        "SELECT vm.name, vm.created_at
+         FROM virtual_models vm
+         JOIN project_model_grants pmg ON pmg.virtual_model_id = vm.id
+         WHERE pmg.project_id = $1
+           AND vm.enabled = TRUE
+           AND (EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $2 AND akmg.virtual_model_id = vm.id
+           ) OR NOT EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $2
+           ))
+         ORDER BY vm.created_at ASC",
+    )
+    .bind(&auth.project.id)
+    .bind(&auth.api_key.id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|error| {
+        tracing::error!("Failed to list models for key {}: {}", auth.api_key.id, error);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+    })?;
+
+    let data = rows
+        .into_iter()
+        .map(|(name, created_at)| {
+            json!({
+                "id": name,
+                "object": "model",
+                "created": created_at.timestamp(),
+                "owned_by": "smartgate",
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(json!({"object": "list", "data": data})))
 }

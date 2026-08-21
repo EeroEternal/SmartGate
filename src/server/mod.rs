@@ -103,6 +103,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         )
         .nest("/api/saas", crate::saas::routes(app_state.clone()))
         .route("/v1/usage", get(crate::api::stats_handler::get_key_usage))
+        .route("/v1/models", get(crate::api::models::list_models))
         .route(
             "/v1/chat/completions",
             post(crate::api::proxy::chat_completions),
