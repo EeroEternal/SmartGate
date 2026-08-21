@@ -3420,6 +3420,15 @@ type QualityAnalyticsData = {
   records: QualityRecord[]
 }
 
+function QualityHelpTip({ tip, unavailable }: { tip: string; unavailable?: string }) {
+  const title = unavailable ? `${tip} ${unavailable}` : tip
+  return (
+    <span title={title} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+      <Info className="h-3.5 w-3.5" />
+    </span>
+  )
+}
+
 export function QualityPage() {
   const { t } = useI18n()
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h')
@@ -3529,14 +3538,10 @@ export function QualityPage() {
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                   {summary?.quality_preserved_rate != null ? (t('quality.verified_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
                 </span>
-                {summary?.quality_preserved_rate == null && (
-                  <span
-                    title={t('quality.preserved_rate_unavailable_tip') || 'Requires an independent All-Pro baseline to be configured for comparative fidelity measurement.'}
-                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                <QualityHelpTip
+                  tip={t('quality.preserved_rate_tip') || 'Share of routed responses whose quality matches the configured flagship baseline, measured by comparative evaluation.'}
+                  unavailable={summary?.quality_preserved_rate == null ? (t('quality.preserved_rate_unavailable_tip') || 'Requires an independent All-Pro baseline to be configured for comparative fidelity measurement.') : undefined}
+                />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
@@ -3552,14 +3557,10 @@ export function QualityPage() {
                 <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
                   {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
                 </span>
-                {summary?.shadow_agreement_score == null && (
-                  <span
-                    title={t('quality.shadow_agreement_unavailable_tip') || 'No active shadow inference runs were sampled in this time period.'}
-                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                <QualityHelpTip
+                  tip={t('quality.shadow_agreement_tip') || 'How often the shadow flagship rerun agrees with the routed model for the same prompt, sampled by the auxiliary judge.'}
+                  unavailable={summary?.shadow_agreement_score == null ? (t('quality.shadow_agreement_unavailable_tip') || 'No active shadow inference runs were sampled in this time period.') : undefined}
+                />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-purple-700">
@@ -3571,9 +3572,15 @@ export function QualityPage() {
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.correction_rate') || 'User Correction Rate'}</div>
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
-                {summary?.user_correction_rate != null ? (t('quality.healthy_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
+                  {summary?.user_correction_rate != null ? (t('quality.healthy_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                </span>
+                <QualityHelpTip
+                  tip={t('quality.correction_rate_tip') || 'Share of requests followed by a retry or rephrased follow-up turn, a proxy for user dissatisfaction with the first answer.'}
+                  unavailable={summary?.user_correction_rate == null ? (t('quality.correction_rate_unavailable_tip') || 'No completed requests were recorded in this period.') : undefined}
+                />
+              </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary?.user_correction_rate != null ? `${summary.user_correction_rate}%` : 'N/A'}
@@ -3588,14 +3595,10 @@ export function QualityPage() {
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                   {summary?.schema_compliance_rate != null ? (t('quality.valid_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
                 </span>
-                {summary?.schema_compliance_rate == null && (
-                  <span
-                    title={t('quality.schema_compliance_unavailable_tip') || 'No requests containing tool calls or structured JSON schemas were recorded in this period.'}
-                    className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                <QualityHelpTip
+                  tip={t('quality.schema_compliance_tip') || 'Share of tool-call and structured-output requests that returned valid, schema-compliant JSON.'}
+                  unavailable={summary?.schema_compliance_rate == null ? (t('quality.schema_compliance_unavailable_tip') || 'No requests containing tool calls or structured JSON schemas were recorded in this period.') : undefined}
+                />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
