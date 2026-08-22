@@ -777,6 +777,29 @@ pub(super) async fn get_quality_analytics(
         None
     };
 
+    // Shadow Flighting: compute agreement rate from recorded shadow evaluations.
+    let shadow_eval_sql = format!(
+        "SELECT COALESCE(COUNT(*), 0), COALESCE(SUM(agreement), 0)
+         FROM shadow_evaluations
+         WHERE project_id = $1 {where_sql}"
+    );
+    let (shadow_total, shadow_agreed): (i64, i64) = if let Some(value) = since_value {
+        sqlx::query_as(&shadow_eval_sql)
+            .bind(&ctx.project_id)
+            .bind(value)
+            .fetch_one(&state.db)
+            .await
+    } else {
+        sqlx::query_as(&shadow_eval_sql)
+            .bind(&ctx.project_id)
+            .fetch_one(&state.db)
+            .await
+    }
+    .map_err(db_error)?;
+    let shadow_agreement_score = (shadow_total > 0).then(|| {
+        (shadow_agreed as f64 / shadow_total as f64 * 100.0 * 10.0).round() / 10.0
+    });
+
     let comparison_status = if baseline_config.is_some() { "available" } else { "unavailable" };
     let (baseline_summary, cost_saved_pct) = match &baseline_config {
         Some((virtual_model_id, endpoint_id, service_name, model, provider_name, _input_price, _output_price)) => {
@@ -808,7 +831,7 @@ pub(super) async fn get_quality_analytics(
             "quality_preserved_rate": quality_preserved_rate,
             "user_correction_rate": user_correction_rate,
             "schema_compliance_rate": schema_compliance_rate,
-            "shadow_agreement_score": Value::Null,
+            "shadow_agreement_score": shadow_agreement_score,
             "pro_count": pro_count,
             "flash_count": flash_count,
             "baseline": baseline_summary,

@@ -643,7 +643,7 @@ export function NewServicePage() {
 
 type ModelDna = { code_logic: number; reasoning_math: number; agent_tools: number; multilingual_nlp: number; context_retention: number; strengths: string[] }
 type ServiceEndpoint = { id: string; provider_id: string; provider_name: string; provider_type: string; protocol: string; model: string; base_url: string; input_price_per_1m: number; output_price_per_1m: number; capability_score: number; configured_capability_score?: number; context_length?: number; enabled?: boolean; supports_tools?: boolean; health_status?: string; cooling_down?: boolean; health_observed?: boolean; total_requests?: number; total_errors?: number; preferred_for_hard_requests?: boolean; model_dna?: ModelDna }
-type ServiceDetails = { id: string; name: string; model?: string; strategy: string; status: string; endpoint_count: number; endpoints: ServiceEndpoint[]; judge_enabled?: boolean; judge_endpoint_id?: string }
+type ServiceDetails = { id: string; name: string; model?: string; strategy: string; status: string; endpoint_count: number; endpoints: ServiceEndpoint[]; judge_enabled?: boolean; judge_endpoint_id?: string; shadow_enabled?: boolean; shadow_virtual_model_id?: string; shadow_sample_rate?: number }
 type CallApi = 'openai-chat' | 'openai-responses' | 'anthropic-messages'
 
 function callExample(api: CallApi, model: string) {
@@ -1484,8 +1484,9 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
   const [preset, setPreset] = useState('coding')
   const [judgeEnabled, setJudgeEnabled] = useState(Boolean(service.judge_enabled))
   const [judgeEndpointId, setJudgeEndpointId] = useState(service.judge_endpoint_id || service.endpoints[0]?.id || '')
-  const [shadowEnabled, setShadowEnabled] = useState(false)
-  const [shadowSampleRate, setShadowSampleRate] = useState(5)
+  const [shadowEnabled, setShadowEnabled] = useState(Boolean(service.shadow_enabled))
+  const [shadowSampleRate, setShadowSampleRate] = useState(service.shadow_sample_rate != null ? Math.round(service.shadow_sample_rate * 100) : 5)
+  const [shadowVirtualModelId, setShadowVirtualModelId] = useState(service.shadow_virtual_model_id || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -1504,6 +1505,9 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
           strategy: nextStrategy,
           judge_enabled: nextStrategy === 'capability_aware' ? judgeEnabled : false,
           judge_endpoint_id: nextStrategy === 'capability_aware' && judgeEnabled ? (selectedJudge.id || undefined) : undefined,
+          shadow_enabled: shadowEnabled,
+          shadow_virtual_model_id: shadowEnabled ? (shadowVirtualModelId || undefined) : undefined,
+          shadow_sample_rate: shadowEnabled ? (shadowSampleRate / 100) : 0,
         }),
       })
       onSaved()
@@ -1577,18 +1581,31 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
             {t('services.shadow_flighting_desc') || 'Asynchronously mirrors a configurable percentage of live queries to shadow models in the background. Zero user latency overhead.'}
           </p>
           {shadowEnabled && (
-            <div className="pt-2 flex items-center gap-4">
-              <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate') || 'Sample Rate'}:</span>
-              <input
-                type="range"
-                min="1"
-                max="25"
-                step="1"
-                value={shadowSampleRate}
-                onChange={(e) => setShadowSampleRate(Number(e.target.value))}
-                className="w-full accent-zinc-950"
-              />
-              <span className="text-xs font-mono font-bold text-zinc-900 w-10 text-right">{shadowSampleRate}%</span>
+            <div className="pt-2 space-y-3">
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-zinc-700">{t('services.shadow_target_model') || 'Shadow comparison model service name'}</label>
+                <input
+                  type="text"
+                  value={shadowVirtualModelId}
+                  onChange={(e) => setShadowVirtualModelId(e.target.value)}
+                  placeholder={service.name}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                />
+                <p className="text-xs text-zinc-500">{t('services.shadow_target_desc') || 'Must be a Model service authorized for the same API key.'}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate') || 'Sample Rate'}:</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="25"
+                  step="1"
+                  value={shadowSampleRate}
+                  onChange={(e) => setShadowSampleRate(Number(e.target.value))}
+                  className="w-full accent-zinc-950"
+                />
+                <span className="text-xs font-mono font-bold text-zinc-900 w-10 text-right">{shadowSampleRate}%</span>
+              </div>
             </div>
           )}
         </div>

@@ -200,12 +200,13 @@
     "preset_reasoning": "多步推理与数学 (85% 推理 + 15% 代码)",
     "preset_tools": "自主智能体 (60% 工具 + 40% 推理)",
     "preset_general": "通用对话助手 (70% NLP + 30% 约束)",
-    "shadow_flighting_title": "影子流量旁路评测 (Shadow Flighting)",
-    "shadow_flighting_desc": "在后台异步将指定比例的线上真实流量镜像至候选模型，用户端零延迟开销。",
+    "shadow_flighting_title": "影子质量飞检",
+    "shadow_flighting_desc": "在后台异步将一定比例的线上真实请求镜像到影子模型。",
     "shadow_sample_rate": "采样比例",
-    "shadow_target_model": "影子比对模型",
+    "shadow_target_model": "影子对比模型服务名称",
     "active_strategy": "当前生效策略",
-    "configure_strategy": "配置策略"
+    "configure_strategy": "配置策略",
+    "shadow_target_desc": "必须是同一个 API key 已授权的 Model service。"
   },
   "evaluation": {
     "title": "模型评估与能力基准看板",

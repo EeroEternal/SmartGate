@@ -36,6 +36,9 @@ fn pool(strategy: &str) -> ModelPool {
         session_affinity_ttl_secs: 3_600,
         judge_enabled: 0,
         judge_endpoint_id: None,
+        shadow_enabled: 0,
+        shadow_virtual_model_id: None,
+        shadow_sample_rate: 0.0,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     }

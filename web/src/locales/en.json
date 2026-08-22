@@ -201,11 +201,12 @@
     "preset_tools": "Autonomous Agent (60% Tools + 40% Reasoning)",
     "preset_general": "General Assistant (70% NLP + 30% Context)",
     "shadow_flighting_title": "Shadow Quality Flighting",
-    "shadow_flighting_desc": "Asynchronously mirrors a configurable percentage of live queries to shadow models in the background. Zero user latency overhead.",
+    "shadow_flighting_desc": "Asynchronously mirrors a configurable percentage of live queries to a shadow model in the background.",
     "shadow_sample_rate": "Traffic Sample Rate",
-    "shadow_target_model": "Shadow Comparison Model",
+    "shadow_target_model": "Shadow comparison model service name",
     "active_strategy": "Active Strategy",
-    "configure_strategy": "Configure Strategy"
+    "configure_strategy": "Configure Strategy",
+    "shadow_target_desc": "Must be a Model service authorized for the same API key."
   },
   "evaluation": {
     "title": "Model Evaluation & DNA Benchmarking",

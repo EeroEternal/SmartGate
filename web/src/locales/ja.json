@@ -200,12 +200,13 @@
     "preset_reasoning": "推論・数学 (85% 推論 + 15% コード)",
     "preset_tools": "自律型 Agent (60% ツール + 40% 推理)",
     "preset_general": "汎用アシスタント (70% 言語 + 30% コンテキスト)",
-    "shadow_flighting_title": "シャドウ品質検証 (Shadow Flighting)",
-    "shadow_flighting_desc": "指定した割合のライブトラフィックをバックグラウンドで非同期にシャドウモデルにミラーリングします。ユーザー側の遅延ゼロ。",
+    "shadow_flighting_title": "シャドウ品質飛行",
+    "shadow_flighting_desc": "オンラインリクエストの一定割合をバックグラウンドでシャドウモデルに非同期ミラーリングします。",
     "shadow_sample_rate": "トラフィックサンプリング率",
-    "shadow_target_model": "シャドウ比較モデル",
+    "shadow_target_model": "シャドウ比較モデルサービス名",
     "active_strategy": "現在の有効戦略",
-    "configure_strategy": "戦略を設定"
+    "configure_strategy": "戦略を設定",
+    "shadow_target_desc": "同じAPIキーで承認されたモデルサービスである必要があります。"
   },
   "evaluation": {
     "title": "モデル評価と能力ベンチマーク",

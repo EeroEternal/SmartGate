@@ -200,12 +200,13 @@
     "preset_reasoning": "추론 및 수학 (85% 추론 + 15% 코드)",
     "preset_tools": "자율형 Agent (60% 도구 + 40% 추론)",
     "preset_general": "범용 어시스턴트 (70% 언어 + 30% 컨텍스트)",
-    "shadow_flighting_title": "섀도우 품질 검증 (Shadow Flighting)",
-    "shadow_flighting_desc": "라이브 트래픽의 지정된 비율을 백그라운드에서 비동기로 섀도우 모델에 미러링합니다. 사용자 지연 시간 0.",
+    "shadow_flighting_title": "섀도우 품질 플라이팅",
+    "shadow_flighting_desc": "실시간 요청의 일정 비율을 백그라운드에서 섀도우 모델로 비동기 미러링합니다.",
     "shadow_sample_rate": "트래픽 샘플링 비율",
-    "shadow_target_model": "섀도우 비교 모델",
+    "shadow_target_model": "섀도우 비교 모델 서비스 이름",
     "active_strategy": "현재 활성 전략",
-    "configure_strategy": "전략 설정"
+    "configure_strategy": "전략 설정",
+    "shadow_target_desc": "동일한 API 키로 승인된 모델 서비스여야 합니다."
   },
   "evaluation": {
     "title": "모델 평가 및 역량 벤치마크",

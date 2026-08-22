@@ -1,5 +1,6 @@
 //! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
 
+use crate::api::shadow::{execute_shadow, extract_response_preview, store_shadow_evaluation};
 use crate::api::warm::warm_error;
 use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
@@ -521,6 +522,67 @@ async fn chat_proxy(
                     state.warm_store.record_delta_result(true);
                 }
             }
+
+            // Shadow Flighting: mirror a sample of non-streaming requests to the configured
+            // flagship model in the background and compare response previews.
+            let (status, body) = response.into_parts();
+            let is_json = matches!(&body, unigateway_sdk::protocol::ProtocolResponseBody::Json(_));
+            let should_shadow = is_json
+                && pool.as_ref().is_some_and(|p| p.shadow_enabled != 0)
+                && pool
+                    .as_ref()
+                    .and_then(|p| p.shadow_virtual_model_id.as_ref())
+                    .is_some()
+                && {
+                    let sample = uuid::Uuid::new_v4().as_u128() % 1_000_000;
+                    let threshold = (pool.as_ref().unwrap().shadow_sample_rate.max(0.0).min(1.0) * 1_000_000.0) as u128;
+                    sample < threshold
+                };
+
+            let main_preview = if is_json {
+                match &body {
+                    unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => crate::api::shadow::extract_json_preview(json),
+                    _ => String::new(),
+                }
+            } else {
+                String::new()
+            };
+
+            if should_shadow {
+                let state_clone = Arc::clone(&state);
+                let auth_clone = auth.clone();
+                let headers_clone = headers.clone();
+                let payload_clone = payload.clone();
+                let shadow_model_name = pool
+                    .as_ref()
+                    .unwrap()
+                    .shadow_virtual_model_id
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+                let request_preview = prompt_preview.clone();
+                let is_openai = protocol == ChatProtocol::OpenAi;
+                tokio::spawn(async move {
+                    run_shadow(
+                        state_clone,
+                        auth_clone,
+                        headers_clone,
+                        payload_clone,
+                        shadow_model_name,
+                        request_preview,
+                        main_preview,
+                        is_openai,
+                    )
+                    .await;
+                });
+            }
+
+            let response = unigateway_sdk::protocol::ProtocolHttpResponse::json(status, match body {
+                unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => json,
+                unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
+                    return (StatusCode::OK, Json(serde_json::Value::Null)).into_response();
+                }
+            });
             let mut resp = protocol_response_to_axum(response);
             for (name, value) in budget_headers(&budget, spent, limit) {
                 if let Some(name) = name {
@@ -554,6 +616,68 @@ async fn chat_proxy(
             host_error_response(e)
         }
     }
+}
+
+async fn run_shadow(
+    state: Arc<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    payload: serde_json::Value,
+    shadow_model_name: String,
+    request_preview: String,
+    main_preview: String,
+    is_openai: bool,
+) {
+    if let Some(result) = execute_shadow(
+        state.clone(),
+        auth.clone(),
+        headers,
+        payload,
+        shadow_model_name,
+        request_preview,
+        is_openai,
+    )
+    .await
+    {
+        let similarity = jaccard_similarity(&main_preview, &result.response_preview);
+        let agreement = similarity > 0.3;
+        if let Err(error) = store_shadow_evaluation(
+            &state.db,
+            &auth.project.org_id,
+            &auth.project.id,
+            &auth.api_key.id,
+            &result,
+            similarity,
+            agreement,
+        )
+        .await
+        {
+            tracing::warn!("Failed to store shadow evaluation: {}", error);
+        }
+    }
+}
+
+fn jaccard_similarity(a: &str, b: &str) -> f64 {
+    if a.is_empty() && b.is_empty() {
+        return 1.0;
+    }
+    let set_a: std::collections::HashSet<String> = a
+        .split_whitespace()
+        .map(|word| word.to_lowercase())
+        .collect();
+    let set_b: std::collections::HashSet<String> = b
+        .split_whitespace()
+        .map(|word| word.to_lowercase())
+        .collect();
+    if set_a.is_empty() && set_b.is_empty() {
+        return 1.0;
+    }
+    let intersection = set_a.intersection(&set_b).count();
+    let union = set_a.union(&set_b).count();
+    if union == 0 {
+        return 0.0;
+    }
+    intersection as f64 / union as f64
 }
 
 pub async fn responses(
