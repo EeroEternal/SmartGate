@@ -518,9 +518,9 @@ pub(super) async fn get_quality_analytics(
     };
 
     let logs_sql = format!(
-        "SELECT u.id, u.timestamp, COALESCE(vm.id, ''), COALESCE(vm.name, 'default'),
-                COALESCE(e.upstream_model_id, 'unknown'),
-                COALESCE(pa.name, pa.provider_type, 'unknown'),
+        "SELECT u.id, u.timestamp, COALESCE(vm.id, '') AS virtual_model_id, COALESCE(vm.name, 'default') AS service_name,
+                COALESCE(e.upstream_model_id, 'unknown') AS model,
+                COALESCE(pa.name, pa.provider_type, 'unknown') AS provider_name,
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
                 u.latency_ms, u.status_code, u.estimated_cost,
                 u.routing_strategy, u.routing_decision, u.metadata, u.trimmed_chars,
