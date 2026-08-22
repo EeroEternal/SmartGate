@@ -483,7 +483,7 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
                 <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
                   <Icon className="h-4 w-4" />
                 </div>
-                <span className="truncate text-sm font-medium text-zinc-950">{card.title}</span>
+                <span className="min-w-0 text-sm font-medium leading-snug text-zinc-950">{card.title}</span>
               </div>
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${card.badgeClass}`}>
                 {card.badge}
@@ -552,7 +552,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               }`}
             >
               <span className="text-base leading-none">{preset.icon}</span>
-              <span className={`min-w-0 truncate text-xs ${isSelected ? 'font-semibold text-zinc-900' : 'text-zinc-700'}`}>{preset.name}</span>
+              <span className={`min-w-0 text-xs leading-snug ${isSelected ? 'font-semibold text-zinc-900' : 'text-zinc-700'}`}>{preset.name}</span>
             </button>
           )
         })}
