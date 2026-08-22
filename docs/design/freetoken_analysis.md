@@ -1,0 +1,169 @@
+# FreeToken Analysis: Lessons for SmartGate and UniGateway
+
+Source: *FreeToken: Efficient Edge-Native MoE Serving with Bandwidth-Adaptive Execution* (Yang et al., arXiv 2608.16157). Code: https://github.com/FlashML-org/FreeToken
+
+This document summarizes the ideas in the paper that are relevant to us, explains
+them in plain language, and maps them to concrete opportunities on the SmartGate
+control plane and the UniGateway data plane.
+
+---
+
+## 1. What FreeToken is
+
+FreeToken is an inference engine for Mixture-of-Experts (MoE) models on consumer
+hardware (a laptop GPU, a gaming desktop). Instead of treating a personal machine
+as "a small GPU", it treats it as a heterogeneous platform: GPU VRAM, PCIe
+bandwidth, CPU DRAM bandwidth, and CPU compute are all part of one elastic pool.
+It co-designs weight loading, expert caching, CPU-GPU execution, and memory
+management around two observations:
+
+1. **Agent workloads keep changing their execution pattern** (multi-turn, tool
+   calls, context edits), unlike single-shot requests.
+2. **Edge hardware is unbalanced**, and the balance differs from machine to
+   machine, so no fixed offloading strategy works everywhere.
+
+## 2. The core idea: semantic incremental checkpoints
+
+### 2.1 The problem
+
+Modern frontier models increasingly use hybrid attention: interleaved full
+attention plus sliding-window attention, or recurrent layers (e.g. gatedDeltaNet,
+Kimi Delta Attention). A recurrent layer compresses the **entire prefix into one
+evolving state**. Unlike a KV cache, this state cannot be partially reused: you
+either have a checkpoint of the state at token N, or you must recompute everything
+from scratch.
+
+Checkpoints are expensive. One saved state costs as much memory as the KV cache
+of hundreds of tokens, so an engine can only hold a handful of them. Meanwhile,
+agent harnesses edit the conversation history on almost every turn:
+
+- OpenClaw strips thinking blocks from every assistant turn but the latest.
+- OpenCode replaces tool outputs beyond a recent window with a fixed placeholder.
+- SWE-agent keeps only the last n tool observations.
+
+Any checkpoint taken at a position that was later edited becomes invalid. With
+naively placed checkpoints (say, every K tokens), an agent edit invalidates most
+of them and forces a full re-prefill of thousands of tokens — tens of seconds of
+GPU time on edge hardware.
+
+### 2.2 The insight
+
+**Agent context edits are predictable.** Harnesses do not delete random spans;
+they delete whole blocks marked by special tokens: `<think>...</think>`,
+`</tool_call>`, `</tool_output>`, conversation turns. After such an edit, the
+preserved prefix always ends exactly at one of these semantic boundaries.
+
+So FreeToken places its scarce recurrent-state checkpoints **at those special
+token anchors** ("semantic-aware state cache"). When the next request arrives with
+an edited prompt, the engine restores from the deepest checkpoint whose anchor
+still survives, reuses the full-attention KV up to that point, and re-prefills
+only the new suffix.
+
+In one sentence: **predict where the client will cut the context, and pre-place
+reusable increments exactly there.**
+
+### 2.3 Why this matters outside of MoE engines
+
+The mechanism itself (recurrent states, expert caches, PCIe budgets) is inference-
+engine territory. But the underlying principle generalizes:
+
+> Agentic traffic has structure. The infrastructure that can observe and predict
+> that structure — where turns start, what gets trimmed, which prefixes survive —
+> can turn that prediction into cost and latency savings.
+
+A gateway sits precisely at the observation point for this structure. That is the
+part worth borrowing.
+
+## 3. Relevance to SmartGate (control plane)
+
+SmartGate sees every request's session id, virtual model, endpoint, token usage,
+and cache hit counts. Three concrete opportunities follow from the paper's
+"agent traffic is predictable" viewpoint.
+
+### 3.1 Cache-aware session affinity (lowest hanging fruit)
+
+Today, session affinity sticks a session to an endpoint blindly. The paper argues
+that for agentic sessions, **prefix survival = money and latency saved**: every
+cache miss means re-prefilling the whole conversation.
+
+We already log `cache_hit_tokens` and `cache_write_tokens` per request in
+`usage_logs`, and we already have session affinity in `model_pools`. What is
+missing is closing the loop:
+
+- Aggregate per-session, per-endpoint cache hit rates over a rolling window.
+- Feed the rate into routing feedback as a signal: if a sticky endpoint's cache
+  hit rate decays (provider evicted our cache), re-rank candidates so the session
+  migrates to an endpoint where the next turn is likely to hit.
+
+The data is already collected; only the policy computation is missing.
+
+### 3.2 Cache-price-aware routing for agent sessions
+
+Agent sessions replay long prefixes every turn, so their dominant cost driver is
+the **cache read price**, not the nominal input price. SmartGate already stores
+`cache_read_per_1m` in endpoint profiles but CostAware scoring uses input price.
+
+For sessions detected as agentic (multi-turn, tool-heavy — signals we compute for
+workload profiles today), CostAware should weight cache-read price more heavily.
+A provider that charges 10x less for cached tokens may be dramatically cheaper
+for agent traffic even at an equal headline input price.
+
+### 3.3 Trim-stability as a first-class metric
+
+If the gateway (or the client harness) edits history between turns, provider-side
+prefix caches break at the edit point. SmartGate can measure this: compare
+`prompt_tokens` growth against `cache_hit_tokens` across turns of a session. A
+session whose cache hit ratio collapses after trims indicates either non-
+deterministic trimming (see §4.1) or a provider with aggressive eviction. This is
+diagnostic output for both routing feedback and the Quality / Analytics dashboards.
+
+## 4. Relevance to UniGateway (data plane)
+
+Protocol rendering, payload transformation, and trimming belong to UniGateway.
+Two rules follow directly from the paper.
+
+### 4.1 Tool trimming must be deterministic and boundary-aligned
+
+UniGateway's tool-trim (`max_tool_chars`, `tool_trim_dry_run`) rewrites the
+request body before it goes upstream — structurally the same act as OpenCode
+replacing old tool outputs with placeholders. The paper's lesson is about *how*
+to edit:
+
+- **Delete whole messages at message boundaries**, never mid-content.
+- **Replace removed content with a fixed placeholder** (constant text, constant
+  shape), not with a variable-length summary.
+- **Be deterministic across turns**: given the same history evolution, produce
+  byte-identical results. If trim decisions depend on fluctuating state (exact
+  char counts near the limit, ordering of equal-priority items), each turn
+  produces a different prefix and the upstream provider's prefix cache misses on
+  everything after the first divergence.
+
+A well-behaved trim keeps the prefix up to the first edit byte-identical, so the
+upstream cache survives until exactly that point — the same "resume from the
+surviving anchor" outcome FreeToken achieves with explicit checkpoints.
+
+### 4.2 Do not re-render stable parts of the history
+
+Anything under UniGateway's control that serializes conversation history (field
+ordering, whitespace, tool-call id normalization, system prompt injection) should
+keep previously-sent bytes stable unless semantically required otherwise. Silent
+instability in rendering is invisible in functional tests but directly converts
+into cache misses and higher bills for agentic customers.
+
+## 5. What does NOT apply
+
+Expert LRU caches, CPU-GPU execution splitting, double-buffered weight loading,
+and q* bandwidth policies are inference-engine mechanics. They sit below the
+gateway stack: SmartGate must not encode them in handlers, and UniGateway's job
+ends at protocol semantics — it does not manage model residency. Per the project
+boundary rules, any future work stays within: SmartGate = policy computation over
+observed signals; UniGateway = protocol-level payload stability.
+
+## 6. Suggested next steps
+
+| # | Item | Plane | Effort | Prerequisite |
+|---|------|-------|--------|--------------|
+| 1 | Cache-hit-rate routing feedback signal for sticky sessions | SmartGate | Low | Data already in `usage_logs` |
+| 2 | Cache-read-price weighting in CostAware for agentic sessions | SmartGate | Low | Workload profile detection exists |
+| 3 | Session-level cache-collapse diagnostic in Analytics | SmartGate | Medium | Same data |
+| 4 | Audit tool-trim determinism; enforce placeholder + message boundaries | UniGateway | Medium | Needs trace comparison across turns |
