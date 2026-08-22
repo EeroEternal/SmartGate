@@ -208,7 +208,7 @@ pub(super) async fn get_api_key_profile(
     let base_sql = "SELECT u.timestamp, u.prompt_tokens, u.completion_tokens,
                            u.total_tokens, u.latency_ms, u.status_code,
                            u.estimated_cost,
-                           COALESCE(pa.provider_type, 'unknown'),
+                           COALESCE(pa.provider_type, 'unknown') AS provider_type,
                            u.routing_decision, u.metadata,
                            u.usage_source, u.usage_confidence, u.pricing_source,
                            u.session_id, u.ttft_ms, u.affinity_applied, u.affinity_hit
