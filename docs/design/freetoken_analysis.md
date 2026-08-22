@@ -119,17 +119,45 @@ diagnostic output for both routing feedback and the Quality / Analytics dashboar
 
 ## 4. Relevance to UniGateway (data plane)
 
-Protocol rendering, payload transformation, and trimming belong to UniGateway.
-Two rules follow directly from the paper.
+Protocol rendering and payload serialization belong to UniGateway. One hard rule
+follows directly from the paper.
 
-### 4.1 Tool trimming must be deterministic and boundary-aligned
+### 4.1 Deterministic rendering (accepted by UniGateway)
 
-UniGateway's tool-trim (`max_tool_chars`, `tool_trim_dry_run`) rewrites the
-request body before it goes upstream — structurally the same act as OpenCode
-replacing old tool outputs with placeholders. The paper's lesson is about *how*
-to edit:
+UniGateway parses requests into typed structs and re-serializes the upstream
+body, so rendering determinism is a library contract. UniGateway has accepted
+this item and the accompanying golden-file regression tests:
 
-- **Delete whole messages at message boundaries**, never mid-content.
+- Stable field ordering (serde_json `BTreeMap`, no `preserve_order` needed).
+- No rendering decisions dependent on time, counters, or iteration order.
+- Golden-file tests that replay a multi-turn sequence and assert the rendered
+  bytes of the unchanged history prefix are identical across turns.
+
+Two scope clarifications from the UniGateway team:
+
+- **Determinism holds per (endpoint, model).** A fallback or retry that switches
+  endpoints changes the resolved model name anyway, so the upstream cache is lost
+  by construction; the rendering layer cannot and should not promise more.
+- **Byte-stability is only meaningful on same-protocol passthrough paths.** In a
+  cross-protocol conversion (e.g., Anthropic → OpenAI) the provider-native cache
+  concepts are not isomorphic to begin with.
+
+### 4.2 History editing (trimming) belongs to SmartGate, not UniGateway
+
+An earlier draft of this document assumed tool trimming lived in UniGateway
+(`tool_trim_enabled` / `max_tool_chars`). That is incorrect: those switches are
+SmartGate control-plane pool settings, and the trimming itself is implemented in
+the SmartGate host layer before dispatch (`src/api/proxy.rs`), structurally via
+request mutation — which is exactly the layering UniGateway asks for: core stays
+policy-free, hosts implement mutations through `hooks.on_request`. The trim
+guidelines therefore apply to **SmartGate's own trim implementation**:
+
+- **Delete whole paired groups at message boundaries**, never mid-content. This
+  is stronger than "delete whole messages": in OpenAI protocol an assistant
+  `tool_calls` message must stay paired with its subsequent `role: "tool"`
+  messages; in Anthropic, `tool_use` / `tool_result` are pairs; the Responses API
+  chains reasoning items by id. Deleting one side of a pair yields an orphaned
+  structure and a provider 4xx. Trim operates on complete pairs/groups only.
 - **Replace removed content with a fixed placeholder** (constant text, constant
   shape), not with a variable-length summary.
 - **Be deterministic across turns**: given the same history evolution, produce
@@ -141,14 +169,6 @@ to edit:
 A well-behaved trim keeps the prefix up to the first edit byte-identical, so the
 upstream cache survives until exactly that point — the same "resume from the
 surviving anchor" outcome FreeToken achieves with explicit checkpoints.
-
-### 4.2 Do not re-render stable parts of the history
-
-Anything under UniGateway's control that serializes conversation history (field
-ordering, whitespace, tool-call id normalization, system prompt injection) should
-keep previously-sent bytes stable unless semantically required otherwise. Silent
-instability in rendering is invisible in functional tests but directly converts
-into cache misses and higher bills for agentic customers.
 
 ## 5. What does NOT apply
 
@@ -166,4 +186,5 @@ observed signals; UniGateway = protocol-level payload stability.
 | 1 | Cache-hit-rate routing feedback signal for sticky sessions | SmartGate | Low | Data already in `usage_logs` |
 | 2 | Cache-read-price weighting in CostAware for agentic sessions | SmartGate | Low | Workload profile detection exists |
 | 3 | Session-level cache-collapse diagnostic in Analytics | SmartGate | Medium | Same data |
-| 4 | Audit tool-trim determinism; enforce placeholder + message boundaries | UniGateway | Medium | Needs trace comparison across turns |
+| 4 | Audit SmartGate trim determinism: placeholder + paired-group deletion + golden tests | SmartGate (host layer) | Medium | Needs trace comparison across turns |
+| 5 | Rendering-determinism golden-file regression tests | UniGateway | Low | Accepted by UniGateway |
