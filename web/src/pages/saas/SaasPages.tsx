@@ -463,15 +463,7 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          {t('services.strategy_hub_title') || 'Routing Strategy Matrix'}
-        </label>
-        <span className="text-xs text-zinc-400">
-          {t('services.strategy_hub_desc') || 'Choose how SmartGate optimizes cost, latency, and quality.'}
-        </span>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {strategyCards.map((card) => {
           const isSelected = selectedStrategy === card.id
           const Icon = card.icon
@@ -480,34 +472,22 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
               key={card.id}
               type="button"
               onClick={() => onSelect(card.id)}
-              className={`relative flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+              aria-pressed={isSelected}
+              className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left transition-all ${
                 isSelected
                   ? 'border-zinc-950 bg-zinc-50/90 ring-1 ring-zinc-950 shadow-sm'
                   : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/40'
               }`}
             >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span className="font-semibold text-sm text-zinc-950 leading-snug">{card.title}</span>
-                  </div>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium shrink-0 ${card.badgeClass}`}>
-                    {card.badge}
-                  </span>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
+                  <Icon className="h-4 w-4" />
                 </div>
-                <p className="mt-2.5 text-xs leading-relaxed text-zinc-500">{card.desc}</p>
+                <span className="truncate text-sm font-medium text-zinc-950">{card.title}</span>
               </div>
-              <div className="mt-3 flex items-center justify-between pt-2 border-t border-zinc-100">
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${isSelected ? 'bg-zinc-950' : 'bg-zinc-300'}`} />
-                  <span className={`text-xs ${isSelected ? 'font-medium text-zinc-900' : 'text-zinc-400'}`}>
-                    {isSelected ? (t('services.active_strategy') || 'Selected') : (t('services.configure_strategy') || 'Select')}
-                  </span>
-                </div>
-              </div>
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${card.badgeClass}`}>
+                {card.badge}
+              </span>
             </button>
           )
         })}
@@ -552,15 +532,12 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
   ]
 
   return (
-    <div className="rounded-xl border border-purple-200/80 bg-purple-50/40 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-          {t('services.workload_presets') || 'Workload Intent Presets'}
-        </label>
-        <span className="text-[11px] text-purple-700/80">Auto-calibrates 5D weights</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="rounded-xl border border-purple-200/80 bg-purple-50/40 p-3">
+      <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+        <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+        {t('services.workload_presets') || 'Workload Intent Presets'}
+      </label>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {presets.map((preset) => {
           const isSelected = selectedPreset === preset.id
           return (
@@ -568,17 +545,14 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               key={preset.id}
               type="button"
               onClick={() => onSelectPreset(preset.id)}
-              className={`flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all ${
+              className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all ${
                 isSelected
                   ? 'border-purple-600 bg-white ring-1 ring-purple-600 shadow-xs'
                   : 'border-purple-200/60 bg-white/70 hover:border-purple-300 hover:bg-white'
               }`}
             >
-              <span className="text-base leading-none mt-0.5">{preset.icon}</span>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-zinc-900 truncate">{preset.name}</div>
-                <div className="text-[11px] text-zinc-500 leading-tight mt-0.5">{preset.desc}</div>
-              </div>
+              <span className="text-base leading-none">{preset.icon}</span>
+              <span className={`min-w-0 truncate text-xs ${isSelected ? 'font-semibold text-zinc-900' : 'text-zinc-700'}`}>{preset.name}</span>
             </button>
           )
         })}
@@ -1516,11 +1490,10 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-xs overflow-y-auto" role="dialog" aria-modal="true">
-      <form onSubmit={submit} className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-4">
+      <form onSubmit={submit} className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
             <h2 className="text-lg font-semibold text-zinc-950">{t('services.edit_routing_title') || 'Edit routing strategy'}</h2>
-            <p className="mt-1 text-xs text-zinc-500">{t('services.edit_routing_desc') || 'Select optimal strategy and tuning presets for incoming queries.'}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -1533,7 +1506,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
           <div className="space-y-4">
             <WorkloadPresetSelector selectedPreset={preset} onSelectPreset={setPreset} />
 
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-3">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 space-y-2">
               <label className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-700 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1550,14 +1523,13 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
                   ) : (
                     <p className="text-xs text-amber-600">{t('services.judge_no_endpoints') || 'Please connect at least one provider endpoint first.'}</p>
                   )}
-                  <p className="text-xs text-zinc-500">{t('services.judge_desc') || 'When enabled, requests with ambiguous complexity are pre-checked by this lightweight model before routing to Pro or Flash.'}</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-700 cursor-pointer">
               <input
@@ -1577,9 +1549,6 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500">
-            {t('services.shadow_flighting_desc') || 'Asynchronously mirrors a configurable percentage of live queries to shadow models in the background. Zero user latency overhead.'}
-          </p>
           {shadowEnabled && (
             <div className="pt-2 space-y-3">
               <div className="space-y-2">
@@ -1598,7 +1567,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
                 <input
                   type="range"
                   min="1"
-                  max="25"
+                  max="100"
                   step="1"
                   value={shadowSampleRate}
                   onChange={(e) => setShadowSampleRate(Number(e.target.value))}
@@ -1611,7 +1580,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
         </div>
 
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
-        <div className="mt-6 flex justify-end gap-3 border-t border-zinc-100 pt-4">
+        <div className="mt-4 flex justify-end gap-3 border-t border-zinc-100 pt-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
             {t('common.cancel') || 'Cancel'}
           </button>
