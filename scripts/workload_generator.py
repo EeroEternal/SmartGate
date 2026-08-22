@@ -26,6 +26,7 @@ import requests
 BASE_URL = os.environ.get("SMARTGATE_BASE_URL", "https://api.smartgate.run").rstrip("/")
 API_KEY = os.environ.get("SMARTGATE_API_KEY")
 MODEL = os.environ.get("SMARTGATE_MODEL", "fusion")
+BASELINE_MODEL = os.environ.get("SMARTGATE_BASELINE_MODEL", "")
 
 if not API_KEY:
     print("Error: set SMARTGATE_API_KEY", file=sys.stderr)
@@ -353,6 +354,18 @@ def main():
         flow_results = run_tool_flow(f"tool-flow-{i+1}")
         results.extend((f"tool-flow-{i+1}", r) for r in flow_results)
         time.sleep(0.5)
+
+    # 4. If a baseline model is configured, send some requests to it so the
+    # Quality Analytics control group gets real traffic.
+    if BASELINE_MODEL:
+        print(f"\nSending 5 requests to baseline model: {BASELINE_MODEL}")
+        for i in range(5):
+            payload = simple_question()
+            payload["model"] = BASELINE_MODEL
+            results.append(("baseline", chat(payload, f"baseline-{i+1}")))
+            time.sleep(0.5)
+    else:
+        print("\nTip: set SMARTGATE_BASELINE_MODEL to also populate the baseline control group.")
 
     ok = sum(1 for _, r in results if r.get("ok"))
     print(f"\nDone. {ok}/{len(results)} requests succeeded.")
