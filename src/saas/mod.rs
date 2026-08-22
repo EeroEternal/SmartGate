@@ -221,10 +221,11 @@ async fn sync(state: &Arc<AppState>) {
 }
 
 fn db_error<E: std::fmt::Display>(error: E) -> (StatusCode, Json<ApiResponse<()>>) {
-    tracing::error!("SaaS database error: {}", error);
+    let message = format!("Database error: {error}");
+    tracing::error!("SaaS {message}");
     (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(ApiResponse::error("Database error")),
+        Json(ApiResponse::error(&message)),
     )
 }
 
