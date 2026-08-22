@@ -133,7 +133,29 @@ this item and the accompanying golden-file regression tests:
 - Golden-file tests that replay a multi-turn sequence and assert the rendered
   bytes of the unchanged history prefix are identical across turns.
 
-Two scope clarifications from the UniGateway team:
+Test-design refinements agreed with the UniGateway team:
+
+- **Byte-constancy under repeated rendering, not only cross-turn diff.** Today's
+  stability rests on two coincidences: `entry().or_insert()` never overwrites,
+  and `serde_json`'s `BTreeMap` sorts keys on output. If `preserve_order` is ever
+  enabled (e.g., to pass through client field order), `Map` becomes an
+  insertion-ordered IndexMap and the random SipHash iteration order of a fresh
+  `HashMap` would leak straight into the bytes. A same-request-rendered-N-times
+  case (new struct instance each time → different hash seed) actually exercises
+  this; two consecutive turns can coincide in ordering and miss it.
+- **All renderers get baselines**, not just OpenAI Chat: `openai/requests.rs`
+  (`build_chat_request` and `build_responses_request`, which has its own extra
+  merge path), and `anthropic/requests.rs` (extra merge plus conflict-defense
+  logic).
+- **Injection-position assertions**: system prompt inserted at index 0 of the
+  raw-messages path, placeholder thinking signature value — positions where a
+  mistake invalidates the upstream cache earlier than necessary.
+- **Pinned endpoint context**: fixtures must fix one `DriverEndpointContext`
+  because `resolved_model()` rewrites the model name per endpoint; a comment in
+  the tests states that fallback-induced cache loss across endpoints is a
+  scheduler-layer design property outside this contract.
+
+- Two scope clarifications from the UniGateway team:
 
 - **Determinism holds per (endpoint, model).** A fallback or retry that switches
   endpoints changes the resolved model name anyway, so the upstream cache is lost
@@ -141,6 +163,10 @@ Two scope clarifications from the UniGateway team:
 - **Byte-stability is only meaningful on same-protocol passthrough paths.** In a
   cross-protocol conversion (e.g., Anthropic → OpenAI) the provider-native cache
   concepts are not isomorphic to begin with.
+
+The optional neutral message-mutation strategy slot remains parked: revisit only
+if SmartGate's trim audit concludes something genuinely belongs in core, at which
+point paired-group deletion becomes part of the trait contract.
 
 ### 4.2 History editing (trimming) belongs to SmartGate, not UniGateway
 
