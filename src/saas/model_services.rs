@@ -58,6 +58,12 @@ pub(super) struct UpdateModelServiceRequest {
     judge_enabled: Option<bool>,
     #[serde(default)]
     judge_endpoint_id: Option<String>,
+    #[serde(default)]
+    shadow_enabled: Option<bool>,
+    #[serde(default)]
+    shadow_virtual_model_id: Option<String>,
+    #[serde(default)]
+    shadow_sample_rate: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -341,9 +347,10 @@ pub(super) async fn get_model_service(
     ctx: SaasContext,
     Path(model_id): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let service: Option<(String, String, String, String, i32, Option<String>, String)> =
+    let service: Option<(String, String, String, String, i32, Option<String>, String, i32, Option<String>, f64)> =
         sqlx::query_as(
-            "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id, mp.id
+            "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id, mp.id,
+                    mp.shadow_enabled, mp.shadow_virtual_model_id, mp.shadow_sample_rate
          FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
@@ -357,7 +364,7 @@ pub(super) async fn get_model_service(
         .fetch_optional(&state.db)
         .await
         .map_err(db_error)?;
-    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id, pool_id)) =
+    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id, pool_id, shadow_enabled, shadow_virtual_model_id, shadow_sample_rate)) =
         service
     else {
         return Err((
@@ -510,6 +517,9 @@ pub(super) async fn get_model_service(
         "status": if endpoint_count == 0 { "draft" } else { "active" },
         "judge_enabled": judge_enabled != 0,
         "judge_endpoint_id": judge_endpoint_id,
+        "shadow_enabled": shadow_enabled != 0,
+        "shadow_virtual_model_id": shadow_virtual_model_id,
+        "shadow_sample_rate": shadow_sample_rate,
     }))))
 }
 
@@ -541,13 +551,26 @@ pub(super) async fn update_model_service(
         ));
     };
     let judge_enabled = input.judge_enabled.map(|v| if v { 1 } else { 0 });
+    let shadow_enabled = input.shadow_enabled.map(|v| if v { 1 } else { 0 });
+    let shadow_sample_rate = input.shadow_sample_rate.map(|v| v.clamp(0.0, 1.0));
     sqlx::query(
-        "UPDATE model_pools SET strategy = $1, judge_enabled = COALESCE($2, judge_enabled), judge_endpoint_id = CASE WHEN $2 IS NOT NULL THEN $3 ELSE judge_endpoint_id END, updated_at = CURRENT_TIMESTAMP WHERE id = $4",
+        "UPDATE model_pools SET strategy = $1,
+            judge_enabled = COALESCE($2, judge_enabled),
+            judge_endpoint_id = CASE WHEN $2 IS NOT NULL THEN $3 ELSE judge_endpoint_id END,
+            shadow_enabled = COALESCE($7, shadow_enabled),
+            shadow_virtual_model_id = CASE WHEN $7 IS NOT NULL THEN $8 ELSE shadow_virtual_model_id END,
+            shadow_sample_rate = COALESCE($9, shadow_sample_rate),
+            updated_at = CURRENT_TIMESTAMP WHERE id = $4",
     )
     .bind(&strategy)
     .bind(judge_enabled)
     .bind(input.judge_endpoint_id.as_deref().filter(|s| !s.trim().is_empty()))
     .bind(&pool_id)
+    .bind(judge_enabled)
+    .bind(input.judge_endpoint_id.as_deref().filter(|s| !s.trim().is_empty()))
+    .bind(shadow_enabled)
+    .bind(input.shadow_virtual_model_id.as_deref().filter(|s| !s.trim().is_empty()))
+    .bind(shadow_sample_rate)
     .execute(&state.db)
     .await
     .map_err(db_error)?;
@@ -555,6 +578,8 @@ pub(super) async fn update_model_service(
     Ok(Json(ApiResponse::success(json!({
         "id": model_id,
         "strategy": strategy,
+        "shadow_enabled": input.shadow_enabled.unwrap_or(false),
+        "shadow_sample_rate": input.shadow_sample_rate.unwrap_or(0.0),
         "updated": true
     }))))
 }

@@ -91,6 +91,9 @@ pub struct ModelPool {
     pub session_affinity_ttl_secs: i32,
     pub judge_enabled: i32,
     pub judge_endpoint_id: Option<String>,
+    pub shadow_enabled: i32,
+    pub shadow_virtual_model_id: Option<String>,
+    pub shadow_sample_rate: f64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
