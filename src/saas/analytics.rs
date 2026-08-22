@@ -483,6 +483,27 @@ pub(super) async fn get_routing_analytics(
     }))))
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct QualityAnalyticsRow {
+    id: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
+    virtual_model_id: String,
+    service_name: String,
+    model: String,
+    provider_name: String,
+    prompt_tokens: i32,
+    completion_tokens: i32,
+    total_tokens: i32,
+    latency_ms: i32,
+    status_code: Option<i32>,
+    estimated_cost: f64,
+    routing_strategy: Option<String>,
+    routing_decision: Option<String>,
+    metadata: Option<String>,
+    trimmed_chars: i32,
+    tool_message_chars: i32,
+}
+
 pub(super) async fn get_quality_analytics(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -497,7 +518,7 @@ pub(super) async fn get_quality_analytics(
     };
 
     let logs_sql = format!(
-        "SELECT u.id, u.timestamp, COALESCE(vm.name, 'default'),
+        "SELECT u.id, u.timestamp, COALESCE(vm.id, ''), COALESCE(vm.name, 'default'),
                 COALESCE(e.upstream_model_id, 'unknown'),
                 COALESCE(pa.name, pa.provider_type, 'unknown'),
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
@@ -514,24 +535,7 @@ pub(super) async fn get_quality_analytics(
          LIMIT 100"
     );
 
-    let rows: Vec<(
-        String,
-        chrono::DateTime<chrono::Utc>,
-        String,
-        String,
-        String,
-        i32,
-        i32,
-        i32,
-        i32,
-        Option<i32>,
-        f64,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        i32,
-        i32,
-    )> = if let Some(value) = since_value {
+    let rows: Vec<QualityAnalyticsRow> = if let Some(value) = since_value {
         sqlx::query_as(&logs_sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -557,34 +561,64 @@ pub(super) async fn get_quality_analytics(
     let mut flash_count = 0usize;
     let mut schema_request_count = 0usize;
     let mut schema_success_count = 0usize;
-    let total_queries = rows.len();
 
+    let mut baseline_cost = 0.0;
+    let mut baseline_latency = 0i64;
+    let mut baseline_latencies: Vec<i32> = Vec::new();
+    let mut baseline_prompt_tokens = 0i64;
+    let mut baseline_completion_tokens = 0i64;
+    let mut baseline_trimmed_chars = 0i64;
+    let mut baseline_correction_count = 0usize;
+    let mut baseline_successful_count = 0usize;
+    let mut baseline_schema_request_count = 0usize;
+    let mut baseline_schema_success_count = 0usize;
+    let mut baseline_queries = 0usize;
+
+    let total_queries = rows.len();
     let mut quality_records = Vec::new();
 
-    for (
+    let baseline_config = load_savings_baseline(&state, &ctx)
+        .await
+        .map_err(db_error)?;
+    let baseline_virtual_model_id = baseline_config.as_ref().map(|row| row.0.clone());
+
+    for QualityAnalyticsRow {
         id,
         timestamp,
+        virtual_model_id,
         service_name,
         model,
         provider_name,
         prompt_tokens,
         completion_tokens,
-        tokens,
+        total_tokens: tokens,
         latency_ms,
         status_code,
-        cost,
-        _strategy,
-        decision_str,
-        _metadata_str,
+        estimated_cost: cost,
+        routing_strategy: _,
+        routing_decision: decision_str,
+        metadata: _,
         trimmed_chars,
         tool_message_chars,
-    ) in rows {
+    } in rows {
+        let is_baseline = baseline_virtual_model_id.as_ref() == Some(&virtual_model_id);
+
         total_cost += cost;
         total_latency += latency_ms as i64;
         latencies.push(latency_ms);
         total_prompt_tokens += prompt_tokens as i64;
         total_completion_tokens += completion_tokens as i64;
         total_trimmed_chars += trimmed_chars as i64;
+
+        if is_baseline {
+            baseline_cost += cost;
+            baseline_latency += latency_ms as i64;
+            baseline_latencies.push(latency_ms);
+            baseline_prompt_tokens += prompt_tokens as i64;
+            baseline_completion_tokens += completion_tokens as i64;
+            baseline_trimmed_chars += trimmed_chars as i64;
+            baseline_queries += 1;
+        }
 
         let is_pro = model.to_lowercase().contains("pro")
             || model.to_lowercase().contains("reasoner")
@@ -602,12 +636,21 @@ pub(super) async fn get_quality_analytics(
         let status = status_code.unwrap_or(200);
         if status == 200 {
             successful_count += 1;
+            if is_baseline {
+                baseline_successful_count += 1;
+            }
         }
 
         if tool_message_chars > 0 {
             schema_request_count += 1;
+            if is_baseline {
+                baseline_schema_request_count += 1;
+            }
             if status == 200 {
                 schema_success_count += 1;
+                if is_baseline {
+                    baseline_schema_success_count += 1;
+                }
             }
         }
 
@@ -632,6 +675,9 @@ pub(super) async fn get_quality_analytics(
         let is_correction = signals.iter().any(|s| s.contains("Correction") || s.contains("Follow-up") || s.contains("Clarification"));
         if is_correction {
             correction_count += 1;
+            if is_baseline {
+                baseline_correction_count += 1;
+            }
         }
 
         let (verdict, feedback_source, verdict_desc) = if status < 200 || status >= 300 {
@@ -671,54 +717,64 @@ pub(super) async fn get_quality_analytics(
             "verdict": verdict,
             "verdict_desc": verdict_desc,
             "feedback_source": feedback_source,
+            "is_baseline": is_baseline,
         }));
     }
 
-    let actual_avg_cost = (total_queries > 0)
-        .then(|| (total_cost / total_queries as f64 * 10_000.0).round() / 10_000.0);
-    let actual_avg_latency = (total_queries > 0)
-        .then(|| (total_latency as f64 / total_queries as f64).round() as i64);
+    let treatment_queries = total_queries.saturating_sub(baseline_queries);
+    let actual_avg_cost = (treatment_queries > 0)
+        .then(|| (total_cost / treatment_queries as f64 * 10_000.0).round() / 10_000.0);
+    let actual_avg_latency = (treatment_queries > 0)
+        .then(|| (total_latency as f64 / treatment_queries as f64).round() as i64);
     let p90_latency = profile_percentile(&latencies, 0.90).map(|value| value.round() as i64);
-    let user_correction_rate = (total_queries > 0).then(|| {
-        (correction_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
+    let user_correction_rate = (treatment_queries > 0).then(|| {
+        (correction_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
-    let success_rate = (total_queries > 0).then(|| {
-        (successful_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
+    let success_rate = (treatment_queries > 0).then(|| {
+        (successful_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
-    let schema_compliance_rate = (schema_request_count > 0).then(|| {
-        (schema_success_count as f64 / schema_request_count as f64 * 100.0 * 10.0).round() / 10.0
+    let schema_compliance_rate = (schema_request_count > baseline_schema_request_count).then(|| {
+        ((schema_success_count - baseline_schema_success_count) as f64 / (schema_request_count - baseline_schema_request_count) as f64 * 100.0 * 10.0).round() / 10.0
     });
 
-    // Compare against the operator-configured baseline endpoint. Cost is estimated from
-    // the baseline's configured prices applied to observed traffic; latency and quality
-    // are not manufactured and require real baseline traffic or a controlled A/B experiment.
-    let baseline_config = load_savings_baseline(&state, &ctx)
-        .await
-        .map_err(db_error)?;
-    let comparison_status = if baseline_config.is_some() {
-        "available"
+    let baseline_avg_cost = (baseline_queries > 0)
+        .then(|| (baseline_cost / baseline_queries as f64 * 10_000.0).round() / 10_000.0);
+    let baseline_avg_latency = (baseline_queries > 0)
+        .then(|| (baseline_latency as f64 / baseline_queries as f64).round() as i64);
+    let baseline_p90_latency = profile_percentile(&baseline_latencies, 0.90).map(|value| value.round() as i64);
+    let baseline_correction_rate = (baseline_queries > 0).then(|| {
+        (baseline_correction_count as f64 / baseline_queries as f64 * 100.0 * 10.0).round() / 10.0
+    });
+    let baseline_success_rate = (baseline_queries > 0).then(|| {
+        (baseline_successful_count as f64 / baseline_queries as f64 * 100.0 * 10.0).round() / 10.0
+    });
+    let baseline_schema_compliance_rate = (baseline_schema_request_count > 0).then(|| {
+        (baseline_schema_success_count as f64 / baseline_schema_request_count as f64 * 100.0 * 10.0).round() / 10.0
+    });
+
+    let quality_preserved_rate = if baseline_queries > 0 && treatment_queries > 0 {
+        let baseline_rate = baseline_successful_count as f64 / baseline_queries as f64;
+        let treatment_rate = successful_count as f64 / treatment_queries as f64;
+        if baseline_rate > 0.0 {
+            Some(((treatment_rate / baseline_rate * 100.0) * 10.0).round() / 10.0)
+        } else {
+            None
+        }
     } else {
-        "unavailable"
+        None
     };
+
+    let speedup_pct = if baseline_avg_latency.is_some() && baseline_avg_latency.unwrap() > 0 && actual_avg_latency.is_some() {
+        let baseline_ms = baseline_avg_latency.unwrap() as f64;
+        let actual_ms = actual_avg_latency.unwrap() as f64;
+        Some((((baseline_ms - actual_ms) / baseline_ms * 100.0) * 10.0).round() / 10.0)
+    } else {
+        None
+    };
+
+    let comparison_status = if baseline_config.is_some() { "available" } else { "unavailable" };
     let (baseline_summary, cost_saved_pct) = match &baseline_config {
-        Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) => {
-            let priced = *input_price > 0.0 || *output_price > 0.0;
-            let (cost_per_req, saved_pct) = if priced && total_queries > 0 {
-                let (baseline_total_cost, _) = calculate_savings(
-                    total_prompt_tokens,
-                    total_completion_tokens,
-                    total_trimmed_chars,
-                    total_cost,
-                    *input_price,
-                    *output_price,
-                );
-                (
-                    Some((baseline_total_cost / total_queries as f64 * 10_000.0).round() / 10_000.0),
-                    cost_saved_percentage(total_cost, baseline_total_cost),
-                )
-            } else {
-                (None, None)
-            };
+        Some((virtual_model_id, endpoint_id, service_name, model, provider_name, _input_price, _output_price)) => {
             (
                 json!({
                     "name": format!("{service_name} · {model}"),
@@ -726,13 +782,14 @@ pub(super) async fn get_quality_analytics(
                     "endpoint_id": endpoint_id,
                     "model": model,
                     "provider_name": provider_name,
-                    "cost_per_req": cost_per_req,
-                    "avg_latency_ms": Value::Null,
-                    "p90_latency_ms": Value::Null,
-                    "task_success_rate": Value::Null,
-                    "correction_rate": Value::Null,
+                    "cost_per_req": baseline_avg_cost,
+                    "avg_latency_ms": baseline_avg_latency,
+                    "p90_latency_ms": baseline_p90_latency,
+                    "task_success_rate": baseline_success_rate,
+                    "correction_rate": baseline_correction_rate,
+                    "schema_compliance_rate": baseline_schema_compliance_rate,
                 }),
-                saved_pct,
+                cost_saved_percentage(baseline_cost, total_cost),
             )
         }
         None => (Value::Null, None),
@@ -743,7 +800,7 @@ pub(super) async fn get_quality_analytics(
         "summary": {
             "total_queries": total_queries,
             "comparison_status": comparison_status,
-            "quality_preserved_rate": Value::Null,
+            "quality_preserved_rate": quality_preserved_rate,
             "user_correction_rate": user_correction_rate,
             "schema_compliance_rate": schema_compliance_rate,
             "shadow_agreement_score": Value::Null,
@@ -757,8 +814,9 @@ pub(super) async fn get_quality_analytics(
                 "p90_latency_ms": p90_latency,
                 "task_success_rate": success_rate,
                 "correction_rate": user_correction_rate,
+                "schema_compliance_rate": schema_compliance_rate,
                 "cost_saved_pct": cost_saved_pct,
-                "speedup_pct": Value::Null,
+                "speedup_pct": speedup_pct,
             }
         },
         "records": quality_records,

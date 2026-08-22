@@ -3478,8 +3478,10 @@ type QualityAnalyticsData = {
       name: string
       cost_per_req: number | null
       avg_latency_ms: number | null
+      p90_latency_ms: number | null
       task_success_rate: number | null
       correction_rate: number | null
+      schema_compliance_rate: number | null
     } | null
     smartgate_routing: {
       name: string
@@ -3488,6 +3490,7 @@ type QualityAnalyticsData = {
       p90_latency_ms: number | null
       task_success_rate: number | null
       correction_rate: number | null
+      schema_compliance_rate: number | null
       cost_saved_pct: number | null
       speedup_pct: number | null
     }
@@ -3724,7 +3727,13 @@ export function QualityPage() {
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                       <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
-                        {baseline.avg_latency_ms != null ? `${(baseline.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
+                        {baseline.p90_latency_ms != null ? `${(baseline.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                        {baseline.schema_compliance_rate != null ? `${baseline.schema_compliance_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -3740,7 +3749,7 @@ export function QualityPage() {
                       </div>
                     </div>
                     <p className="col-span-2 text-[11px] leading-relaxed text-zinc-400">
-                      {t('quality.baseline_est_note') || 'Cost is estimated from the configured baseline endpoint pricing; latency and quality metrics appear after real baseline traffic or a controlled A/B experiment.'}
+                      {t('quality.baseline_est_note') || 'Metrics are computed from actual requests sent to the configured baseline model service. Send traffic to the baseline service to populate this card.'}
                     </p>
                   </div>
                 ) : (
@@ -3809,6 +3818,15 @@ export function QualityPage() {
                       {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
                     </span>
                     {routing?.correction_rate != null && baseline?.correction_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-emerald-800/70 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                    <span className="text-sm font-semibold text-zinc-900">
+                      {routing?.schema_compliance_rate != null ? `${routing.schema_compliance_rate}%` : 'N/A'}
+                    </span>
+                    {routing?.schema_compliance_rate != null && baseline?.schema_compliance_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.schema_compliance_rate - baseline.schema_compliance_rate).toFixed(1)}% delta)</span> : null}
                   </div>
                 </div>
               </div>
