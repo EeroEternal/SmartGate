@@ -203,10 +203,11 @@
     "shadow_flighting_title": "Shadow Quality Flighting",
     "shadow_flighting_desc": "Asynchronously mirrors a configurable percentage of live queries to a shadow model in the background.",
     "shadow_sample_rate": "Traffic Sample Rate",
-    "shadow_target_model": "Shadow comparison model service name",
+    "shadow_target_model": "Shadow comparison model service",
     "active_strategy": "Active Strategy",
     "configure_strategy": "Configure Strategy",
-    "shadow_target_desc": "Must be a Model service authorized for the same API key."
+    "shadow_target_desc": "Must be a Model service authorized for the same API key.",
+    "shadow_no_targets": "Create another Model service to use as the shadow comparison target."
   },
   "evaluation": {
     "title": "Model Evaluation & DNA Benchmarking",

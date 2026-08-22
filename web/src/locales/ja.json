@@ -203,10 +203,11 @@
     "shadow_flighting_title": "シャドウ品質飛行",
     "shadow_flighting_desc": "オンラインリクエストの一定割合をバックグラウンドでシャドウモデルに非同期ミラーリングします。",
     "shadow_sample_rate": "トラフィックサンプリング率",
-    "shadow_target_model": "シャドウ比較モデルサービス名",
+    "shadow_target_model": "シャドウ比較モデルサービス",
     "active_strategy": "現在の有効戦略",
     "configure_strategy": "戦略を設定",
-    "shadow_target_desc": "同じAPIキーで承認されたモデルサービスである必要があります。"
+    "shadow_target_desc": "同じAPIキーで承認されたモデルサービスである必要があります。",
+    "shadow_no_targets": "シャドウ比較ターゲットとして別のモデルサービスを作成してください。"
   },
   "evaluation": {
     "title": "モデル評価と能力ベンチマーク",

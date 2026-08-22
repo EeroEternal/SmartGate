@@ -1461,14 +1461,27 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
   const [shadowEnabled, setShadowEnabled] = useState(Boolean(service.shadow_enabled))
   const [shadowSampleRate, setShadowSampleRate] = useState(service.shadow_sample_rate != null ? Math.round(service.shadow_sample_rate * 100) : 5)
   const [shadowVirtualModelId, setShadowVirtualModelId] = useState(service.shadow_virtual_model_id || '')
+  const [serviceOptions, setServiceOptions] = useState<{ id: string; name: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    saasFetch<Service[]>('/api/saas/model-services')
+      .then((res) => {
+        if (cancelled) return
+        setServiceOptions((res.data || []).filter((svc) => svc.id !== service.id).map((svc) => ({ id: svc.name, name: svc.name })))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [service.id])
 
   const judgeOptions = service.endpoints.map((ep) => ({
     id: ep.id,
     name: `${ep.provider_name} - ${ep.model}${ep.input_price_per_1m ? ` ($${ep.input_price_per_1m}/1M)` : ''}`,
   }))
   const selectedJudge = judgeOptions.find((opt) => opt.id === judgeEndpointId) || judgeOptions[0] || { id: '', name: 'No endpoints available' }
+  const selectedShadowTarget = serviceOptions.find((opt) => opt.id === shadowVirtualModelId) || serviceOptions[0]
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
@@ -1480,7 +1493,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
           judge_enabled: nextStrategy === 'capability_aware' ? judgeEnabled : false,
           judge_endpoint_id: nextStrategy === 'capability_aware' && judgeEnabled ? (selectedJudge.id || undefined) : undefined,
           shadow_enabled: shadowEnabled,
-          shadow_virtual_model_id: shadowEnabled ? (shadowVirtualModelId || undefined) : undefined,
+          shadow_virtual_model_id: shadowEnabled ? (selectedShadowTarget?.id || undefined) : undefined,
           shadow_sample_rate: shadowEnabled ? (shadowSampleRate / 100) : 0,
         }),
       })
@@ -1550,18 +1563,18 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
             )}
           </div>
           {shadowEnabled && (
-            <div className="pt-2 space-y-3">
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-zinc-700">{t('services.shadow_target_model') || 'Shadow comparison model service name'}</label>
-                <input
-                  type="text"
-                  value={shadowVirtualModelId}
-                  onChange={(e) => setShadowVirtualModelId(e.target.value)}
-                  placeholder={service.name}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-950 focus:outline-none"
+            <div className="space-y-2 pt-1">
+              {serviceOptions.length > 0 ? (
+                <Select
+                  label={t('services.shadow_target_model') || 'Shadow comparison model service'}
+                  options={serviceOptions}
+                  selected={selectedShadowTarget}
+                  onChange={(option) => setShadowVirtualModelId(String(option.id))}
                 />
-                <p className="text-xs text-zinc-500">{t('services.shadow_target_desc') || 'Must be a Model service authorized for the same API key.'}</p>
-              </div>
+              ) : (
+                <p className="text-xs text-amber-600">{t('services.shadow_no_targets') || 'Create another Model service to use as the shadow comparison target.'}</p>
+              )}
+              <p className="text-xs text-zinc-500">{t('services.shadow_target_desc') || 'Must be a Model service authorized for the same API key.'}</p>
               <div className="flex items-center gap-4">
                 <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate') || 'Sample Rate'}:</span>
                 <input

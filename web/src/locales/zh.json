@@ -203,10 +203,11 @@
     "shadow_flighting_title": "影子质量飞检",
     "shadow_flighting_desc": "在后台异步将一定比例的线上真实请求镜像到影子模型。",
     "shadow_sample_rate": "采样比例",
-    "shadow_target_model": "影子对比模型服务名称",
+    "shadow_target_model": "影子对比模型服务",
     "active_strategy": "当前生效策略",
     "configure_strategy": "配置策略",
-    "shadow_target_desc": "必须是同一个 API key 已授权的 Model service。"
+    "shadow_target_desc": "必须是同一个 API key 已授权的 Model service。",
+    "shadow_no_targets": "请先创建另一个 Model service 作为影子对比目标。"
   },
   "evaluation": {
     "title": "模型评估与能力基准看板",
