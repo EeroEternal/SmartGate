@@ -2426,7 +2426,9 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const exampleModel = serviceNames[0] || 'your-model-service'
-  const baseUrl = window.location.origin
+  const baseUrl = (typeof window !== 'undefined' && (window.location.hostname === 'smartgate.run' || window.location.hostname.endsWith('.pages.dev')))
+    ? 'https://api.smartgate.run'
+    : window.location.origin
   const curlExample = [
     `curl ${baseUrl}/v1/chat/completions \\`,
     `  -H "Authorization: Bearer ${rawKey}" \\`,
