@@ -488,6 +488,7 @@ struct QualityAnalyticsRow {
     id: String,
     timestamp: chrono::DateTime<chrono::Utc>,
     virtual_model_id: String,
+    endpoint_id: String,
     service_name: String,
     model: String,
     provider_name: String,
@@ -518,7 +519,7 @@ pub(super) async fn get_quality_analytics(
     };
 
     let logs_sql = format!(
-        "SELECT u.id, u.timestamp, COALESCE(vm.id, '') AS virtual_model_id, COALESCE(vm.name, 'default') AS service_name,
+        "SELECT u.id, u.timestamp, COALESCE(vm.id, '') AS virtual_model_id, COALESCE(e.id, '') AS endpoint_id, COALESCE(vm.name, 'default') AS service_name,
                 COALESCE(e.upstream_model_id, 'unknown') AS model,
                 COALESCE(pa.name, pa.provider_type, 'unknown') AS provider_name,
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
@@ -580,12 +581,13 @@ pub(super) async fn get_quality_analytics(
     let baseline_config = load_savings_baseline(&state, &ctx)
         .await
         .map_err(db_error)?;
-    let baseline_virtual_model_id = baseline_config.as_ref().map(|row| row.0.clone());
+    let baseline_pair = baseline_config.as_ref().map(|row| (row.0.clone(), row.1.clone()));
 
     for QualityAnalyticsRow {
         id,
         timestamp,
         virtual_model_id,
+        endpoint_id,
         service_name,
         model,
         provider_name,
@@ -601,7 +603,7 @@ pub(super) async fn get_quality_analytics(
         trimmed_chars,
         tool_message_chars,
     } in rows {
-        let is_baseline = baseline_virtual_model_id.as_ref() == Some(&virtual_model_id);
+        let is_baseline = baseline_pair.as_ref() == Some(&(virtual_model_id.clone(), endpoint_id.clone()));
 
         total_cost += cost;
         total_latency += latency_ms as i64;

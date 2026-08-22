@@ -355,8 +355,8 @@ def main():
         results.extend((f"tool-flow-{i+1}", r) for r in flow_results)
         time.sleep(0.5)
 
-    # 4. If a baseline model is configured, send some requests to it so the
-    # Quality Analytics control group gets real traffic.
+    // 5. If a baseline model is configured, send some requests to it so the
+    // Quality Analytics control group gets real traffic.
     if BASELINE_MODEL:
         print(f"\nSending 5 requests to baseline model: {BASELINE_MODEL}")
         for i in range(5):
