@@ -7,7 +7,7 @@ description = "Open-source AI gateway with control/data plane separation — cut
 
 [dependencies]
 # Core Engine
-unigateway-sdk = { version = "2.14.0", features = ["host", "session"] }
+unigateway-sdk = { version = "2.14.2", features = ["host", "session"] }
 
 # Web Framework
 axum = { version = "0.7", features = ["macros"] }
@@ -41,6 +41,6 @@ hex = "0.4"
 clap = { version = "4.0", features = ["derive", "env"] }
 eero_llm_providers = "0.14.6"
 reqwest = { version = "0.12", features = ["json"] }
-unigateway-session = { version = "2.14.0", features = ["http"] }
-unigateway-session-redis = "2.14.0"
+unigateway-session = { version = "2.14.2", features = ["http"] }
+unigateway-session-redis = "2.14.2"
 redis = "0.27.6"

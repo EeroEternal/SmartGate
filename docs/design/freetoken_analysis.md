@@ -212,5 +212,5 @@ observed signals; UniGateway = protocol-level payload stability.
 | 1 | Cache-hit-rate routing feedback signal for sticky sessions | SmartGate | Low | Data already in `usage_logs` |
 | 2 | Cache-read-price weighting in CostAware for agentic sessions | SmartGate | Low | Workload profile detection exists |
 | 3 | Session-level cache-collapse diagnostic in Analytics | SmartGate | Medium | Same data |
-| 4 | Audit SmartGate trim determinism: placeholder + paired-group deletion + golden tests | SmartGate (host layer) | Medium | Needs trace comparison across turns |
-| 5 | Rendering-determinism golden-file regression tests | UniGateway | Low | Accepted by UniGateway |
+| 4 | ~~Audit SmartGate trim determinism~~ | SmartGate (host layer) | — | **Done**: content-only trimming shipped (`afd0909`) |
+| 5 | ~~Rendering-determinism golden-file regression tests~~ | UniGateway | — | **Done**: released in UniGateway v2.14.2 (commit `31562f6`); also fixed a Responses-path `_`-prefixed field leak. SmartGate consumes 2.14.2. |
