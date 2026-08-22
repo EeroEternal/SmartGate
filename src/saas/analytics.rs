@@ -778,11 +778,17 @@ pub(super) async fn get_quality_analytics(
     };
 
     // Shadow Flighting: compute agreement rate from recorded shadow evaluations.
-    let shadow_eval_sql = format!(
+    // Note: shadow_evaluations has no table alias, so the time filter must be
+    // written against its own `timestamp` column instead of reusing where_sql.
+    let shadow_eval_sql = if since_value.is_some() {
         "SELECT COALESCE(COUNT(*), 0), COALESCE(SUM(agreement), 0)
          FROM shadow_evaluations
-         WHERE project_id = $1 {where_sql}"
-    );
+         WHERE project_id = $1 AND timestamp >= $2"
+    } else {
+        "SELECT COALESCE(COUNT(*), 0), COALESCE(SUM(agreement), 0)
+         FROM shadow_evaluations
+         WHERE project_id = $1"
+    };
     let (shadow_total, shadow_agreed): (i64, i64) = if let Some(value) = since_value {
         sqlx::query_as(&shadow_eval_sql)
             .bind(&ctx.project_id)
