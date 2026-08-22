@@ -1,6 +1,6 @@
 //! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
 
-use crate::api::shadow::{execute_shadow, extract_response_preview, store_shadow_evaluation};
+use crate::api::shadow::{execute_shadow, store_shadow_evaluation};
 use crate::api::warm::warm_error;
 use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
@@ -142,10 +142,10 @@ async fn chat_proxy(
     if warm_context.is_none() {
         if let Some(ref p) = pool {
             if p.tool_trim_enabled != 0 {
+                let max_tool_chars = p.max_tool_chars.max(256) as usize;
                 let cfg = SlimConfig {
-                    keep_recent_full: 1,
-                    max_newest_chars: p.max_tool_chars.max(256) as usize,
-                    max_recent_chars: (p.max_tool_chars.max(256) as usize).min(4_000),
+                    max_tool_chars,
+                    placeholder_after: max_tool_chars.saturating_mul(4),
                 };
                 let result = slim_tool_messages(payload.clone(), &cfg);
                 slimmed_chars = result.slimmed_chars;

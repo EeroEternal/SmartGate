@@ -5,8 +5,7 @@ use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
 use crate::routing::canonicalize_strategy;
 use crate::warm::{parse_context_with_headers, strip_context, Delivery};
-use axum::body::to_bytes;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use std::sync::Arc;
 use unigateway_sdk::host::{HostContext, HostDispatchOutcome, HostDispatchTarget, HostProtocol, HostRequest, dispatch_request_with_middleware};
 
