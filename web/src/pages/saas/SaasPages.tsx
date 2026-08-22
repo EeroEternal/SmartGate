@@ -2507,7 +2507,7 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
           <p className="mt-1 text-xs text-zinc-500">
             {t('keys.usage_desc') || 'Use this key with any OpenAI-compatible client. Set the base URL to this gateway and pass the model service name as the model.'}
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-[11px] leading-relaxed text-zinc-100"><code>{curlExample}</code></pre>
+          <pre className="mt-3 whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-4 text-[11px] leading-relaxed text-zinc-100"><code>{curlExample}</code></pre>
         </div>
       </div>
     </div>
