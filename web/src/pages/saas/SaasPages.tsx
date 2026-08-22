@@ -3485,6 +3485,7 @@ type QualityAnalyticsData = {
       name: string
       cost_per_req: number | null
       avg_latency_ms: number | null
+      p90_latency_ms: number | null
       task_success_rate: number | null
       correction_rate: number | null
       cost_saved_pct: number | null
@@ -3785,7 +3786,7 @@ export function QualityPage() {
                   <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-emerald-700 font-mono">
-                      {routing?.avg_latency_ms != null ? `${(routing.avg_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
+                      {routing?.p90_latency_ms != null ? `${(routing.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                     </span>
                     <span className="text-[10px] font-semibold text-emerald-600">
                       {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' }) || 'faster'})` : ''}

@@ -502,7 +502,8 @@ pub(super) async fn get_quality_analytics(
                 COALESCE(pa.name, pa.provider_type, 'unknown'),
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
                 u.latency_ms, u.status_code, u.estimated_cost,
-                u.routing_strategy, u.routing_decision, u.metadata, u.trimmed_chars
+                u.routing_strategy, u.routing_decision, u.metadata, u.trimmed_chars,
+                u.tool_message_chars
          FROM usage_logs u
          JOIN projects p ON p.id = u.project_id
          LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
@@ -529,6 +530,7 @@ pub(super) async fn get_quality_analytics(
         Option<String>,
         Option<String>,
         i32,
+        i32,
     )> = if let Some(value) = since_value {
         sqlx::query_as(&logs_sql)
             .bind(&ctx.org_id)
@@ -545,6 +547,7 @@ pub(super) async fn get_quality_analytics(
 
     let mut total_cost = 0.0;
     let mut total_latency = 0i64;
+    let mut latencies: Vec<i32> = Vec::new();
     let mut total_prompt_tokens = 0i64;
     let mut total_completion_tokens = 0i64;
     let mut total_trimmed_chars = 0i64;
@@ -552,6 +555,8 @@ pub(super) async fn get_quality_analytics(
     let mut successful_count = 0usize;
     let mut pro_count = 0usize;
     let mut flash_count = 0usize;
+    let mut schema_request_count = 0usize;
+    let mut schema_success_count = 0usize;
     let total_queries = rows.len();
 
     let mut quality_records = Vec::new();
@@ -572,9 +577,11 @@ pub(super) async fn get_quality_analytics(
         decision_str,
         _metadata_str,
         trimmed_chars,
+        tool_message_chars,
     ) in rows {
         total_cost += cost;
         total_latency += latency_ms as i64;
+        latencies.push(latency_ms);
         total_prompt_tokens += prompt_tokens as i64;
         total_completion_tokens += completion_tokens as i64;
         total_trimmed_chars += trimmed_chars as i64;
@@ -595,6 +602,13 @@ pub(super) async fn get_quality_analytics(
         let status = status_code.unwrap_or(200);
         if status == 200 {
             successful_count += 1;
+        }
+
+        if tool_message_chars > 0 {
+            schema_request_count += 1;
+            if status == 200 {
+                schema_success_count += 1;
+            }
         }
 
         let mut prompt_preview = String::new();
@@ -664,11 +678,15 @@ pub(super) async fn get_quality_analytics(
         .then(|| (total_cost / total_queries as f64 * 10_000.0).round() / 10_000.0);
     let actual_avg_latency = (total_queries > 0)
         .then(|| (total_latency as f64 / total_queries as f64).round() as i64);
+    let p90_latency = profile_percentile(&latencies, 0.90).map(|value| value.round() as i64);
     let user_correction_rate = (total_queries > 0).then(|| {
         (correction_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
     let success_rate = (total_queries > 0).then(|| {
         (successful_count as f64 / total_queries as f64 * 100.0 * 10.0).round() / 10.0
+    });
+    let schema_compliance_rate = (schema_request_count > 0).then(|| {
+        (schema_success_count as f64 / schema_request_count as f64 * 100.0 * 10.0).round() / 10.0
     });
 
     // Compare against the operator-configured baseline endpoint. Cost is estimated from
@@ -710,6 +728,7 @@ pub(super) async fn get_quality_analytics(
                     "provider_name": provider_name,
                     "cost_per_req": cost_per_req,
                     "avg_latency_ms": Value::Null,
+                    "p90_latency_ms": Value::Null,
                     "task_success_rate": Value::Null,
                     "correction_rate": Value::Null,
                 }),
@@ -726,7 +745,7 @@ pub(super) async fn get_quality_analytics(
             "comparison_status": comparison_status,
             "quality_preserved_rate": Value::Null,
             "user_correction_rate": user_correction_rate,
-            "schema_compliance_rate": Value::Null,
+            "schema_compliance_rate": schema_compliance_rate,
             "shadow_agreement_score": Value::Null,
             "pro_count": pro_count,
             "flash_count": flash_count,
@@ -735,6 +754,7 @@ pub(super) async fn get_quality_analytics(
                 "name": "SmartGate Intelligent Routing",
                 "cost_per_req": actual_avg_cost,
                 "avg_latency_ms": actual_avg_latency,
+                "p90_latency_ms": p90_latency,
                 "task_success_rate": success_rate,
                 "correction_rate": user_correction_rate,
                 "cost_saved_pct": cost_saved_pct,
@@ -743,6 +763,16 @@ pub(super) async fn get_quality_analytics(
         },
         "records": quality_records,
     }))))
+}
+
+fn profile_percentile(values: &[i32], fraction: f64) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    let index = ((sorted.len() - 1) as f64 * fraction).round() as usize;
+    Some(sorted[index.min(sorted.len() - 1)] as f64)
 }
 
 type SavingsBaselineRow = (String, String, String, String, String, f64, f64);
