@@ -23,6 +23,9 @@ import uuid
 
 import requests
 
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 1.0
+
 BASE_URL = os.environ.get("SMARTGATE_BASE_URL", "https://api.smartgate.run").rstrip("/")
 API_KEY = os.environ.get("SMARTGATE_API_KEY")
 MODEL = os.environ.get("SMARTGATE_MODEL", "fusion")
@@ -41,23 +44,28 @@ ENDPOINT = f"{BASE_URL}/v1/chat/completions"
 
 
 def chat(payload: dict, tag: str) -> dict:
-    """Send one chat completion request and return a small summary."""
+    """Send one chat completion request with transient-error retries."""
     print(f"[{tag}] -> {payload.get('model')}")
-    try:
-        response = requests.post(ENDPOINT, headers=HEADERS, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        usage = data.get("usage") or {}
-        choice = (data.get("choices") or [{}])[0]
-        finish = choice.get("finish_reason")
-        text = choice.get("message", {}).get("content", "")[:120]
-        tool_calls = choice.get("message", {}).get("tool_calls")
-        print(f"    status={response.status_code} finish={finish} tool_calls={bool(tool_calls)} tokens={usage}")
-        print(f"    preview: {text!r}")
-        return {"ok": True, "status": response.status_code, "usage": usage, "finish": finish, "tool_calls": tool_calls}
-    except Exception as exc:
-        print(f"    ERROR: {exc}")
-        return {"ok": False, "error": str(exc)}
+    last_error = ""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.post(ENDPOINT, headers=HEADERS, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            usage = data.get("usage") or {}
+            choice = (data.get("choices") or [{}])[0]
+            finish = choice.get("finish_reason")
+            text = choice.get("message", {}).get("content", "")[:120]
+            tool_calls = choice.get("message", {}).get("tool_calls")
+            print(f"    status={response.status_code} finish={finish} tool_calls={bool(tool_calls)} tokens={usage}")
+            print(f"    preview: {text!r}")
+            return {"ok": True, "status": response.status_code, "usage": usage, "finish": finish, "tool_calls": tool_calls}
+        except Exception as exc:
+            last_error = str(exc)
+            print(f"    attempt {attempt}/{MAX_RETRIES} ERROR: {last_error}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS)
+    return {"ok": False, "error": last_error}
 
 
 def simple_greeting():
