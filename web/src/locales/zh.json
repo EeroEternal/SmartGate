@@ -386,7 +386,6 @@
     "task_success": "任务成功率",
     "followup_correction": "用户纠错追问",
     "baseline_est_note": "成本按已配置基线端点的定价估算；延迟与质量指标需要真实基线流量或受控 A/B 实验后才会展示。",
-    "conclusion": "所选时间范围内的观测对比。结果基于遥测数据，不代表未来成本、延迟或质量的保证。",
     "verdict_logs_title": "质量反馈与实时验证日志",
     "verdict_logs_subtitle": "实时汇聚探针验证、裁判模型评分与自动升阶记录。",
     "all_verdicts": "全部结论",

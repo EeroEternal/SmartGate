@@ -729,14 +729,17 @@ pub(super) async fn get_quality_analytics(
     let actual_avg_latency = (treatment_queries > 0)
         .then(|| (total_latency as f64 / treatment_queries as f64).round() as i64);
     let p90_latency = profile_percentile(&latencies, 0.90).map(|value| value.round() as i64);
+    let treatment_successful_count = successful_count.saturating_sub(baseline_successful_count);
+    let treatment_correction_count = correction_count.saturating_sub(baseline_correction_count);
+    let treatment_schema_success_count = schema_success_count.saturating_sub(baseline_schema_success_count);
     let user_correction_rate = (treatment_queries > 0).then(|| {
-        (correction_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
+        (treatment_correction_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
     let success_rate = (treatment_queries > 0).then(|| {
-        (successful_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
+        (treatment_successful_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
     let schema_compliance_rate = (schema_request_count > baseline_schema_request_count).then(|| {
-        ((schema_success_count - baseline_schema_success_count) as f64 / (schema_request_count - baseline_schema_request_count) as f64 * 100.0 * 10.0).round() / 10.0
+        (treatment_schema_success_count as f64 / (schema_request_count - baseline_schema_request_count) as f64 * 100.0 * 10.0).round() / 10.0
     });
 
     let baseline_avg_cost = (baseline_queries > 0)
@@ -756,7 +759,7 @@ pub(super) async fn get_quality_analytics(
 
     let quality_preserved_rate = if baseline_queries > 0 && treatment_queries > 0 {
         let baseline_rate = baseline_successful_count as f64 / baseline_queries as f64;
-        let treatment_rate = successful_count as f64 / treatment_queries as f64;
+        let treatment_rate = treatment_successful_count as f64 / treatment_queries as f64;
         if baseline_rate > 0.0 {
             Some(((treatment_rate / baseline_rate * 100.0) * 10.0).round() / 10.0)
         } else {

@@ -386,7 +386,6 @@
     "task_success": "Task Success Rate",
     "followup_correction": "Follow-up Correction",
     "baseline_est_note": "Cost is estimated from the configured baseline endpoint pricing; latency and quality metrics appear after real baseline traffic or a controlled A/B experiment.",
-    "conclusion": "Observed comparison for the selected time range. Results are telemetry-based and are not a guarantee of future cost, latency, or quality.",
     "verdict_logs_title": "Quality Feedback & Verification Logs",
     "verdict_logs_subtitle": "Live stream of verification sources, shadow judge scores, and auto-escalations.",
     "all_verdicts": "All Verdicts",

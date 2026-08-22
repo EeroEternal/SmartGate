@@ -3712,8 +3712,15 @@ export function QualityPage() {
             {/* Control Group: Baseline */}
             <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
               <div>
-                <div className="flex items-center justify-between border-b border-zinc-200/80 pb-2">
-                  <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
+                <div className="flex items-start justify-between border-b border-zinc-200/80 pb-2">
+                  <div>
+                    <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
+                    {baseline && (
+                      <div className="mt-0.5 text-[11px] text-zinc-500 truncate max-w-[180px]" title={baseline.name}>
+                        {baseline.name}
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[10px] font-medium text-zinc-400">{baseline ? (t('quality.flagship_tag') || 'Configured baseline') : (t('quality.not_configured_tag') || 'Not configured')}</span>
                 </div>
                 {baseline ? (
@@ -3833,12 +3840,7 @@ export function QualityPage() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5 text-xs text-zinc-600 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <CheckCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>{t('quality.conclusion') || 'Observed comparison for the selected time range. Results are telemetry-based and are not a guarantee of future cost, latency, or quality.'}</span>
-            </span>
-          </div>
+
         </div>
 
         {baselineModalOpen && (

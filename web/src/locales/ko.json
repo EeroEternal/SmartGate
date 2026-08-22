@@ -386,7 +386,6 @@
     "task_success": "작업 성공률",
     "followup_correction": "후속 수정",
     "baseline_est_note": "비용은 구성된 기준 엔드포인트 가격으로 추정됩니다. 지연 시간과 품질 지표는 실제 기준 트래픽 또는 통제된 A/B 실험 후에 표시됩니다.",
-    "conclusion": "선택한 기간의 관측 비교입니다. 결과는 텔레메트리 기반이며 향후 비용, 지연 시간 또는 품질을 보장하지 않습니다.",
     "verdict_logs_title": "품질 피드백 및 검증 로그",
     "verdict_logs_subtitle": "검증 소스, 섀도우 심사관 점수 및 자동 승격 실시간 기록.",
     "all_verdicts": "모든 판정",
