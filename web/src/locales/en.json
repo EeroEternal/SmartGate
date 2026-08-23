@@ -555,18 +555,26 @@
     "stat_discounted": "Discounted Models",
     "stat_discounted_hint": "Models with active price discounts",
     "stat_total_indexed": "Total Models Indexed",
-    "last_synced": "Last synced",
+    "multidim_filter": "Multi-dimensional Filters",
     "search_placeholder": "Search models by name, ID, or description…",
     "filter_all": "All Models",
     "filter_free_only": "Free Models Only",
     "filter_discounted_only": "Discounted Only",
+    "filter_context_all": "Any Context Window",
+    "filter_context_32k": "≥ 32k Context",
+    "filter_context_128k": "≥ 128k Context",
+    "filter_context_200k": "≥ 200k Context",
     "sort_smart": "Smart Ranking",
     "sort_price_asc": "Lowest Price First",
+    "sort_price_desc": "Highest Price First",
     "sort_discount_desc": "Highest Discount First",
     "sort_context_desc": "Largest Context Window",
+    "sort_newest": "Newest Released",
     "prompt_price": "Input / 1M",
     "completion_price": "Output / 1M",
     "context_length": "Context Window",
-    "no_models_found": "No matching OpenRouter models found in catalog."
+    "no_models_found": "No matching OpenRouter models found in catalog.",
+    "page_info": "Page {current} of {total} ({count} matching models)",
+    "per_page": "{size} / page"
   }
 }

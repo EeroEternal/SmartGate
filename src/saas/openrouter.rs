@@ -18,7 +18,10 @@ pub struct OpenRouterMarketQuery {
     pub search: Option<String>,
     pub free_only: Option<bool>,
     pub min_discount: Option<f64>,
+    pub min_context: Option<i32>,
     pub sort: Option<String>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,6 +36,10 @@ pub struct OpenRouterMarketStats {
 pub struct OpenRouterMarketResponse {
     pub stats: OpenRouterMarketStats,
     pub models: Vec<OpenRouterMarketModel>,
+    pub total_count: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
 }
 
 pub async fn get_openrouter_market(
@@ -40,15 +47,21 @@ pub async fn get_openrouter_market(
     State(state): State<Arc<AppState>>,
     Query(query): Query<OpenRouterMarketQuery>,
 ) -> Result<Json<ApiResponse<OpenRouterMarketResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let mut sql = String::from("SELECT * FROM openrouter_market_models WHERE 1=1");
+    let mut where_clause = String::from("WHERE 1=1");
 
     if let Some(true) = query.free_only {
-        sql.push_str(" AND is_free = 1");
+        where_clause.push_str(" AND is_free = 1");
     }
 
     if let Some(min_disc) = query.min_discount {
         if min_disc > 0.0 {
-            sql.push_str(&format!(" AND discount_ratio >= {}", min_disc));
+            where_clause.push_str(&format!(" AND discount_ratio >= {}", min_disc));
+        }
+    }
+
+    if let Some(min_ctx) = query.min_context {
+        if min_ctx > 0 {
+            where_clause.push_str(&format!(" AND context_length >= {}", min_ctx));
         }
     }
 
@@ -56,21 +69,36 @@ pub async fn get_openrouter_market(
         let trimmed = search.trim();
         if !trimmed.is_empty() {
             let escaped = trimmed.replace('\'', "''");
-            sql.push_str(&format!(
+            where_clause.push_str(&format!(
                 " AND (id ILIKE '%{}%' OR name ILIKE '%{}%' OR description ILIKE '%{}%')",
                 escaped, escaped, escaped
             ));
         }
     }
 
+    let count_sql = format!("SELECT COUNT(*)::bigint FROM openrouter_market_models {}", where_clause);
+    let total_count: (i64,) = sqlx::query_as(&count_sql)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or((0,));
+
+    let page_size = query.page_size.unwrap_or(12).clamp(1, 100);
+    let total_pages = ((total_count.0 as f64) / (page_size as f64)).ceil().max(1.0) as i64;
+    let page = query.page.unwrap_or(1).clamp(1, total_pages);
+    let offset = (page - 1) * page_size;
+
+    let mut sql = format!("SELECT * FROM openrouter_market_models {}", where_clause);
+
     match query.sort.as_deref() {
-        Some("price_asc") => sql.push_str(" ORDER BY prompt_price_per_1m ASC, completion_price_per_1m ASC"),
-        Some("discount_desc") => sql.push_str(" ORDER BY discount_ratio DESC, prompt_price_per_1m ASC"),
+        Some("price_asc") => sql.push_str(" ORDER BY is_free DESC, prompt_price_per_1m ASC, completion_price_per_1m ASC"),
+        Some("price_desc") => sql.push_str(" ORDER BY prompt_price_per_1m DESC, completion_price_per_1m DESC"),
+        Some("discount_desc") => sql.push_str(" ORDER BY discount_ratio DESC, is_free DESC, prompt_price_per_1m ASC"),
         Some("context_desc") => sql.push_str(" ORDER BY context_length DESC"),
+        Some("newest") => sql.push_str(" ORDER BY created_at DESC NULLS LAST"),
         _ => sql.push_str(" ORDER BY is_free DESC, discount_ratio DESC, id ASC"),
     }
 
-    sql.push_str(" LIMIT 200");
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", page_size, offset));
 
     let models = sqlx::query_as::<_, OpenRouterMarketModel>(&sql)
         .fetch_all(&state.db)
@@ -99,7 +127,14 @@ pub async fn get_openrouter_market(
         last_synced_at: stats_row.3,
     };
 
-    Ok(Json(ApiResponse::success(OpenRouterMarketResponse { stats, models })))
+    Ok(Json(ApiResponse::success(OpenRouterMarketResponse {
+        stats,
+        models,
+        total_count: total_count.0,
+        page,
+        page_size,
+        total_pages,
+    })))
 }
 
 pub async fn trigger_openrouter_sync(
