@@ -1906,48 +1906,51 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
   useEffect(() => {
     let active = true
+    const mapMarket = (items: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }>): CatalogOffering[] =>
+      items.map((m) => ({
+        provider_id: 'openrouter',
+        provider_name: 'OpenRouter',
+        endpoint_id: `openrouter-${m.id}`,
+        endpoint_key: 'openrouter',
+        region: 'global',
+        base_url: 'https://openrouter.ai/api/v1',
+        price_currency: 'USD',
+        model: m.id,
+        model_name: m.name,
+        description: m.description || '',
+        input_price_per_1m: m.prompt_price_per_1m,
+        output_price_per_1m: m.completion_price_per_1m,
+        cache_read_price_per_1m: 0,
+        cache_write_price_per_1m: 0,
+        supports_tools: true,
+        supports_vision: false,
+        supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1') || m.id.includes('o3'),
+        context_length: m.context_length,
+      }))
+
     const loadMarket = async () => {
       try {
-        const queryParam = modelSearch.trim() ? `&search=${encodeURIComponent(modelSearch.trim())}` : ''
-        const res = await saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>(`/api/saas/openrouter/market?page_size=1000${queryParam}`)
-        if (active && res.data?.models) {
-          const mapped: CatalogOffering[] = res.data.models.map((m) => ({
-            provider_id: 'openrouter',
-            provider_name: 'OpenRouter',
-            endpoint_id: `openrouter-${m.id}`,
-            endpoint_key: 'openrouter',
-            region: 'global',
-            base_url: 'https://openrouter.ai/api/v1',
-            price_currency: 'USD',
-            model: m.id,
-            model_name: m.name,
-            description: m.description || '',
-            input_price_per_1m: m.prompt_price_per_1m,
-            output_price_per_1m: m.completion_price_per_1m,
-            cache_read_price_per_1m: 0,
-            cache_write_price_per_1m: 0,
-            supports_tools: true,
-            supports_vision: false,
-            supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1') || m.id.includes('o3'),
-            context_length: m.context_length,
-          }))
-          setOpenRouterModels(mapped)
+        let res = await saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>('/api/saas/openrouter/market?page_size=1000')
+        if ((!res.data?.models || res.data.models.length <= 3) && active) {
+          try {
+            await saasFetch('/api/saas/openrouter/sync', { method: 'POST' })
+            res = await saasFetch('/api/saas/openrouter/market?page_size=1000')
+          } catch (_) {}
+        }
+        if (active && res.data?.models?.length) {
+          setOpenRouterModels(mapMarket(res.data.models))
         }
       } catch (_) {}
     }
     loadMarket()
     return () => { active = false }
-  }, [modelSearch])
+  }, [])
 
   const fullCatalog = useMemo(() => {
-    if (openRouterModels.length === 0) {
-      if (!modelSearch.trim()) return initialCatalog
-      const q = modelSearch.toLowerCase()
-      return initialCatalog.filter((m) => m.model.toLowerCase().includes(q) || (m.model_name && m.model_name.toLowerCase().includes(q)))
-    }
+    if (openRouterModels.length === 0) return initialCatalog
     const nonOr = initialCatalog.filter((item) => item.provider_id !== 'openrouter')
     return [...nonOr, ...openRouterModels]
-  }, [initialCatalog, openRouterModels, modelSearch])
+  }, [initialCatalog, openRouterModels])
 
   useEffect(() => {
     saasFetch<SaasProvider[]>('/api/saas/providers').then((res) => {
@@ -1982,44 +1985,21 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     return fullCatalog.filter((item) => item.provider_id === currentProviderType)
   }, [fullCatalog, currentProviderType])
 
-  const filteredModels = useMemo(() => {
-    const query = modelSearch.trim().toLowerCase()
-    if (!query) return models
-
-    // Relevance scoring:
-    // Exact ID match: 100
-    // ID starts with query or contains `/{query}`: 80
-    // Name contains query: 60
-    // ID contains query: 40
-    // Description contains query: 10
-    const scored = models.map((m) => {
+  const modelQuery = modelSearch.trim().toLowerCase()
+  const filteredModels = models
+    .map((m) => {
+      if (!modelQuery) return { model: m, score: 1 }
       const id = (m.model || '').toLowerCase()
       const name = (m.model_name || '').toLowerCase()
-      const desc = (m.description || '').toLowerCase()
       let score = 0
-
-      if (id === query || id === `deepseek/${query}`) {
-        score = 100
-      } else if (id.startsWith(query) || id.startsWith(`${query}/`) || id.includes(`/${query}`)) {
-        score = 80
-      } else if (name.startsWith(query) || name.includes(` ${query}`)) {
-        score = 70
-      } else if (name.includes(query)) {
-        score = 50
-      } else if (id.includes(query)) {
-        score = 40
-      } else if (desc.includes(query)) {
-        score = 10
-      }
-
+      if (id === modelQuery || id.endsWith(`/${modelQuery}`)) score = 100
+      else if (id.startsWith(modelQuery) || id.includes(`/${modelQuery}`) || name.startsWith(modelQuery)) score = 80
+      else if (id.includes(modelQuery) || name.includes(modelQuery)) score = 40
       return { model: m, score }
     })
-
-    return scored
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((item) => item.model)
-  }, [models, modelSearch])
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.model)
 
   const formatPrice = (val: number) => {
     if (val === 0) return 'FREE'
@@ -2300,7 +2280,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   <div className="relative mb-2">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
                     <input
-                      type="text"
+                      type="search"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
                       placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}

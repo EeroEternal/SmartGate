@@ -65,13 +65,16 @@ pub async fn get_openrouter_market(
         }
     }
 
+    let mut search_term: Option<String> = None;
     if let Some(ref search) = query.search {
         let trimmed = search.trim();
         if !trimmed.is_empty() {
             let escaped = trimmed.replace('\'', "''");
+            search_term = Some(escaped.clone());
+            // Only match id and name; description matching is too noisy for short queries.
             where_clause.push_str(&format!(
-                " AND (id ILIKE '%{}%' OR name ILIKE '%{}%' OR description ILIKE '%{}%')",
-                escaped, escaped, escaped
+                " AND (id ILIKE '%{}%' OR name ILIKE '%{}%')",
+                escaped, escaped
             ));
         }
     }
@@ -89,13 +92,19 @@ pub async fn get_openrouter_market(
 
     let mut sql = format!("SELECT * FROM openrouter_market_models {}", where_clause);
 
-    match query.sort.as_deref() {
-        Some("price_asc") => sql.push_str(" ORDER BY is_free DESC, prompt_price_per_1m ASC, completion_price_per_1m ASC"),
-        Some("price_desc") => sql.push_str(" ORDER BY prompt_price_per_1m DESC, completion_price_per_1m DESC"),
-        Some("discount_desc") => sql.push_str(" ORDER BY discount_ratio DESC, is_free DESC, prompt_price_per_1m ASC"),
-        Some("context_desc") => sql.push_str(" ORDER BY context_length DESC"),
-        Some("newest") => sql.push_str(" ORDER BY created_at DESC NULLS LAST"),
-        _ => sql.push_str(" ORDER BY is_free DESC, discount_ratio DESC, id ASC"),
+    if let Some(ref term) = search_term {
+        sql.push_str(&format!(
+            " ORDER BY CASE WHEN id ILIKE '%{term}%' THEN 0 WHEN name ILIKE '%{term}%' THEN 1 ELSE 2 END, is_free DESC, discount_ratio DESC, id ASC"
+        ));
+    } else {
+        match query.sort.as_deref() {
+            Some("price_asc") => sql.push_str(" ORDER BY is_free DESC, prompt_price_per_1m ASC, completion_price_per_1m ASC"),
+            Some("price_desc") => sql.push_str(" ORDER BY prompt_price_per_1m DESC, completion_price_per_1m DESC"),
+            Some("discount_desc") => sql.push_str(" ORDER BY discount_ratio DESC, is_free DESC, prompt_price_per_1m ASC"),
+            Some("context_desc") => sql.push_str(" ORDER BY context_length DESC"),
+            Some("newest") => sql.push_str(" ORDER BY created_at DESC NULLS LAST"),
+            _ => sql.push_str(" ORDER BY is_free DESC, discount_ratio DESC, id ASC"),
+        }
     }
 
     sql.push_str(&format!(" LIMIT {} OFFSET {}", page_size, offset));
