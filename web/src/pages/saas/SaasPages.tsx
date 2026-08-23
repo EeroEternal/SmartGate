@@ -1949,20 +1949,16 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
         setSelectedAccountId(list[0].id)
         setUseExisting(true)
         const acc = list[0]
-        const first = fullCatalog.find((item) => item.provider_id === acc.provider_type)
-        if (first) {
-          setSelectedModelIds([first.model])
-        }
         setDraft((curr) => ({
           ...curr,
           provider_type: acc.provider_type,
           protocol: acc.protocol || 'openai',
           base_url: acc.base_url,
-          upstream_model_id: first?.model || '',
-          input_price_per_1m: first ? String(first.input_price_per_1m) : '',
-          output_price_per_1m: first ? String(first.output_price_per_1m) : '',
-          capability_score: first ? inferDefaultCapability(first) : '0.70',
-          context_length: first?.context_length ? String(first.context_length) : '',
+          upstream_model_id: '',
+          input_price_per_1m: '',
+          output_price_per_1m: '',
+          capability_score: '0.70',
+          context_length: '',
         }))
       } else {
         setUseExisting(false)
@@ -1970,7 +1966,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     }).catch(() => {
       setUseExisting(false)
     })
-  }, [fullCatalog])
+  }, [])
 
   const selectedAccount = savedAccounts.find((a) => a.id === selectedAccountId)
   const currentProviderType = useExisting ? (selectedAccount?.provider_type || 'custom') : draft.provider_type
@@ -2062,18 +2058,23 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     setSelectedModelIds((prev) => {
       const exists = prev.includes(m.model)
       if (exists) {
-        return prev.filter((id) => id !== m.model)
+        const next = prev.filter((id) => id !== m.model)
+        if (draft.upstream_model_id === m.model) {
+          const fallback = next.length > 0 ? next[0] : ''
+          patch({ upstream_model_id: fallback })
+        }
+        return next
       } else {
+        patch({
+          upstream_model_id: m.model,
+          base_url: useExisting ? (selectedAccount?.base_url || m.base_url) : m.base_url,
+          input_price_per_1m: String(m.input_price_per_1m),
+          output_price_per_1m: String(m.output_price_per_1m),
+          capability_score: inferDefaultCapability(m),
+          context_length: m.context_length ? String(m.context_length) : '',
+        })
         return [...prev, m.model]
       }
-    })
-    patch({
-      upstream_model_id: m.model,
-      base_url: useExisting ? (selectedAccount?.base_url || m.base_url) : m.base_url,
-      input_price_per_1m: String(m.input_price_per_1m),
-      output_price_per_1m: String(m.output_price_per_1m),
-      capability_score: inferDefaultCapability(m),
-      context_length: m.context_length ? String(m.context_length) : '',
     })
     setTestStatus('idle')
   }
