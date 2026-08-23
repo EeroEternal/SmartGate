@@ -980,7 +980,11 @@ pub(super) async fn test_connection(
             .header("x-api-key", &payload.api_key)
             .header("anthropic-version", "2023-06-01");
     } else {
-        req_builder = req_builder.header("Authorization", format!("Bearer {}", payload.api_key));
+        req_builder = req_builder
+            .header("Authorization", format!("Bearer {}", payload.api_key))
+            .header("HTTP-Referer", "https://smartgate.run")
+            .header("X-Title", "SmartGate")
+            .header("User-Agent", "SmartGate/0.5.0");
     }
 
     match req_builder.send().await {

@@ -251,7 +251,11 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
           protocol,
           base_url: baseUrl.trim(),
           api_key: apiKey.trim(),
-          upstream_model_id: selectedPreset === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o-mini',
+          upstream_model_id: selectedPreset === 'anthropic'
+            ? 'claude-3-5-sonnet-20241022'
+            : selectedPreset === 'openrouter'
+            ? 'deepseek/deepseek-chat'
+            : 'gpt-4o-mini',
         }),
       })
       if (res.success && res.data?.passed !== false) {
