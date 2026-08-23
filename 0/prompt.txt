@@ -1,7 +1,8 @@
-/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787476973879.png
-添加 provider 搜索模型不对
+/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787477564732.png
+为什么选择了之后不能再重新选择？而且我是在那里按了几个按键，它就自动选择了，是不是这个选择的交互有点问题？
 
 ---
 
-/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787477564732.png
-为什么选择了之后不能再重新选择？而且我是在那里按了几个按键，它就自动选择了，是不是这个选择的交互有点问题？
+/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787477696762.png
+ 这个调用方法没必要一直放在这里，可以折叠。包括上面的路由策略和支持的 API 协议，都可以折叠起来，采用更紧凑的方法，把下面的 provide 供应
+ 商列表列出来。我发现下面的 add provider 不太对，其实增加的应该是 provider 里面的对应模型。你看看这个怎么优化一下。
