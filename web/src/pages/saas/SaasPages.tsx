@@ -1969,7 +1969,9 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   }, [])
 
   const selectedAccount = savedAccounts.find((a) => a.id === selectedAccountId)
-  const currentProviderType = useExisting ? (selectedAccount?.provider_type || 'custom') : draft.provider_type
+  const currentProviderType = useExisting
+    ? (selectedAccount?.provider_type || (openRouterModels.length ? 'openrouter' : 'custom'))
+    : draft.provider_type
   const models = useMemo(() => {
     return fullCatalog.filter((item) => item.provider_id === currentProviderType)
   }, [fullCatalog, currentProviderType])
@@ -2270,10 +2272,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   />
                 </div>
 
-                {models.length > 0 ? (
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-zinc-200 bg-white p-2">
-                    {visibleModels.length > 0 ? (
-                      visibleModels.map((m) => {
+                <div className="h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2">
+                  {visibleModels.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {visibleModels.map((m) => {
                         const isChecked = selectedModelIds.includes(m.model)
                         return (
                           <label
@@ -2303,23 +2305,21 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                               </div>
                               <div className="mt-0.5 text-[11px] text-zinc-400 truncate">
                                 <code className="text-zinc-600">{m.model}</code>
-                                {m.context_length ? ` · ${m.context_length.toLocaleString()} ctx` : ''}
+                                {m.context_length ? ` ${m.context_length.toLocaleString()} ctx` : ''}
                               </div>
                             </div>
                           </label>
                         )
-                      })
-                    ) : (
-                      <div className="py-4 text-center text-xs text-zinc-400">
-                        {t('services.no_models_match') || 'No models match your search.'}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-6 text-center text-xs text-zinc-400">
-                    {t('common.loading') || 'Loading models…'}
-                  </div>
-                )}
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-zinc-400">
+                      {models.length === 0
+                        ? (t('common.loading') || 'Loading models…')
+                        : (t('services.no_models_match') || 'No models match your search.')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
