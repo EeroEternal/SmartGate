@@ -1905,18 +1905,12 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const [openRouterModels, setOpenRouterModels] = useState<CatalogOffering[]>([])
 
   useEffect(() => {
-    // Fetch live OpenRouter market models so all models are available immediately
+    let active = true
     const loadMarket = async () => {
       try {
-        let res = await saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>('/api/saas/openrouter/market?page_size=1000')
-        if (!res.data?.models || res.data.models.length <= 3) {
-          // If DB has not synced yet, trigger a background sync and re-fetch
-          try {
-            await saasFetch('/api/saas/openrouter/sync', { method: 'POST' })
-            res = await saasFetch('/api/saas/openrouter/market?page_size=1000')
-          } catch (_) {}
-        }
-        if (res.data?.models && res.data.models.length > 0) {
+        const queryParam = modelSearch.trim() ? `&search=${encodeURIComponent(modelSearch.trim())}` : ''
+        const res = await saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>(`/api/saas/openrouter/market?page_size=1000${queryParam}`)
+        if (active && res.data?.models) {
           const mapped: CatalogOffering[] = res.data.models.map((m) => ({
             provider_id: 'openrouter',
             provider_name: 'OpenRouter',
@@ -1942,13 +1936,18 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
       } catch (_) {}
     }
     loadMarket()
-  }, [])
+    return () => { active = false }
+  }, [modelSearch])
 
   const fullCatalog = useMemo(() => {
-    if (openRouterModels.length === 0) return initialCatalog
+    if (openRouterModels.length === 0) {
+      if (!modelSearch.trim()) return initialCatalog
+      const q = modelSearch.toLowerCase()
+      return initialCatalog.filter((m) => m.model.toLowerCase().includes(q) || (m.model_name && m.model_name.toLowerCase().includes(q)))
+    }
     const nonOr = initialCatalog.filter((item) => item.provider_id !== 'openrouter')
     return [...nonOr, ...openRouterModels]
-  }, [initialCatalog, openRouterModels])
+  }, [initialCatalog, openRouterModels, modelSearch])
 
   useEffect(() => {
     saasFetch<SaasProvider[]>('/api/saas/providers').then((res) => {
@@ -1979,16 +1978,19 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
   const selectedAccount = savedAccounts.find((a) => a.id === selectedAccountId)
   const currentProviderType = useExisting ? (selectedAccount?.provider_type || 'custom') : draft.provider_type
-  const models = fullCatalog.filter((item) => item.provider_id === currentProviderType)
+  const models = useMemo(() => {
+    return fullCatalog.filter((item) => item.provider_id === currentProviderType)
+  }, [fullCatalog, currentProviderType])
 
   const filteredModels = useMemo(() => {
-    if (!modelSearch.trim()) return models
-    const query = modelSearch.toLowerCase()
-    return models.filter((m) =>
-      m.model.toLowerCase().includes(query) ||
-      (m.model_name && m.model_name.toLowerCase().includes(query)) ||
-      (m.description && m.description.toLowerCase().includes(query))
-    )
+    const query = modelSearch.trim().toLowerCase()
+    if (!query) return models
+    return models.filter((m) => {
+      const idMatch = m.model && m.model.toLowerCase().includes(query)
+      const nameMatch = m.model_name && m.model_name.toLowerCase().includes(query)
+      const descMatch = m.description && m.description.toLowerCase().includes(query)
+      return Boolean(idMatch || nameMatch || descMatch)
+    })
   }, [models, modelSearch])
 
   const accountOptions = savedAccounts.map((a) => ({
