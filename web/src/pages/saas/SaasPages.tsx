@@ -3748,9 +3748,9 @@ export function QualityPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             {/* Control Group: Baseline */}
-            <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between border-b border-zinc-200/80 pb-2">
                   <div>
@@ -3764,53 +3764,50 @@ export function QualityPage() {
                   <span className="text-[10px] font-medium text-zinc-400">{baseline ? (t('quality.flagship_tag') || 'Configured baseline') : (t('quality.not_configured_tag') || 'Not configured')}</span>
                 </div>
                 {baseline ? (
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div className="mt-2.5 grid grid-cols-2 gap-2.5 text-xs">
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
-                      <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
+                      <div className="mt-0.5 text-sm font-semibold text-zinc-900 font-mono">
                         {baseline.cost_per_req != null ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
-                      <div className="mt-0.5 text-base font-semibold text-zinc-900 font-mono">
+                      <div className="mt-0.5 text-sm font-semibold text-zinc-900 font-mono">
                         {baseline.p90_latency_ms != null ? `${(baseline.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
-                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                      <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.schema_compliance_rate != null ? `${baseline.schema_compliance_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
-                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                      <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.task_success_rate != null ? `${baseline.task_success_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
-                      <div className="mt-0.5 text-sm font-semibold text-zinc-800">
+                      <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.correction_rate != null ? `${baseline.correction_rate}%` : 'N/A'}
                       </div>
                     </div>
-                    <p className="col-span-2 text-[11px] leading-relaxed text-zinc-400">
-                      {t('quality.baseline_est_note') || 'Metrics are computed from actual requests sent to the configured baseline model service. Send traffic to the baseline service to populate this card.'}
-                    </p>
                   </div>
                 ) : (
-                  <div className="mt-4 text-center py-4 px-3 rounded-lg border border-dashed border-zinc-200 bg-white/70">
+                  <div className="mt-3 text-center py-3 px-2 rounded-lg border border-dashed border-zinc-200 bg-white/70">
                     <p className="text-xs text-zinc-600 font-medium">
                       {t('quality.no_baseline_guide') || 'No comparison baseline is configured yet.'}
                     </p>
-                    <p className="mt-1 text-[11px] text-zinc-400">
+                    <p className="mt-0.5 text-[11px] text-zinc-400">
                       {t('quality.no_baseline_guide_desc') || 'Select a flagship model (e.g. Pro) to enable real-time cost savings and latency speedup calculation.'}
                     </p>
                     <button
                       type="button"
                       onClick={() => setBaselineModalOpen(true)}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors"
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors"
                     >
                       <Settings2 className="h-3 w-3" />
                       <span>{t('quality.configure_baseline_now') || 'Configure Baseline Now'}</span>
@@ -3821,59 +3818,61 @@ export function QualityPage() {
             </div>
 
             {/* Treatment Group: SmartGate */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
-              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
-                <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title') || 'Treatment: SmartGate Intelligent Routing'}</span>
-                <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Observed routing'}</span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-base font-bold text-emerald-700 font-mono">
-                      {routing?.cost_per_req != null ? `$${routing.cost_per_req.toFixed(4)}` : 'N/A'}
-                    </span>
-                    <span className="text-[10px] font-semibold text-emerald-600">
-                      {routing?.cost_saved_pct != null ? `(-${routing.cost_saved_pct}%)` : ''}
-                    </span>
-                  </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                  <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title') || 'Treatment: SmartGate Intelligent Routing'}</span>
+                  <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Observed routing'}</span>
                 </div>
-                <div>
-                  <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-base font-bold text-emerald-700 font-mono">
-                      {routing?.p90_latency_ms != null ? `${(routing.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
-                    </span>
-                    <span className="text-[10px] font-semibold text-emerald-600">
-                      {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' }) || 'faster'})` : ''}
-                    </span>
+                <div className="mt-2.5 grid grid-cols-2 gap-2.5 text-xs">
+                  <div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="text-sm font-bold text-emerald-700 font-mono">
+                        {routing?.cost_per_req != null ? `$${routing.cost_per_req.toFixed(4)}` : 'N/A'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600">
+                        {routing?.cost_saved_pct != null ? `(-${routing.cost_saved_pct}%)` : ''}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-sm font-semibold text-zinc-900">
-                      {routing?.task_success_rate != null ? `${routing.task_success_rate}%` : 'N/A'}
-                    </span>
-                    {routing?.task_success_rate != null && baseline?.task_success_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.task_success_rate - baseline.task_success_rate).toFixed(1)}% delta)</span> : null}
+                  <div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="text-sm font-bold text-emerald-700 font-mono">
+                        {routing?.p90_latency_ms != null ? `${(routing.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600">
+                        {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' }) || 'faster'})` : ''}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-sm font-semibold text-zinc-900">
-                      {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
-                    </span>
-                    {routing?.correction_rate != null && baseline?.correction_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
+                  <div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="text-xs font-semibold text-zinc-900">
+                        {routing?.task_success_rate != null ? `${routing.task_success_rate}%` : 'N/A'}
+                      </span>
+                      {routing?.task_success_rate != null && baseline?.task_success_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.task_success_rate - baseline.task_success_rate).toFixed(1)}% delta)</span> : null}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-emerald-800/70 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-sm font-semibold text-zinc-900">
-                      {routing?.schema_compliance_rate != null ? `${routing.schema_compliance_rate}%` : 'N/A'}
-                    </span>
-                    {routing?.schema_compliance_rate != null && baseline?.schema_compliance_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.schema_compliance_rate - baseline.schema_compliance_rate).toFixed(1)}% delta)</span> : null}
+                  <div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="text-xs font-semibold text-zinc-900">
+                        {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
+                      </span>
+                      {routing?.correction_rate != null && baseline?.correction_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.correction_rate - baseline.correction_rate).toFixed(1)}% delta)</span> : null}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="text-xs font-semibold text-zinc-900">
+                        {routing?.schema_compliance_rate != null ? `${routing.schema_compliance_rate}%` : 'N/A'}
+                      </span>
+                      {routing?.schema_compliance_rate != null && baseline?.schema_compliance_rate != null ? <span className="text-[10px] text-zinc-500 font-mono">({(routing.schema_compliance_rate - baseline.schema_compliance_rate).toFixed(1)}% delta)</span> : null}
+                    </div>
                   </div>
                 </div>
               </div>
