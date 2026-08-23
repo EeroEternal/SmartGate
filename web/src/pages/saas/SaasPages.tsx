@@ -2304,20 +2304,11 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                       })
                     ) : (
                       <div className="py-4 text-center text-xs text-zinc-400">
-                        {t('services.no_models_match') || 'No models match your search. You can enter a custom Model ID below.'}
+                        {t('services.no_models_match') || 'No models match your search.'}
                       </div>
                     )}
                   </div>
                 ) : null}
-
-                <div className="mt-3">
-                  <Field
-                    label={t('services.custom_or_additional_model') || 'Or specify custom Model ID'}
-                    value={draft.upstream_model_id}
-                    onChange={(val) => patch({ upstream_model_id: val })}
-                    placeholder={t('services.custom_model_placeholder') || 'e.g. deepseek/deepseek-r1:free or custom model identifier'}
-                  />
-                </div>
               </div>
             </div>
           ) : (
@@ -2420,16 +2411,16 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             </div>
           )}
 
-          <button type="button" onClick={() => setAdvanced((value) => !value)} className="text-xs font-medium text-zinc-700 hover:text-zinc-950">
+          <button type="button" onClick={() => setAdvanced((value) => !value)} className="text-[11px] font-medium text-zinc-500 hover:text-zinc-900 transition-colors">
             {advanced ? (t('services.hide_advanced') || 'Hide advanced settings') : (t('services.advanced_settings') || 'Price and capability settings')}
           </button>
 
           {advanced && (
-            <div className="grid gap-3 rounded-xl bg-zinc-50 p-3.5 sm:grid-cols-3 text-zinc-900 border border-zinc-200">
-              <Field required={false} label={t('services.input_price') || 'Input $/1M'} value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" />
-              <Field required={false} label={t('services.output_price') || 'Output $/1M'} value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" />
-              <Field required={false} label={t('services.capability_range') || 'Capability 0–1'} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.5" />
-              <Field required={false} label={t('services.context_length') || 'Context length'} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
+            <div className="grid gap-2.5 rounded-lg bg-zinc-50 p-2.5 sm:grid-cols-4 text-zinc-900 border border-zinc-200 text-xs">
+              <Field size="sm" required={false} label={t('services.input_price') || 'Input $/1M'} value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" />
+              <Field size="sm" required={false} label={t('services.output_price') || 'Output $/1M'} value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" />
+              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability 0–1'} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.70" />
+              <Field size="sm" required={false} label={t('services.context_length') || 'Context length'} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
             </div>
           )}
         </div>
@@ -4626,7 +4617,24 @@ function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: ()
 
 function errorText(error: unknown) { return error instanceof globalThis.Error ? error.message : 'Something went wrong' }
 function Page({ action, children }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) { return <div>{action && <div className="flex justify-end">{action}</div>}<div className={action ? 'mt-6' : ''}>{children}</div></div> }
-function Field({ label, value, onChange, placeholder, type = 'text', required = true, alignWithSelect = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; required?: boolean; alignWithSelect?: boolean }) { return <label className="block text-sm font-medium text-zinc-700">{label}<input required={required} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`${alignWithSelect ? 'mt-1 rounded-md py-2' : 'mt-2 rounded-lg py-2.5'} w-full border border-zinc-300 px-3 outline-none focus:border-zinc-950`} /></label> }
+function Field({ label, value, onChange, placeholder, type = 'text', required = true, alignWithSelect = false, size = 'md' }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; required?: boolean; alignWithSelect?: boolean; size?: 'sm' | 'md' }) {
+  if (size === 'sm') {
+    return (
+      <label className="block text-xs font-medium text-zinc-600">
+        {label}
+        <input
+          required={required}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 outline-none focus:border-zinc-950"
+        />
+      </label>
+    )
+  }
+  return <label className="block text-sm font-medium text-zinc-700">{label}<input required={required} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`${alignWithSelect ? 'mt-1 rounded-md py-2' : 'mt-2 rounded-lg py-2.5'} w-full border border-zinc-300 px-3 outline-none focus:border-zinc-950`} /></label>
+}
 function Metric({ label, value, fullValue }: { label: string; value: string; fullValue?: string }) {
   return (
     <div className="min-w-0">
