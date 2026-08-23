@@ -1,0 +1,7 @@
+/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787476973879.png
+添加 provider 搜索模型不对
+
+---
+
+/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787477564732.png
+为什么选择了之后不能再重新选择？而且我是在那里按了几个按键，它就自动选择了，是不是这个选择的交互有点问题？

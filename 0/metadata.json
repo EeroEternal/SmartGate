@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0PZVWT4VYJ6FBYKA06C8R0W",
+  "session_id": "01a02dd6-efea-7ed0-b2ae-c2d509a8dded",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-23T09:40:13.495497Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "web/src/locales/en.json",
+    "web/src/locales/ja.json",
+    "web/src/locales/ko.json",
+    "web/src/locales/zh.json",
+    "web/src/pages/saas/SaasPages.tsx"
+  ],
+  "agent": "Pi",
+  "model": "grok-4.6",
+  "turn_id": "2c84e5c51a63",
+  "checkpoint_transcript_start": 139,
+  "transcript_lines_at_start": 139,
+  "compact_transcript_start": 60,
+  "token_usage": {
+    "input_tokens": 55102,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2601856,
+    "output_tokens": 22809,
+    "api_call_count": 23
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-23T09:40:13.352813Z",
+    "agent_lines": 157,
+    "agent_removed": 147,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 157,
+    "total_lines_changed": 304,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
