@@ -1,0 +1,2 @@
+/var/folders/74/hb50tq8x26b7l19vj856cx4c0000gn/T/otty-paste/image-1787475481838.png
+模型服务， add provider，待连接的模型，输入deep搜索，但是前面出来的还是 gemma openrouter auto 和 qwen 3.7 max，是怎么回事
