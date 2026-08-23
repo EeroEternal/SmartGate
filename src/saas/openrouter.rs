@@ -82,7 +82,7 @@ pub async fn get_openrouter_market(
         .await
         .unwrap_or((0,));
 
-    let page_size = query.page_size.unwrap_or(12).clamp(1, 100);
+    let page_size = query.page_size.unwrap_or(12).clamp(1, 1000);
     let total_pages = ((total_count.0 as f64) / (page_size as f64)).ceil().max(1.0) as i64;
     let page = query.page.unwrap_or(1).clamp(1, total_pages);
     let offset = (page - 1) * page_size;

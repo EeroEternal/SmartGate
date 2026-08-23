@@ -1905,9 +1905,17 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const [openRouterModels, setOpenRouterModels] = useState<CatalogOffering[]>([])
 
   useEffect(() => {
-    // Fetch live OpenRouter market models so all 300+ models are always available immediately
-    saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>('/api/saas/openrouter/market?page_size=500')
-      .then((res) => {
+    // Fetch live OpenRouter market models so all models are available immediately
+    const loadMarket = async () => {
+      try {
+        let res = await saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>('/api/saas/openrouter/market?page_size=1000')
+        if (!res.data?.models || res.data.models.length <= 3) {
+          // If DB has not synced yet, trigger a background sync and re-fetch
+          try {
+            await saasFetch('/api/saas/openrouter/sync', { method: 'POST' })
+            res = await saasFetch('/api/saas/openrouter/market?page_size=1000')
+          } catch (_) {}
+        }
         if (res.data?.models && res.data.models.length > 0) {
           const mapped: CatalogOffering[] = res.data.models.map((m) => ({
             provider_id: 'openrouter',
@@ -1926,13 +1934,14 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             cache_write_price_per_1m: 0,
             supports_tools: true,
             supports_vision: false,
-            supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1'),
+            supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1') || m.id.includes('o3'),
             context_length: m.context_length,
           }))
           setOpenRouterModels(mapped)
         }
-      })
-      .catch(() => {})
+      } catch (_) {}
+    }
+    loadMarket()
   }, [])
 
   const fullCatalog = useMemo(() => {
