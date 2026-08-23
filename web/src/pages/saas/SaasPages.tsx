@@ -72,7 +72,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
 
   return <div className="min-h-screen bg-zinc-50 text-zinc-950">
-    <header className="relative z-10 h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
+    <header className="h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
       <Link to="/app" className="flex items-center gap-3 font-semibold tracking-tight">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
         SmartGate
@@ -2078,7 +2078,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>

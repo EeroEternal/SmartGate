@@ -299,7 +299,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
@@ -459,7 +459,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
