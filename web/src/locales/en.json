@@ -591,6 +591,9 @@
     "connect_first": "Connect First Provider",
     "delete_title": "Delete Provider Account",
     "delete_confirm_desc": "Are you sure you want to delete {name}?",
-    "cannot_delete_has_endpoints": "Cannot delete provider: {count} model endpoints are currently linked to it."
+    "cannot_delete_has_endpoints": "Cannot delete provider: {count} model endpoints are currently linked to it.",
+    "use_connected_account": "Use Connected Provider Account",
+    "connect_new_account": "Add New Credentials",
+    "select_account": "Select Connected Account"
   }
 }

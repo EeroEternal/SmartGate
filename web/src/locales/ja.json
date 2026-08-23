@@ -591,6 +591,9 @@
     "connect_first": "最初のプロバイダーを接続",
     "delete_title": "プロバイダーアカウントの削除",
     "delete_confirm_desc": "プロバイダーアカウント {name} を削除してもよろしいですか？",
-    "cannot_delete_has_endpoints": "プロバイダーを削除できません: 現在 {count} 個のモデルエンドポイントがこのアカウントにリンクされています。"
+    "cannot_delete_has_endpoints": "プロバイダーを削除できません: 現在 {count} 個のモデルエンドポイントがこのアカウントにリンクされています。",
+    "use_connected_account": "接続済みアカウントを使用",
+    "connect_new_account": "新しい認証情報を入力",
+    "select_account": "接続済みアカウントを選択"
   }
 }

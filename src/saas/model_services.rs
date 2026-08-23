@@ -18,13 +18,18 @@ use super::{conflict_error, db_error, saas_strategy, sync, SaasContext};
 
 #[derive(Debug, Deserialize, Clone)]
 pub(super) struct ModelEndpointRequest {
-    provider_type: String,
+    #[serde(default)]
+    account_id: Option<String>,
+    #[serde(default)]
+    provider_type: Option<String>,
     #[serde(default)]
     provider_name: Option<String>,
     #[serde(default)]
     protocol: Option<String>,
-    base_url: String,
-    api_key: String,
+    #[serde(default)]
+    base_url: Option<String>,
+    #[serde(default)]
+    api_key: Option<String>,
     upstream_model_id: String,
     input_price_per_1m: Option<f64>,
     output_price_per_1m: Option<f64>,
@@ -184,8 +189,7 @@ pub(super) async fn create_model_service(
         ));
     }
 
-    let has_explicit_endpoints = !input.endpoints.is_empty();
-    let endpoints = if has_explicit_endpoints {
+    let endpoints = if !input.endpoints.is_empty() {
         input.endpoints
     } else {
         match (
@@ -196,11 +200,12 @@ pub(super) async fn create_model_service(
         ) {
             (Some(provider_type), Some(base_url), Some(api_key), Some(upstream_model_id)) => {
                 vec![ModelEndpointRequest {
-                    provider_type,
+                    account_id: None,
+                    provider_type: Some(provider_type),
                     provider_name: None,
                     protocol: None,
-                    base_url,
-                    api_key,
+                    base_url: Some(base_url),
+                    api_key: Some(api_key),
                     upstream_model_id,
                     input_price_per_1m: input.input_price_per_1m,
                     output_price_per_1m: input.output_price_per_1m,
@@ -214,32 +219,37 @@ pub(super) async fn create_model_service(
     };
 
     for endpoint in &endpoints {
-        if endpoint.provider_type.trim().is_empty()
-            || endpoint.base_url.trim().is_empty()
-            || endpoint.api_key.trim().is_empty()
-            || endpoint.upstream_model_id.trim().is_empty()
-        {
+        if endpoint.upstream_model_id.trim().is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error(
-                    "Every upstream endpoint needs a provider, URL, API key, and model",
-                )),
+                Json(ApiResponse::error("Every upstream endpoint needs a model ID")),
             ));
         }
-        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
-        if !matches!(protocol, "openai" | "anthropic") {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
-            ));
-        }
-        if !endpoint.base_url.starts_with("https://")
-            && !endpoint.base_url.starts_with("http://127.0.0.1")
-        {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Provider URL must use HTTPS")),
-            ));
+        if endpoint.account_id.is_none() {
+            let ptype = endpoint.provider_type.as_deref().unwrap_or("").trim();
+            let base_url = endpoint.base_url.as_deref().unwrap_or("").trim();
+            let api_key = endpoint.api_key.as_deref().unwrap_or("").trim();
+            if ptype.is_empty() || base_url.is_empty() || api_key.is_empty() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "Every upstream endpoint needs a provider, URL, API key, and model",
+                    )),
+                ));
+            }
+            let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+            if !matches!(protocol, "openai" | "anthropic") {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
+                ));
+            }
+            if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error("Provider URL must use HTTPS")),
+                ));
+            }
         }
     }
 
@@ -276,21 +286,45 @@ pub(super) async fn create_model_service(
         .map_err(db_error)?;
 
     for (index, endpoint) in endpoints.iter().enumerate() {
-        let provider_id = Uuid::new_v4().to_string();
-        let endpoint_id = Uuid::new_v4().to_string();
-        provider_types.push(endpoint.provider_type.clone());
-        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
-        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
-            .bind(&provider_id)
+        let (provider_id, provider_type) = if let Some(ref aid) = endpoint.account_id {
+            let account: Option<(String, String)> = sqlx::query_as(
+                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
+            )
+            .bind(aid)
             .bind(&ctx.org_id)
-            .bind(endpoint.provider_name.clone().unwrap_or_else(|| endpoint.provider_type.clone()))
-            .bind(&endpoint.provider_type)
-            .bind(protocol)
-            .bind(clean_base_url(&endpoint.base_url))
-            .bind(&endpoint.api_key)
-            .execute(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await
             .map_err(db_error)?;
+
+            let Some((pid, ptype)) = account else {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("Selected provider account not found")),
+                ));
+            };
+            (pid, ptype)
+        } else {
+            let pid = Uuid::new_v4().to_string();
+            let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
+            let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+            let base_url = endpoint.base_url.as_deref().unwrap_or("");
+            let api_key = endpoint.api_key.as_deref().unwrap_or("");
+            sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+                .bind(&pid)
+                .bind(&ctx.org_id)
+                .bind(endpoint.provider_name.clone().unwrap_or_else(|| ptype.clone()))
+                .bind(&ptype)
+                .bind(protocol)
+                .bind(clean_base_url(base_url))
+                .bind(api_key)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            (pid, ptype)
+        };
+
+        provider_types.push(provider_type);
+        let endpoint_id = Uuid::new_v4().to_string();
         sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(&endpoint_id)
             .bind(&provider_id)
@@ -590,33 +624,71 @@ pub(super) async fn add_model_service_endpoint(
     Path(model_id): Path<String>,
     Json(endpoint): Json<ModelEndpointRequest>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    if endpoint.provider_type.trim().is_empty()
-        || endpoint.base_url.trim().is_empty()
-        || endpoint.api_key.trim().is_empty()
-        || endpoint.upstream_model_id.trim().is_empty()
-    {
+    let upstream_model_id = endpoint.upstream_model_id.trim();
+    if upstream_model_id.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(
-                "Provider, URL, API key, and model are required",
-            )),
+            Json(ApiResponse::error("Upstream model ID is required")),
         ));
     }
-    let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
-    if !matches!(protocol, "openai" | "anthropic") {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
-        ));
-    }
-    if !endpoint.base_url.starts_with("https://")
-        && !endpoint.base_url.starts_with("http://127.0.0.1")
-    {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Provider URL must use HTTPS")),
-        ));
-    }
+
+    let (provider_id, provider_type) = if let Some(ref aid) = endpoint.account_id {
+        let account: Option<(String, String)> = sqlx::query_as(
+            "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
+        )
+        .bind(aid)
+        .bind(&ctx.org_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(db_error)?;
+
+        let Some((pid, ptype)) = account else {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::error("Selected provider account not found")),
+            ));
+        };
+        (pid, ptype)
+    } else {
+        let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
+        let base_url = endpoint.base_url.as_deref().unwrap_or("").trim();
+        let api_key = endpoint.api_key.as_deref().unwrap_or("").trim();
+        if ptype.is_empty() || base_url.is_empty() || api_key.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error(
+                    "Provider type, URL, API key, and model are required",
+                )),
+            ));
+        }
+        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+        if !matches!(protocol, "openai" | "anthropic") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
+            ));
+        }
+        if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Provider URL must use HTTPS")),
+            ));
+        }
+        let pid = Uuid::new_v4().to_string();
+        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+            .bind(&pid)
+            .bind(&ctx.org_id)
+            .bind(endpoint.provider_name.clone().unwrap_or_else(|| ptype.clone()))
+            .bind(&ptype)
+            .bind(protocol)
+            .bind(clean_base_url(base_url))
+            .bind(api_key)
+            .execute(&state.db)
+            .await
+            .map_err(db_error)?;
+        (pid, ptype)
+    };
+
     let pool: Option<(String, i64)> = sqlx::query_as(
         "SELECT mp.id, COUNT(mpe.endpoint_id)
          FROM virtual_models vm
@@ -641,19 +713,7 @@ pub(super) async fn add_model_service_endpoint(
         ));
     };
     let mut tx = state.db.begin().await.map_err(db_error)?;
-    let provider_id = Uuid::new_v4().to_string();
     let endpoint_id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
-        .bind(&provider_id)
-        .bind(&ctx.org_id)
-        .bind(endpoint.provider_name.clone().unwrap_or_else(|| endpoint.provider_type.clone()))
-        .bind(&endpoint.provider_type)
-        .bind(endpoint.protocol.as_deref().unwrap_or("openai"))
-        .bind(clean_base_url(&endpoint.base_url))
-        .bind(&endpoint.api_key)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_error)?;
     sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(&endpoint_id)
         .bind(&provider_id)
@@ -680,7 +740,7 @@ pub(super) async fn add_model_service_endpoint(
     sync(&state).await;
     Ok(Json(ApiResponse::success(json!({
         "id": endpoint_id,
-        "provider_type": endpoint.provider_type,
+        "provider_type": provider_type,
         "model": endpoint.upstream_model_id,
         "endpoint_count": endpoint_count + 1,
     }))))

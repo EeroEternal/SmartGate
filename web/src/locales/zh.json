@@ -591,6 +591,9 @@
     "connect_first": "连接首个 Provider",
     "delete_title": "删除 Provider 账户",
     "delete_confirm_desc": "确定要删除 Provider 账户 {name} 吗？",
-    "cannot_delete_has_endpoints": "无法删除该 Provider：当前仍有 {count} 个模型端点正在关联使用此账户。"
+    "cannot_delete_has_endpoints": "无法删除该 Provider：当前仍有 {count} 个模型端点正在关联使用此账户。",
+    "use_connected_account": "使用已连接的 Provider 账户",
+    "connect_new_account": "录入新凭证",
+    "select_account": "选择已有 Provider 账户"
   }
 }

@@ -591,6 +591,9 @@
     "connect_first": "첫 제공자 연결",
     "delete_title": "제공자 계정 삭제",
     "delete_confirm_desc": "제공자 계정 {name}을(를) 삭제하시겠습니까?",
-    "cannot_delete_has_endpoints": "제공자를 삭제할 수 없습니다: 현재 {count}개의 모델 엔드포인트가 이 계정에 연결되어 있습니다."
+    "cannot_delete_has_endpoints": "제공자를 삭제할 수 없습니다: 현재 {count}개의 모델 엔드포인트가 이 계정에 연결되어 있습니다.",
+    "use_connected_account": "연결된 제공자 계정 사용",
+    "connect_new_account": "새 자격 증명 추가",
+    "select_account": "연결된 제공자 계정 선택"
   }
 }
