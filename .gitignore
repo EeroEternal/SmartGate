@@ -11,3 +11,8 @@
 *.db
 *.db-shm
 *.db-wal
+.gemini/
+.cursor/
+.entire/
+.pi/
+.system_generated/
