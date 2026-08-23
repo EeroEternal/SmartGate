@@ -196,21 +196,53 @@ A well-behaved trim keeps the prefix up to the first edit byte-identical, so the
 upstream cache survives until exactly that point — the same "resume from the
 surviving anchor" outcome FreeToken achieves with explicit checkpoints.
 
-## 5. What does NOT apply
+## 5. Absorbed vs. deliberately not absorbed
 
-Expert LRU caches, CPU-GPU execution splitting, double-buffered weight loading,
-and q* bandwidth policies are inference-engine mechanics. They sit below the
-gateway stack: SmartGate must not encode them in handlers, and UniGateway's job
-ends at protocol semantics — it does not manage model residency. Per the project
-boundary rules, any future work stays within: SmartGate = policy computation over
-observed signals; UniGateway = protocol-level payload stability.
+After implementing items 1-5 below, the boundary question "did we absorb
+semantic checkpointing?" has a definite answer, recorded here to prevent
+future mis-scoping.
 
-## 6. Suggested next steps
+### 5.1 Deliberately NOT absorbed: the checkpoint mechanism itself
 
-| # | Item | Plane | Effort | Prerequisite |
-|---|------|-------|--------|--------------|
-| 1 | Cache-hit-rate routing feedback signal for sticky sessions | SmartGate | Low | Data already in `usage_logs` |
-| 2 | Cache-read-price weighting in CostAware for agentic sessions | SmartGate | Low | Workload profile detection exists |
-| 3 | Session-level cache-collapse diagnostic in Analytics | SmartGate | Medium | Same data |
-| 4 | ~~Audit SmartGate trim determinism~~ | SmartGate (host layer) | — | **Done**: content-only trimming shipped (`afd0909`) |
-| 5 | ~~Rendering-determinism golden-file regression tests~~ | UniGateway | — | **Done**: released in UniGateway v2.14.2 (commit `31562f6`); also fixed a Responses-path `_`-prefixed field leak. SmartGate consumes 2.14.2. |
+FreeToken's semantic checkpointing stores and restores **model-internal
+recurrent state** at special-token anchors. That state lives in inference-engine
+VRAM; a gateway only ever sees JSON payloads and holds no recurrent state to
+checkpoint. Implementing it here would mean building an inference engine — out
+of scope for SmartGate (control plane) and beyond UniGateway's mandate (protocol
+semantics only). The same applies to expert LRU caches, CPU-GPU execution
+splitting, double-buffered weight loading, and q* bandwidth policies: all sit
+below the gateway stack. If we ever operate our own inference engine, that is
+the layer where this mechanism belongs — and items 1-3 below become its natural
+measurement layer.
+
+### 5.2 Absorbed: the design principle, in three places
+
+The transferable idea — *agent context edits are predictable; encode that prior
+into caching strategy* — is fully landed:
+
+| FreeToken principle | Our implementation |
+|---|---|
+| Predict where agents cut history; place reusable increments at those boundaries | Trim deletes whole messages / `tool_result` blocks with fixed placeholders, content-only deterministic rules (`afd0909`). Every edit behaves like a semantic anchor: the prefix before the cut stays byte-identical across turns |
+| Resume from the deepest surviving anchor; recompute only the suffix | We restore no state, but byte-stability gives providers the equivalent outcome automatically: their cache (KV radix tree or internal checkpoints) survives up to exactly our cut point, and only the new suffix is recomputed/re-billed |
+| Agent traffic patterns are predictable infrastructure signal | Cache-hit-ratio EMA per endpoint with sticky-session collapse migration (#1); agentic sessions rank on cache-read price (#2); session cache-health diagnostics (#3) |
+
+### 5.3 The market-signal effect
+
+When an upstream provider implements engine-level optimizations like FreeToken,
+its responses carry higher `cache_hit_tokens`. Our #1 EMA then automatically
+steers sticky sessions toward it, #2 rewards it in cost ranking, and #3 surfaces
+it on the dashboard. In other words: the gateway layer does not rebuild engine
+mechanics — it builds the visibility and incentive layer that makes such
+mechanics win traffic.
+
+## 6. Next steps (status)
+
+All five items are complete:
+
+| # | Item | Plane | Status |
+|---|------|-------|--------|
+| 1 | Cache-hit-rate routing feedback signal for sticky sessions | SmartGate | **Done** (`c40e191`): EndpointMetric hit-ratio EMA + collapse migration |
+| 2 | Cache-read-price weighting in CostAware for agentic sessions | SmartGate | **Done** (`c40e191`) |
+| 3 | Session-level cache-collapse diagnostic in Analytics | SmartGate | **Done** (`c40e191`): backend + QualityPage strip (en/zh/ja/ko) |
+| 4 | ~~Audit SmartGate trim determinism~~ | SmartGate (host layer) | **Done**: content-only trimming shipped (`afd0909`) |
+| 5 | ~~Rendering-determinism golden-file regression tests~~ | UniGateway | **Done**: released in UniGateway v2.14.2 (commit `31562f6`); also fixed a Responses-path `_`-prefixed field leak. SmartGate consumes 2.14.2. |
