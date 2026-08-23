@@ -1888,7 +1888,7 @@ function ModelProbeModal({
   )
 }
 
-function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
+function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
   const [savedAccounts, setSavedAccounts] = useState<SaasProvider[]>([])
   const [useExisting, setUseExisting] = useState(true)
@@ -1902,6 +1902,44 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
   const [testMsg, setTestMsg] = useState('')
   const [modelSearch, setModelSearch] = useState('')
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([])
+  const [openRouterModels, setOpenRouterModels] = useState<CatalogOffering[]>([])
+
+  useEffect(() => {
+    // Fetch live OpenRouter market models so all 300+ models are always available immediately
+    saasFetch<{ models?: Array<{ id: string; name: string; prompt_price_per_1m: number; completion_price_per_1m: number; context_length: number; description: string | null }> }>('/api/saas/openrouter/market?page_size=500')
+      .then((res) => {
+        if (res.data?.models && res.data.models.length > 0) {
+          const mapped: CatalogOffering[] = res.data.models.map((m) => ({
+            provider_id: 'openrouter',
+            provider_name: 'OpenRouter',
+            endpoint_id: `openrouter-${m.id}`,
+            endpoint_key: 'openrouter',
+            region: 'global',
+            base_url: 'https://openrouter.ai/api/v1',
+            price_currency: 'USD',
+            model: m.id,
+            model_name: m.name,
+            description: m.description || '',
+            input_price_per_1m: m.prompt_price_per_1m,
+            output_price_per_1m: m.completion_price_per_1m,
+            cache_read_price_per_1m: 0,
+            cache_write_price_per_1m: 0,
+            supports_tools: true,
+            supports_vision: false,
+            supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1'),
+            context_length: m.context_length,
+          }))
+          setOpenRouterModels(mapped)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const fullCatalog = useMemo(() => {
+    if (openRouterModels.length === 0) return initialCatalog
+    const nonOr = initialCatalog.filter((item) => item.provider_id !== 'openrouter')
+    return [...nonOr, ...openRouterModels]
+  }, [initialCatalog, openRouterModels])
 
   useEffect(() => {
     saasFetch<SaasProvider[]>('/api/saas/providers').then((res) => {
@@ -1911,7 +1949,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
         setSelectedAccountId(list[0].id)
         setUseExisting(true)
         const acc = list[0]
-        const first = catalog.find((item) => item.provider_id === acc.provider_type)
+        const first = fullCatalog.find((item) => item.provider_id === acc.provider_type)
         if (first) {
           setSelectedModelIds([first.model])
         }
@@ -1932,11 +1970,11 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     }).catch(() => {
       setUseExisting(false)
     })
-  }, [catalog])
+  }, [fullCatalog])
 
   const selectedAccount = savedAccounts.find((a) => a.id === selectedAccountId)
   const currentProviderType = useExisting ? (selectedAccount?.provider_type || 'custom') : draft.provider_type
-  const models = catalog.filter((item) => item.provider_id === currentProviderType)
+  const models = fullCatalog.filter((item) => item.provider_id === currentProviderType)
 
   const filteredModels = useMemo(() => {
     if (!modelSearch.trim()) return models
@@ -1976,7 +2014,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     setSelectedAccountId(accId)
     const acc = savedAccounts.find((a) => a.id === accId)
     if (acc) {
-      const first = catalog.find((item) => item.provider_id === acc.provider_type)
+      const first = fullCatalog.find((item) => item.provider_id === acc.provider_type)
       if (first) {
         setSelectedModelIds([first.model])
       } else {
@@ -1998,7 +2036,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
 
   function chooseNewProviderPreset(option: { id: string | number; name: string }) {
     const provider = String(option.id)
-    const first = catalog.find((item) => item.provider_id === provider)
+    const first = fullCatalog.find((item) => item.provider_id === provider)
     const protocol = /anthropic|claude/i.test(provider) ? 'anthropic' : 'openai'
     if (first) {
       setSelectedModelIds([first.model])
@@ -2154,7 +2192,6 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">{t('services.add_provider') || 'Add provider'}</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Attach upstream AI models to this service pool for intelligent routing.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -2199,7 +2236,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-medium text-zinc-700">
-                    {t('services.model_label') || 'Models to Connect'} ({selectedModelIds.length} selected)
+                    {t('services.models_to_connect') || 'Models to connect'} ({selectedModelIds.length} {t('services.selected_count') || 'selected'})
                   </label>
                   {selectedModelIds.length > 0 && (
                     <button
@@ -2207,7 +2244,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                       onClick={() => setSelectedModelIds([])}
                       className="text-[11px] text-zinc-400 hover:text-zinc-700"
                     >
-                      Clear selection
+                      {t('services.clear_selection') || 'Clear selection'}
                     </button>
                   )}
                 </div>
@@ -2219,7 +2256,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                       type="text"
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="Search models (e.g. deepseek, claude, free, 70b)..."
+                      placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
                       className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
                     />
                   </div>
@@ -2266,7 +2303,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                       })
                     ) : (
                       <div className="py-4 text-center text-xs text-zinc-400">
-                        No preset model matching "{modelSearch}". You can enter custom Model ID below.
+                        {t('services.no_models_match') || 'No models match your search. You can enter a custom Model ID below.'}
                       </div>
                     )}
                   </div>
@@ -2277,7 +2314,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                     label={t('services.custom_or_additional_model') || 'Or specify custom Model ID'}
                     value={draft.upstream_model_id}
                     onChange={(val) => patch({ upstream_model_id: val })}
-                    placeholder="e.g. deepseek/deepseek-r1:free or custom model identifier"
+                    placeholder={t('services.custom_model_placeholder') || 'e.g. deepseek/deepseek-r1:free or custom model identifier'}
                   />
                 </div>
               </div>
