@@ -120,6 +120,7 @@ impl GatewayHooks for SmartGateHooks {
         let db = self.db.clone();
         let quotas = self.quotas.clone();
         let profiles = self.profiles.clone();
+        let metrics = self.metrics.clone();
 
         Box::pin(async move {
             if report.metadata.get("quota_release").map(String::as_str) != Some("0") {
@@ -175,6 +176,17 @@ impl GatewayHooks for SmartGateHooks {
                 .unwrap_or(prompt_tokens + completion_tokens);
             let cache_hit_tokens = provider_usage.and_then(|usage| usage.cache_hit_tokens);
             let cache_write_tokens = provider_usage.and_then(|usage| usage.cache_write_tokens);
+
+            // Feed the endpoint's cache hit-ratio EMA so routing can detect a
+            // sticky endpoint whose provider-side prefix cache collapsed.
+            if report.error_kind.is_none() {
+                if let Some(mut metric) = metrics.get_mut(&endpoint_id) {
+                    metric.record_cache_observation(
+                        prompt_tokens as i64,
+                        cache_hit_tokens.unwrap_or(0) as i64,
+                    );
+                }
+            }
 
             let (unit_price, pricing_source) = profiles
                 .get(&endpoint_id)

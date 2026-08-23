@@ -405,7 +405,13 @@
     "col_source": "Feedback Source",
     "col_tokens_latency": "Tokens / Latency",
     "col_cost": "Cost",
-    "no_records": "No quality verification logs found for this period."
+    "no_records": "No quality verification logs found for this period.",
+    "session_cache_title": "Session Cache Health",
+    "session_cache_tip": "Cache hit ratio per multi-turn session; a low ratio means the provider-side prefix cache is not being retained.",
+    "session_cache_collapsed": "{count} collapsed",
+    "session_cache_healthy": "All healthy",
+    "session_cache_observed": "{count} sessions (3+ turns)",
+    "session_cache_avg": "Avg cache hit {pct}%"
   },
   "usage": {
     "title": "Usage",

@@ -277,3 +277,48 @@ fn low_difficulty_still_prefers_cheap_flash() {
         Some(FLASH)
     );
 }
+
+#[test]
+fn sticky_endpoint_loses_affinity_boost_when_cache_collapses() {
+    // The sticky endpoint stopped retaining provider-side prefix cache while
+    // another candidate is clearly caching; affinity must stop boosting it so
+    // the session can migrate.
+    let fixture = fixture(0.92);
+    let mut hint = hint(0.15, false, false);
+    hint.affinity_enabled = true;
+    hint.sticky_endpoint_id = Some(PRO.to_string());
+    fixture.hints.insert(POOL.to_string(), hint);
+
+    // Pro: collapsed cache (well below the 0.10 threshold). Flash: healthy.
+    let mut pro_metric = EndpointMetric::new(PRO.to_string());
+    for _ in 0..10 {
+        pro_metric.record_cache_observation(1_000, 0);
+    }
+    let mut flash_metric = EndpointMetric::new(FLASH.to_string());
+    for _ in 0..10 {
+        flash_metric.record_cache_observation(1_000, 800);
+    }
+    fixture.metrics.insert(PRO.to_string(), pro_metric);
+    fixture.metrics.insert(FLASH.to_string(), flash_metric);
+
+    // Without the boost, cheap Flash must outrank Pro on an easy task.
+    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(FLASH));
+}
+
+#[test]
+fn sticky_endpoint_keeps_boost_while_cache_is_healthy() {
+    let fixture = fixture(0.92);
+    let mut hint = hint(0.15, false, false);
+    hint.affinity_enabled = true;
+    hint.sticky_endpoint_id = Some(PRO.to_string());
+    fixture.hints.insert(POOL.to_string(), hint);
+
+    let mut pro_metric = EndpointMetric::new(PRO.to_string());
+    for _ in 0..10 {
+        pro_metric.record_cache_observation(1_000, 900);
+    }
+    fixture.metrics.insert(PRO.to_string(), pro_metric);
+
+    // Healthy sticky endpoint keeps its affinity boost even though Flash is cheaper.
+    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+}

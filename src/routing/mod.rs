@@ -38,6 +38,12 @@ pub struct SmartGateFeedbackProvider {
 
 /// Score boost so sticky endpoint wins within its tier when healthy.
 pub const AFFINITY_BOOST: f64 = 10_000.0;
+/// Minimum cache observations before a hit-ratio EMA is trusted for migration.
+pub const CACHE_MIN_SAMPLES: i32 = 8;
+/// Sticky endpoint below this hit ratio is considered to have lost its cache.
+pub const CACHE_COLLAPSED_RATIO: f64 = 0.10;
+/// Another candidate above this ratio is considered to be retaining cache well.
+pub const CACHE_HEALTHY_RATIO: f64 = 0.50;
 
 impl SmartGateFeedbackProvider {
     /// Candidate ordering for one request, as JSON, for `routing_decision` in usage
@@ -54,6 +60,9 @@ impl SmartGateFeedbackProvider {
                     "score": candidate.score,
                     "excluded": candidate.excluded,
                     "exclusion_reason": candidate.exclusion_reason,
+                    "cache_hit_ratio": self.metrics.get(&candidate.endpoint_id).map(|m| {
+                        (m.cache_samples > 0).then_some((m.cache_hit_ratio_ema * 1000.0).round() / 1000.0)
+                    }).unwrap_or(None),
                 })
             })
             .collect()
@@ -226,6 +235,7 @@ impl SmartGateFeedbackProvider {
                     output_tokens: output_tok,
                     difficulty,
                     max_pool_capability,
+                    agentic: affinity_enabled,
                 },
             );
 
@@ -266,7 +276,25 @@ impl SmartGateFeedbackProvider {
                     true
                 };
 
-                if sticky_is_capable {
+                // Cache-collapse migration: if the sticky endpoint's observed
+                // prefix-cache hit ratio has collapsed while another candidate
+                // is clearly retaining cache, stop boosting stickiness so the
+                // session can migrate to whichever endpoint actually caches.
+                let sticky_cache_collapsed = {
+                    let sticky_ratio = self.metrics.get(&sticky).and_then(|m| {
+                        (m.cache_samples >= CACHE_MIN_SAMPLES).then_some(m.cache_hit_ratio_ema)
+                    });
+                    let best_other_ratio = members
+                        .iter()
+                        .filter(|m| m.endpoint_id != sticky)
+                        .filter_map(|m| self.metrics.get(&m.endpoint_id))
+                        .filter(|m| m.cache_samples >= CACHE_MIN_SAMPLES)
+                        .map(|m| m.cache_hit_ratio_ema)
+                        .fold(f64::NAN, f64::max);
+                    matches!(sticky_ratio, Some(ratio) if ratio < CACHE_COLLAPSED_RATIO && best_other_ratio > CACHE_HEALTHY_RATIO)
+                };
+
+                if sticky_is_capable && !sticky_cache_collapsed {
                     if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
                         if !signal.excluded {
                             signal.score = Some(

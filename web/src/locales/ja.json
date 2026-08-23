@@ -405,7 +405,13 @@
     "col_source": "フィードバック元",
     "col_tokens_latency": "トークン / 遅延",
     "col_cost": "コスト",
-    "no_records": "この期間の品質検証ログは見つかりませんでした。"
+    "no_records": "この期間の品質検証ログは見つかりませんでした。",
+    "session_cache_title": "セッションキャッシュ健全性",
+    "session_cache_tip": "マルチターンセッションのキャッシュヒット率。低い場合、プロバイダ側のプレフィックスキャッシュが保持されていません。",
+    "session_cache_collapsed": "{count} 件が崩壊",
+    "session_cache_healthy": "すべて正常",
+    "session_cache_observed": "{count} セッション（3ターン以上）",
+    "session_cache_avg": "平均キャッシュヒット {pct}%"
   },
   "usage": {
     "title": "利用状況と支出",

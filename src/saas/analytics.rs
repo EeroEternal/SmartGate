@@ -829,6 +829,72 @@ pub(super) async fn get_quality_analytics(
         None => (Value::Null, None),
     };
 
+    // Session-level cache health: for multi-turn sessions, compare prompt
+    // growth against cache hits. A low hit ratio on a long session means the
+    // provider-side prefix cache is not being retained (trim instability,
+    // eviction, or endpoint migration).
+    let session_cache_sql = if since_value.is_some() {
+        "SELECT session_id, COUNT(*), COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(cache_hit_tokens), 0)
+         FROM usage_logs
+         WHERE project_id = $1 AND session_id IS NOT NULL AND timestamp >= $2
+         GROUP BY session_id
+         HAVING COUNT(*) >= 3
+         ORDER BY COUNT(*) DESC
+         LIMIT 20"
+    } else {
+        "SELECT session_id, COUNT(*), COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(cache_hit_tokens), 0)
+         FROM usage_logs
+         WHERE project_id = $1 AND session_id IS NOT NULL
+         GROUP BY session_id
+         HAVING COUNT(*) >= 3
+         ORDER BY COUNT(*) DESC
+         LIMIT 20"
+    };
+    let session_rows: Vec<(String, i64, i64, i64)> = match since_value {
+        Some(value) => sqlx::query_as(session_cache_sql)
+            .bind(&ctx.project_id)
+            .bind(value)
+            .fetch_all(&state.db)
+            .await,
+        None => sqlx::query_as(session_cache_sql)
+            .bind(&ctx.project_id)
+            .fetch_all(&state.db)
+            .await,
+    }
+    .map_err(db_error)?;
+    let session_health: Vec<Value> = session_rows
+        .iter()
+        .map(|(session_id, turns, prompt, hits)| {
+            let ratio_pct = if *prompt > 0 {
+                (*hits as f64 / *prompt as f64 * 100.0 * 10.0).round() / 10.0
+            } else {
+                0.0
+            };
+            json!({
+                "session_id": session_id,
+                "turns": turns,
+                "cache_hit_ratio": ratio_pct,
+                "collapsed": ratio_pct < 20.0,
+            })
+        })
+        .collect();
+    let sessions_observed = session_health.len() as i64;
+    let sessions_collapsed = session_health
+        .iter()
+        .filter(|s| s["collapsed"] == json!(true))
+        .count() as i64;
+    let avg_session_ratio = if session_rows.is_empty() {
+        None
+    } else {
+        let sum: f64 = session_rows
+            .iter()
+            .map(|(_, _, prompt, hits)| {
+                if *prompt > 0 { *hits as f64 / *prompt as f64 * 100.0 } else { 0.0 }
+            })
+            .sum();
+        Some(((sum / session_rows.len() as f64) * 10.0).round() / 10.0)
+    };
+
     Ok(Json(ApiResponse::success(json!({
         "range": range,
         "summary": {
@@ -854,6 +920,12 @@ pub(super) async fn get_quality_analytics(
             }
         },
         "records": quality_records,
+        "session_cache_health": {
+            "sessions_observed": sessions_observed,
+            "sessions_collapsed": sessions_collapsed,
+            "avg_cache_hit_ratio": avg_session_ratio,
+            "sessions": session_health,
+        },
     }))))
 }
 

@@ -138,6 +138,10 @@ pub struct EndpointMetric {
     pub total_requests: i32,
     pub total_errors: i32,
     pub consecutive_failures: i32,
+    /// EMA of cache_hit_tokens / prompt_tokens over observed responses.
+    pub cache_hit_ratio_ema: f64,
+    /// Number of cache observations folded into the EMA.
+    pub cache_samples: i32,
     pub health_status: String,
     pub cooldown_until: Option<DateTime<Utc>>,
     pub last_error_at: Option<DateTime<Utc>>,
@@ -154,11 +158,29 @@ impl EndpointMetric {
             total_requests: 0,
             total_errors: 0,
             consecutive_failures: 0,
+            cache_hit_ratio_ema: 0.0,
+            cache_samples: 0,
             health_status: "healthy".to_string(),
             cooldown_until: None,
             last_error_at: None,
             updated_at: Utc::now(),
         }
+    }
+
+    /// Folds one response's cache outcome into the hit-ratio EMA. Purely
+    /// observational: used by routing to detect a sticky endpoint whose
+    /// provider-side prefix cache has collapsed.
+    pub fn record_cache_observation(&mut self, prompt_tokens: i64, hit_tokens: i64) {
+        if prompt_tokens <= 0 {
+            return;
+        }
+        let ratio = (hit_tokens.clamp(0, prompt_tokens) as f64 / prompt_tokens as f64).clamp(0.0, 1.0);
+        self.cache_hit_ratio_ema = if self.cache_samples == 0 {
+            ratio
+        } else {
+            self.cache_hit_ratio_ema * 0.75 + ratio * 0.25
+        };
+        self.cache_samples += 1;
     }
 }
 

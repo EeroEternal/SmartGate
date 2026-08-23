@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Download, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -3495,6 +3495,12 @@ type QualityAnalyticsData = {
     }
   }
   records: QualityRecord[]
+  session_cache_health?: {
+    sessions_observed: number
+    sessions_collapsed: number
+    avg_cache_hit_ratio: number | null
+    sessions: { session_id: string; turns: number; cache_hit_ratio: number; collapsed: boolean }[]
+  }
 }
 
 function QualityHelpTip({ tip, unavailable }: { tip: string; unavailable?: string }) {
@@ -3569,6 +3575,7 @@ export function QualityPage() {
   const paginatedRecords = filteredRecords.slice(startIndex, startIndex + pageSize)
 
   const summary = data?.summary
+  const sessionHealth = data?.session_cache_health
   const baseline = summary?.baseline
   const routing = summary?.smartgate_routing
 
@@ -3681,6 +3688,36 @@ export function QualityPage() {
             <div className="mt-2 text-xs text-zinc-400">{t('quality.schema_sub') || 'Structured JSON & tool outputs'}</div>
           </div>
         </div>
+
+        {/* Session cache health: prefix-cache retention across multi-turn sessions */}
+        {sessionHealth && sessionHealth.sessions_observed > 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                <Database className="h-4 w-4 text-sky-600" />
+                {t('quality.session_cache_title') || 'Session Cache Health'}
+              </div>
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border shrink-0 ${
+                  sessionHealth.sessions_collapsed > 0
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+                title={t('quality.session_cache_tip') || 'Cache hit ratio per multi-turn session; a low ratio means the provider-side prefix cache is not being retained.'}
+              >
+                {sessionHealth.sessions_collapsed > 0
+                  ? (t('quality.session_cache_collapsed', { count: sessionHealth.sessions_collapsed }) || `${sessionHealth.sessions_collapsed} collapsed`)
+                  : (t('quality.session_cache_healthy') || 'All healthy')}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-500">
+              <span>{t('quality.session_cache_observed', { count: sessionHealth.sessions_observed }) || `${sessionHealth.sessions_observed} sessions`}</span>
+              {sessionHealth.avg_cache_hit_ratio != null && (
+                <span>{t('quality.session_cache_avg', { pct: sessionHealth.avg_cache_hit_ratio }) || `Avg hit ${sessionHealth.avg_cache_hit_ratio}%`}</span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* A/B Benchmark ROI & Quality Evidence Matrix */}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">

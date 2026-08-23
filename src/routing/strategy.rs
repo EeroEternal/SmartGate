@@ -44,6 +44,8 @@ pub struct ScoreInput<'a> {
     pub output_tokens: u32,
     pub difficulty: f64,
     pub max_pool_capability: f64,
+    /// Sticky multi-turn session: cost ranking should weight cache-read price.
+    pub agentic: bool,
 }
 
 pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_rate: f64) -> f64 {
@@ -53,6 +55,35 @@ pub fn expected_cost(profile: &EndpointProfile, input: u32, output: u32, error_r
     } else {
         f64::MAX / 8.0
     }
+}
+
+/// Fraction of input tokens assumed to be served from the provider prefix
+/// cache for agentic (sticky multi-turn) sessions.
+pub const AGENTIC_CACHE_FRACTION: f64 = 0.7;
+
+/// Expected cost for an agentic session turn: most of the replayed prefix is
+/// billed at the cache-read price, so endpoints with cheap cached input win on
+/// multi-turn traffic even at an equal headline input price.
+pub fn expected_agentic_cost(
+    profile: &EndpointProfile,
+    input: u32,
+    output: u32,
+    error_rate: f64,
+) -> f64 {
+    let err = error_rate.clamp(0.0, 0.95);
+    if !profile.price.is_priced() {
+        return f64::MAX / 8.0;
+    }
+    let cached = (input as f64 * AGENTIC_CACHE_FRACTION) as u32;
+    let fresh = input.saturating_sub(cached);
+    let cache_price = profile
+        .price
+        .cache_read_per_1m
+        .unwrap_or_else(|| profile.price.input_per_1m * 0.1);
+    ((fresh as f64 / 1_000_000.0) * profile.price.input_per_1m
+        + (cached as f64 / 1_000_000.0) * cache_price
+        + (output as f64 / 1_000_000.0) * profile.price.output_per_1m)
+        * (1.0 + err)
 }
 
 pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000_000.0;
@@ -89,12 +120,21 @@ pub fn capability_qualified(
 pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
     let strategy = canonicalize(strategy);
     let err = input.error_rate.clamp(0.0, 0.95);
-    let base_cost = expected_cost(
-        &input.profile,
-        input.input_tokens,
-        input.output_tokens,
-        err,
-    );
+    let base_cost = if input.agentic {
+        expected_agentic_cost(
+            &input.profile,
+            input.input_tokens,
+            input.output_tokens,
+            err,
+        )
+    } else {
+        expected_cost(
+            &input.profile,
+            input.input_tokens,
+            input.output_tokens,
+            err,
+        )
+    };
 
     match strategy {
         "priority" => {
@@ -222,6 +262,7 @@ mod tests {
                 output_tokens: 500,
                 difficulty: 0.2,
                 max_pool_capability: 1.0,
+                agentic: false,
             },
         )
         .unwrap();
@@ -238,6 +279,7 @@ mod tests {
                 output_tokens: 500,
                 difficulty: 0.2,
                 max_pool_capability: 1.0,
+                agentic: false,
             },
         )
         .unwrap();
@@ -287,6 +329,7 @@ mod tests {
                 output_tokens: 1000,
                 difficulty: diff_complex,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
@@ -303,6 +346,7 @@ mod tests {
                 output_tokens: 1000,
                 difficulty: diff_complex,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
@@ -324,6 +368,7 @@ mod tests {
                 output_tokens: 200,
                 difficulty: diff_simple,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
@@ -340,6 +385,7 @@ mod tests {
                 output_tokens: 200,
                 difficulty: diff_simple,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
@@ -360,6 +406,7 @@ mod tests {
                 output_tokens: 30,
                 difficulty: 0.10,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
@@ -376,9 +423,59 @@ mod tests {
                 output_tokens: 30,
                 difficulty: 0.10,
                 max_pool_capability: 0.95,
+                agentic: false,
             },
         )
         .unwrap();
         assert!(s_flash_short > s_pro_short);
+    }
+    #[test]
+    fn cheap_cache_read_wins_for_agentic_sessions() {
+        let m = member();
+        // Identical headline prices; one declares a cheaper cached-input price.
+        let cache_cheap = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 1.0,
+                output_per_1m: 2.0,
+                cache_read_per_1m: Some(0.02),
+            },
+            ..Default::default()
+        };
+        let cache_default = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 1.0,
+                output_per_1m: 2.0,
+                cache_read_per_1m: None,
+            },
+            ..Default::default()
+        };
+        let build = |profile: EndpointProfile, agentic: bool| {
+            score(
+                "cost_aware",
+                ScoreInput {
+                    member: &m,
+                    profile,
+                    active: 0,
+                    success_latency_ms: 0.0,
+                    all_latency_ms: 0.0,
+                    error_rate: 0.0,
+                    input_tokens: 30_000,
+                    output_tokens: 2_000,
+                    difficulty: 0.2,
+                    max_pool_capability: 1.0,
+                    agentic,
+                },
+            )
+            .unwrap()
+        };
+
+        // Non-agentic requests do not see any difference.
+        assert!(
+            (build(cache_cheap, false) - build(cache_default, false)).abs() < 1e-9,
+            "cache price must not affect single-shot ranking"
+        );
+        // Agentic sessions replay the prefix, so the explicit cheaper
+        // cache-read price wins.
+        assert!(build(cache_cheap, true) > build(cache_default, true));
     }
 }

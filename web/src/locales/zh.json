@@ -405,7 +405,13 @@
     "col_source": "反馈来源",
     "col_tokens_latency": "Token / 耗时",
     "col_cost": "费用",
-    "no_records": "该时间段内暂无质量验证记录。"
+    "no_records": "该时间段内暂无质量验证记录。",
+    "session_cache_title": "会话缓存健康度",
+    "session_cache_tip": "多轮会话的前缀缓存命中率；命中率低说明上游前缀缓存未被保留。",
+    "session_cache_collapsed": "{count} 个已崩塌",
+    "session_cache_healthy": "全部正常",
+    "session_cache_observed": "{count} 个会话（3 轮以上）",
+    "session_cache_avg": "平均缓存命中 {pct}%"
   },
   "usage": {
     "title": "用量与花费",
