@@ -1985,13 +1985,48 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const filteredModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase()
     if (!query) return models
-    return models.filter((m) => {
-      const idMatch = m.model && m.model.toLowerCase().includes(query)
-      const nameMatch = m.model_name && m.model_name.toLowerCase().includes(query)
-      const descMatch = m.description && m.description.toLowerCase().includes(query)
-      return Boolean(idMatch || nameMatch || descMatch)
+
+    // Relevance scoring:
+    // Exact ID match: 100
+    // ID starts with query or contains `/{query}`: 80
+    // Name contains query: 60
+    // ID contains query: 40
+    // Description contains query: 10
+    const scored = models.map((m) => {
+      const id = (m.model || '').toLowerCase()
+      const name = (m.model_name || '').toLowerCase()
+      const desc = (m.description || '').toLowerCase()
+      let score = 0
+
+      if (id === query || id === `deepseek/${query}`) {
+        score = 100
+      } else if (id.startsWith(query) || id.startsWith(`${query}/`) || id.includes(`/${query}`)) {
+        score = 80
+      } else if (name.startsWith(query) || name.includes(` ${query}`)) {
+        score = 70
+      } else if (name.includes(query)) {
+        score = 50
+      } else if (id.includes(query)) {
+        score = 40
+      } else if (desc.includes(query)) {
+        score = 10
+      }
+
+      return { model: m, score }
     })
+
+    return scored
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.model)
   }, [models, modelSearch])
+
+  const formatPrice = (val: number) => {
+    if (val === 0) return 'FREE'
+    if (val < 0.0001) return `<$0.0001`
+    const rounded = Number(val.toPrecision(4))
+    return `$${rounded}`
+  }
 
   const accountOptions = savedAccounts.map((a) => ({
     id: a.id,
@@ -2301,7 +2336,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                                   {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
                                     <span className="text-emerald-600 font-semibold">FREE</span>
                                   ) : (
-                                    <span>${m.input_price_per_1m}/1M</span>
+                                    <span>{formatPrice(m.input_price_per_1m)}/1M</span>
                                   )}
                                 </div>
                               </div>
