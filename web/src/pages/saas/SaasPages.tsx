@@ -666,6 +666,7 @@ export function ServiceDetailsPage() {
   const [testResults, setTestResults] = useState<Record<string, 'passed' | 'failed'>>({})
   const [testToast, setTestToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [callApi, setCallApi] = useState<CallApi>('openai-chat')
+  const [callOpen, setCallOpen] = useState(false)
   const [routingOpen, setRoutingOpen] = useState(false)
   const { dialog, showConfirm } = useDialog()
   const load = () => {
@@ -679,7 +680,7 @@ export function ServiceDetailsPage() {
     }).catch(() => {})
   }, [id])
   async function removeEndpoint(endpointId: string) {
-    if (!id || !await showConfirm('Remove this model from the service?', 'Remove provider?')) return
+    if (!id || !await showConfirm(t('services.remove_provider_confirm') || 'Remove this model from the service?', t('services.remove_model') || 'Remove model?')) return
     try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function copyServiceName() {
@@ -749,68 +750,71 @@ export function ServiceDetailsPage() {
     )}
     {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">{t('common.loading') || 'Loading model service…'}</div> : <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← {t('nav.model_services') || 'Model services'}</Link>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight">{service.name}</h1>
+          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="truncate text-xl font-semibold tracking-tight">{service.name}</h1>
+            <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy') || 'Copy model service name'}>
+              <Copy className="h-4 w-4" />
+            </button>
+            {copied && <span className="text-xs font-medium text-emerald-600">{t('common.copied') || 'Copied'}</span>}
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${service.status === 'draft' ? 'border border-amber-200 bg-amber-50 text-amber-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+              {service.status === 'draft' ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setRoutingOpen(true)}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-600 hover:border-zinc-300 hover:text-zinc-950"
+              title={t('services.edit_routing_title') || 'Edit routing strategy'}
+            >
+              <span>{routing?.label}</span>
+              <Pencil className="h-3 w-3 text-zinc-400" />
+            </button>
+            {service.strategy === 'capability_aware' && service.judge_enabled && (
+              <span className="text-emerald-600">
+                {t('services.judge_status', { model: service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled' })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setCallOpen((open) => !open)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${callOpen ? 'border-zinc-300 bg-zinc-50 text-zinc-950' : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-950'}`}
+              aria-expanded={callOpen}
+            >
+              <span>{t('services.how_to_call') || 'How to call'}</span>
+              <span title={t('services.how_to_call_hint') || 'Use this service name as the model in client requests.'}>
+                <HelpCircle className="h-3 w-3 text-zinc-400" />
+              </span>
+              {callOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </div>
         <button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors">
-          <Plus className="h-4 w-4" /> {t('services.add_provider') || 'Add provider'}
+          <Plus className="h-4 w-4" /> {t('services.add_model') || 'Add model'}
         </button>
       </div>
-      <section className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="min-w-0">
-            <label className="block text-xs font-medium uppercase tracking-wide text-zinc-400">{t('services.service_label') || 'Model service'}</label>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="truncate text-lg font-medium text-zinc-950">{service.name}</span>
-              <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy') || 'Copy model service name'}>
-                <Copy className="h-4 w-4" />
-              </button>
-              {copied && <span className="text-xs text-emerald-600 font-medium">{t('common.copied') || 'Copied'}</span>}
-            </div>
-          </div>
-          <div className="text-sm text-zinc-600">
-            <div className="flex items-center gap-1">
-              <span className="font-medium text-zinc-950">{t('services.routing_strategy') || 'Routing'}</span>
-              <button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('services.edit_routing_title') || 'Edit routing strategy'}>
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="mt-1 text-zinc-500">{routing?.label}</div>
-            {service.strategy === 'capability_aware' && service.judge_enabled && (
-              <div className="mt-1 text-xs text-emerald-600 font-medium">
-                {t('services.judge_status', { model: service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled' })}
-              </div>
-            )}
-          </div>
-          <div className="text-sm text-zinc-600">
-            <span className="font-medium text-zinc-950">{t('services.supported_apis') || 'Supported APIs'}</span>
-            <div className="mt-1 space-y-1 text-zinc-500">
-              <div>OpenAI Chat</div>
-              <div>OpenAI Responses</div>
-              <div>Anthropic Messages</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <CallExamplePanel api={callApi} model={service.name} onChange={setCallApi} />
+      {callOpen && <CallExamplePanel api={callApi} model={service.name} onChange={setCallApi} />}
 
       <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">{t('services.providers_title') || 'Providers'}</h2>
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${service.status === 'draft' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
-            {service.status === 'draft' ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-semibold">{t('services.connected_models') || 'Connected models'}</h2>
+          <span className="text-xs text-zinc-400">
+            {service.endpoints.length === 1
+              ? (t('services.providers_connected_single') || '1 model connected')
+              : t('services.providers_connected', { count: service.endpoints.length }) || `${service.endpoints.length} models connected`}
           </span>
         </div>
         {service.endpoints.length ? (
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 space-y-3">
             {service.endpoints.map((endpoint) => (
               <div key={endpoint.id} className="rounded-lg border border-zinc-200 p-4 hover:border-zinc-300 transition-colors">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="font-medium text-zinc-950">{endpoint.provider_name}</div>
-                    <div className="mt-2 text-sm text-zinc-500">{endpoint.model}</div>
+                    <div className="truncate font-medium text-zinc-950">{endpoint.model}</div>
+                    <div className="mt-1 text-sm text-zinc-500">{endpoint.provider_name}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-zinc-400">
                         {t('services.capability') || 'Capability'} {(endpoint.capability_score ?? 0.5).toFixed(2)}
@@ -841,13 +845,13 @@ export function ServiceDetailsPage() {
                     <button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('services.probe_button') || 'Probe DNA & Capabilities'}>
                       <Sparkles className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors" title={t('services.edit_provider') || 'Edit provider'}>
+                    <button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors" title={t('services.edit_model') || 'Edit model'}>
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 transition-colors disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title={t('services.test_connection') || 'Test connection'}>
                       <Zap className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title={t('services.remove_provider') || 'Remove provider'}>
+                    <button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title={t('services.remove_model') || 'Remove model'}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -856,10 +860,10 @@ export function ServiceDetailsPage() {
             ))}
           </div>
         ) : (
-          <div className="mt-5 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center">
-            <p className="text-sm text-zinc-500">{t('services.no_providers') || 'No providers connected yet.'}</p>
+          <div className="mt-4 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center">
+            <p className="text-sm text-zinc-500">{t('services.no_models_connected') || 'No models connected yet.'}</p>
             <button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">
-              {t('services.add_provider') || 'Add provider'}
+              {t('services.add_model') || 'Add model'}
             </button>
           </div>
         )}
@@ -1411,14 +1415,8 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
     window.setTimeout(() => setCopied(false), 1800)
   }
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="font-semibold">{t('services.how_to_call') || 'How to call'}</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {t('services.how_to_call_desc') || 'Use the model service name as the model value in standard API calls.'}
-          </p>
-        </div>
+    <section className="rounded-xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">
           {tabs.map((tab) => (
             <button
@@ -1435,26 +1433,17 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={copyExample}
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+          title={t('common.copy') || 'Copy example'}
+        >
+          {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? (t('common.copied') || 'Copied') : (t('common.copy') || 'Copy')}
+        </button>
       </div>
-      <div className="mt-4 overflow-hidden rounded-xl bg-[var(--color-primary-soft)] text-zinc-950">
-        <div className="flex items-center justify-between border-b border-primary/20 px-4 py-3">
-          <span className="text-sm font-medium text-zinc-950">{example.label}</span>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-zinc-950">cURL</span>
-            <button
-              type="button"
-              onClick={copyExample}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-950 transition-colors hover:bg-white/60"
-              title={t('common.copy') || 'Copy example'}
-              aria-label="Copy example"
-            >
-              {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? (t('common.copied') || 'Copied') : (t('common.copy') || 'Copy')}
-            </button>
-          </div>
-        </div>
-        <pre role="tabpanel" className="overflow-x-auto p-4 text-xs leading-6 text-zinc-950">{command}</pre>
-      </div>
+      <pre role="tabpanel" className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-[var(--color-primary-soft)] p-3 text-xs leading-6 text-zinc-950">{command}</pre>
     </section>
   )
 }
@@ -2000,6 +1989,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((item) => item.model)
+  const selectedModels = models.filter((m) => selectedModelIds.includes(m.model))
+  const visibleModels = modelQuery
+    ? [...selectedModels, ...filteredModels.filter((m) => !selectedModelIds.includes(m.model))]
+    : filteredModels
 
   const formatPrice = (val: number) => {
     if (val === 0) return 'FREE'
@@ -2036,22 +2029,18 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     setSelectedAccountId(accId)
     const acc = savedAccounts.find((a) => a.id === accId)
     if (acc) {
-      const first = fullCatalog.find((item) => item.provider_id === acc.provider_type)
-      if (first) {
-        setSelectedModelIds([first.model])
-      } else {
-        setSelectedModelIds([])
-      }
+      setSelectedModelIds([])
+      setModelSearch('')
       setDraft((curr) => ({
         ...curr,
         provider_type: acc.provider_type,
         protocol: acc.protocol || 'openai',
         base_url: acc.base_url,
-        upstream_model_id: first?.model || '',
-        input_price_per_1m: first ? String(first.input_price_per_1m) : '',
-        output_price_per_1m: first ? String(first.output_price_per_1m) : '',
-        capability_score: first ? inferDefaultCapability(first) : '0.70',
-        context_length: first?.context_length ? String(first.context_length) : '',
+        upstream_model_id: '',
+        input_price_per_1m: '',
+        output_price_per_1m: '',
+        capability_score: '0.70',
+        context_length: '',
       }))
     }
   }
@@ -2060,47 +2049,37 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     const provider = String(option.id)
     const first = fullCatalog.find((item) => item.provider_id === provider)
     const protocol = /anthropic|claude/i.test(provider) ? 'anthropic' : 'openai'
-    if (first) {
-      setSelectedModelIds([first.model])
-    } else {
-      setSelectedModelIds([])
-    }
+    setSelectedModelIds([])
+    setModelSearch('')
     setDraft({
       ...emptyEndpoint(),
       provider_type: provider,
       protocol,
-      upstream_model_id: first?.model || '',
+      upstream_model_id: '',
       base_url: first?.base_url || '',
-      input_price_per_1m: first ? String(first.input_price_per_1m) : '',
-      output_price_per_1m: first ? String(first.output_price_per_1m) : '',
+      input_price_per_1m: '',
+      output_price_per_1m: '',
       capability_score: first ? inferDefaultCapability(first) : '0.70',
-      context_length: first?.context_length ? String(first.context_length) : '',
+      context_length: '',
     })
-    setAdvanced(hasCatalogDetails(first))
+    setAdvanced(false)
     setTestStatus('idle')
   }
 
   function toggleModelSelection(m: CatalogOffering) {
-    setSelectedModelIds((prev) => {
-      const exists = prev.includes(m.model)
-      if (exists) {
-        const next = prev.filter((id) => id !== m.model)
-        if (draft.upstream_model_id === m.model) {
-          const fallback = next.length > 0 ? next[0] : ''
-          patch({ upstream_model_id: fallback })
-        }
-        return next
-      } else {
-        patch({
-          upstream_model_id: m.model,
-          base_url: useExisting ? (selectedAccount?.base_url || m.base_url) : m.base_url,
-          input_price_per_1m: String(m.input_price_per_1m),
-          output_price_per_1m: String(m.output_price_per_1m),
-          capability_score: inferDefaultCapability(m),
-          context_length: m.context_length ? String(m.context_length) : '',
-        })
-        return [...prev, m.model]
-      }
+    const exists = selectedModelIds.includes(m.model)
+    const next = exists ? selectedModelIds.filter((id) => id !== m.model) : [...selectedModelIds, m.model]
+    const focus = exists
+      ? models.find((item) => item.model === next[0])
+      : m
+    setSelectedModelIds(next)
+    patch({
+      upstream_model_id: focus?.model || '',
+      base_url: useExisting ? (selectedAccount?.base_url || focus?.base_url || '') : (focus?.base_url || ''),
+      input_price_per_1m: focus ? String(focus.input_price_per_1m) : '',
+      output_price_per_1m: focus ? String(focus.output_price_per_1m) : '',
+      capability_score: focus ? inferDefaultCapability(focus) : '0.70',
+      context_length: focus?.context_length ? String(focus.context_length) : '',
     })
     setTestStatus('idle')
   }
@@ -2218,7 +2197,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">{t('services.add_provider') || 'Add provider'}</h2>
+            <h2 className="text-lg font-semibold">{t('services.add_model') || 'Add model'}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -2276,26 +2255,25 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   )}
                 </div>
 
-                {models.length > 0 && (
-                  <div className="relative mb-2">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
-                    <input
-                      type="search"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
-                      className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
-                    />
-                  </div>
-                )}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                    placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
+                    className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
+                  />
+                </div>
 
                 {models.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-zinc-200 bg-white p-2">
-                    {filteredModels.length > 0 ? (
-                      filteredModels.map((m) => {
+                    {visibleModels.length > 0 ? (
+                      visibleModels.map((m) => {
                         const isChecked = selectedModelIds.includes(m.model)
                         return (
                           <label
@@ -2337,7 +2315,11 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                       </div>
                     )}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-6 text-center text-xs text-zinc-400">
+                    {t('common.loading') || 'Loading models…'}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -2461,7 +2443,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             {t('common.cancel') || 'Cancel'}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50">
-            {busy ? (t('common.creating') || 'Adding…') : (selectedModelIds.length > 1 ? `Add ${selectedModelIds.length} models` : (t('services.add_provider') || 'Add provider'))}
+            {busy ? (t('common.creating') || 'Adding…') : (selectedModelIds.length > 1 ? (t('services.add_n_models', { count: selectedModelIds.length }) || `Add ${selectedModelIds.length} models`) : (t('services.add_model') || 'Add model'))}
           </button>
         </div>
       </form>
