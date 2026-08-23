@@ -50,7 +50,18 @@ pub async fn list_providers(
     let providers = sqlx::query_as::<_, SaasProviderItem>(
         "SELECT 
             pa.id, 
-            pa.name, 
+            CASE 
+                WHEN pa.name LIKE 'saas-%' THEN 
+                    CASE 
+                        WHEN pa.provider_type = 'aliyun' THEN 'Aliyun Bailian'
+                        WHEN pa.provider_type = 'deepseek' THEN 'DeepSeek'
+                        WHEN pa.provider_type = 'openai' THEN 'OpenAI'
+                        WHEN pa.provider_type = 'anthropic' THEN 'Anthropic'
+                        WHEN pa.provider_type = 'openrouter' THEN 'OpenRouter'
+                        ELSE pa.provider_type
+                    END
+                ELSE pa.name 
+            END AS name, 
             pa.provider_type, 
             pa.protocol, 
             pa.base_url, 
