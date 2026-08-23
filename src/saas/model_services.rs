@@ -39,6 +39,14 @@ pub(super) struct ModelEndpointRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(super) enum AddEndpointsPayload {
+    Single(ModelEndpointRequest),
+    Batch { endpoints: Vec<ModelEndpointRequest> },
+    List(Vec<ModelEndpointRequest>),
+}
+
+#[derive(Debug, Deserialize)]
 pub(super) struct ModelServiceRequest {
     name: String,
     #[serde(default)]
@@ -114,7 +122,10 @@ pub struct TestConnectionPayload {
     pub upstream_model_id: String,
 }
 
-pub(super) async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Value>> {
+pub(super) async fn list_model_catalog(
+    State(state): State<Arc<AppState>>,
+    _ctx: SaasContext,
+) -> Json<ApiResponse<Value>> {
     let mut offerings = Vec::new();
     let mut grouped: BTreeMap<String, (String, Vec<Value>)> = BTreeMap::new();
 
@@ -154,6 +165,43 @@ pub(super) async fn list_model_catalog(_ctx: SaasContext) -> Json<ApiResponse<Va
             .or_insert_with(|| (provider_name, Vec::new()))
             .1
             .push(model);
+    }
+
+    // Also enrich with live OpenRouter market models from database
+    if let Ok(or_models) = sqlx::query_as::<_, crate::models::OpenRouterMarketModel>(
+        "SELECT * FROM openrouter_market_models ORDER BY prompt_price_per_1m ASC, name ASC",
+    )
+    .fetch_all(&state.db)
+    .await
+    {
+        if !or_models.is_empty() {
+            let mut or_list = Vec::with_capacity(or_models.len());
+            for m in or_models {
+                let or_item = json!({
+                    "provider_id": "openrouter",
+                    "provider_name": "OpenRouter",
+                    "endpoint_id": format!("openrouter-{}", m.id),
+                    "endpoint_key": "openrouter",
+                    "region": "global",
+                    "base_url": "https://openrouter.ai/api/v1",
+                    "price_currency": "USD",
+                    "model": m.id,
+                    "model_name": m.name,
+                    "description": m.description,
+                    "input_price_per_1m": m.prompt_price_per_1m,
+                    "output_price_per_1m": m.completion_price_per_1m,
+                    "cache_read_price_per_1m": 0.0,
+                    "cache_write_price_per_1m": 0.0,
+                    "supports_tools": true,
+                    "supports_vision": m.image_price > 0.0,
+                    "supports_reasoning": m.id.contains("r1") || m.id.contains("reasoning") || m.id.contains("o1") || m.id.contains("o3"),
+                    "context_length": m.context_length,
+                });
+                offerings.push(or_item.clone());
+                or_list.push(or_item);
+            }
+            grouped.insert("openrouter".to_string(), ("OpenRouter".to_string(), or_list));
+        }
     }
 
     let providers = grouped
@@ -622,72 +670,56 @@ pub(super) async fn add_model_service_endpoint(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
     Path(model_id): Path<String>,
-    Json(endpoint): Json<ModelEndpointRequest>,
+    Json(payload): Json<AddEndpointsPayload>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let upstream_model_id = endpoint.upstream_model_id.trim();
-    if upstream_model_id.is_empty() {
+    let endpoints_to_add: Vec<ModelEndpointRequest> = match payload {
+        AddEndpointsPayload::Single(single) => vec![single],
+        AddEndpointsPayload::Batch { endpoints } => endpoints,
+        AddEndpointsPayload::List(list) => list,
+    };
+
+    if endpoints_to_add.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Upstream model ID is required")),
+            Json(ApiResponse::error("At least one model endpoint is required")),
         ));
     }
 
-    let (provider_id, provider_type) = if let Some(ref aid) = endpoint.account_id {
-        let account: Option<(String, String)> = sqlx::query_as(
-            "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
-        )
-        .bind(aid)
-        .bind(&ctx.org_id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(db_error)?;
-
-        let Some((pid, ptype)) = account else {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ApiResponse::error("Selected provider account not found")),
-            ));
-        };
-        (pid, ptype)
-    } else {
-        let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
-        let base_url = endpoint.base_url.as_deref().unwrap_or("").trim();
-        let api_key = endpoint.api_key.as_deref().unwrap_or("").trim();
-        if ptype.is_empty() || base_url.is_empty() || api_key.is_empty() {
+    for ep in &endpoints_to_add {
+        let upstream_model_id = ep.upstream_model_id.trim();
+        if upstream_model_id.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error(
-                    "Provider type, URL, API key, and model are required",
-                )),
+                Json(ApiResponse::error("Upstream model ID is required")),
             ));
         }
-        let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
-        if !matches!(protocol, "openai" | "anthropic") {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
-            ));
+        if ep.account_id.is_none() {
+            let ptype = ep.provider_type.as_deref().unwrap_or("custom").trim();
+            let base_url = ep.base_url.as_deref().unwrap_or("").trim();
+            let api_key = ep.api_key.as_deref().unwrap_or("").trim();
+            if ptype.is_empty() || base_url.is_empty() || api_key.is_empty() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "Provider type, URL, API key, and model are required for new provider accounts",
+                    )),
+                ));
+            }
+            let protocol = ep.protocol.as_deref().unwrap_or("openai");
+            if !matches!(protocol, "openai" | "anthropic") {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error("Protocol must be OpenAI or Anthropic")),
+                ));
+            }
+            if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error("Provider URL must use HTTPS")),
+                ));
+            }
         }
-        if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Provider URL must use HTTPS")),
-            ));
-        }
-        let pid = Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
-            .bind(&pid)
-            .bind(&ctx.org_id)
-            .bind(endpoint.provider_name.clone().unwrap_or_else(|| ptype.clone()))
-            .bind(&ptype)
-            .bind(protocol)
-            .bind(clean_base_url(base_url))
-            .bind(api_key)
-            .execute(&state.db)
-            .await
-            .map_err(db_error)?;
-        (pid, ptype)
-    };
+    }
 
     let pool: Option<(String, i64)> = sqlx::query_as(
         "SELECT mp.id, COUNT(mpe.endpoint_id)
@@ -706,43 +738,92 @@ pub(super) async fn add_model_service_endpoint(
     .fetch_optional(&state.db)
     .await
     .map_err(db_error)?;
-    let Some((pool_id, endpoint_count)) = pool else {
+
+    let Some((pool_id, initial_count)) = pool else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model service not found")),
         ));
     };
+
     let mut tx = state.db.begin().await.map_err(db_error)?;
-    let endpoint_id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-        .bind(&endpoint_id)
-        .bind(&provider_id)
-        .bind(format!("model-service-{}", endpoint_count + 1))
-        .bind(&endpoint.upstream_model_id)
-        .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
-        .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
-        .bind(effective_capability_score(
-            &endpoint.upstream_model_id,
-            endpoint.capability_score.unwrap_or(0.0),
-        ))
-        .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
-        .bind(endpoint.context_length)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_error)?;
-    sqlx::query("INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES ($1, $2, 1, 1)")
-        .bind(&pool_id)
-        .bind(&endpoint_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_error)?;
+    let mut added_ids = Vec::with_capacity(endpoints_to_add.len());
+    let mut current_count = initial_count;
+
+    for endpoint in endpoints_to_add {
+        let (provider_id, _ptype) = if let Some(ref aid) = endpoint.account_id {
+            let account: Option<(String, String)> = sqlx::query_as(
+                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
+            )
+            .bind(aid)
+            .bind(&ctx.org_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            let Some((pid, ptype)) = account else {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("Selected provider account not found")),
+                ));
+            };
+            (pid, ptype)
+        } else {
+            let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
+            let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
+            let base_url = endpoint.base_url.as_deref().unwrap_or("");
+            let api_key = endpoint.api_key.as_deref().unwrap_or("");
+            let pid = Uuid::new_v4().to_string();
+            sqlx::query("INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+                .bind(&pid)
+                .bind(&ctx.org_id)
+                .bind(endpoint.provider_name.clone().unwrap_or_else(|| ptype.clone()))
+                .bind(&ptype)
+                .bind(protocol)
+                .bind(clean_base_url(base_url))
+                .bind(api_key)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            (pid, ptype)
+        };
+
+        current_count += 1;
+        let endpoint_id = Uuid::new_v4().to_string();
+        sqlx::query("INSERT INTO endpoints (id, account_id, name, upstream_model_id, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+            .bind(&endpoint_id)
+            .bind(&provider_id)
+            .bind(format!("model-service-{}", current_count))
+            .bind(&endpoint.upstream_model_id)
+            .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
+            .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
+            .bind(effective_capability_score(
+                &endpoint.upstream_model_id,
+                endpoint.capability_score.unwrap_or(0.0),
+            ))
+            .bind(endpoint.supports_tools.map(|value| if value { 1 } else { 0 }))
+            .bind(endpoint.context_length)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+        sqlx::query("INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight) VALUES ($1, $2, 1, 1)")
+            .bind(&pool_id)
+            .bind(&endpoint_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+        added_ids.push(endpoint_id);
+    }
+
     tx.commit().await.map_err(db_error)?;
     sync(&state).await;
+
     Ok(Json(ApiResponse::success(json!({
-        "id": endpoint_id,
-        "provider_type": provider_type,
-        "model": endpoint.upstream_model_id,
-        "endpoint_count": endpoint_count + 1,
+        "added_count": added_ids.len(),
+        "endpoint_ids": added_ids,
+        "endpoint_count": current_count,
     }))))
 }
 

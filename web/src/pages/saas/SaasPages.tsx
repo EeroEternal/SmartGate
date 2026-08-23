@@ -1,5 +1,5 @@
-import { FormEvent, ReactNode, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Download, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { Activity, AlertCircle, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Download, Eye, EyeOff, ExternalLink, FileCode2, HelpCircle, Info, LogOut, Pencil, Plus, Search, Settings2, ShieldCheck, Sliders, Sparkles, Trash2, TrendingDown, UserCircle, X, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -1900,6 +1900,8 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
   const [error, setError] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle')
   const [testMsg, setTestMsg] = useState('')
+  const [modelSearch, setModelSearch] = useState('')
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([])
 
   useEffect(() => {
     saasFetch<SaasProvider[]>('/api/saas/providers').then((res) => {
@@ -1908,9 +1910,11 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
       if (list.length > 0) {
         setSelectedAccountId(list[0].id)
         setUseExisting(true)
-        // Auto fill preset from first account
         const acc = list[0]
         const first = catalog.find((item) => item.provider_id === acc.provider_type)
+        if (first) {
+          setSelectedModelIds([first.model])
+        }
         setDraft((curr) => ({
           ...curr,
           provider_type: acc.provider_type,
@@ -1928,11 +1932,21 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     }).catch(() => {
       setUseExisting(false)
     })
-  }, [])
+  }, [catalog])
 
   const selectedAccount = savedAccounts.find((a) => a.id === selectedAccountId)
   const currentProviderType = useExisting ? (selectedAccount?.provider_type || 'custom') : draft.provider_type
   const models = catalog.filter((item) => item.provider_id === currentProviderType)
+
+  const filteredModels = useMemo(() => {
+    if (!modelSearch.trim()) return models
+    const query = modelSearch.toLowerCase()
+    return models.filter((m) =>
+      m.model.toLowerCase().includes(query) ||
+      (m.model_name && m.model_name.toLowerCase().includes(query)) ||
+      (m.description && m.description.toLowerCase().includes(query))
+    )
+  }, [models, modelSearch])
 
   const accountOptions = savedAccounts.map((a) => ({
     id: a.id,
@@ -1951,7 +1965,6 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
 
   const protocolOptions = [{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]
   const selectedProtocol = protocolOptions.find((option) => option.id === draft.protocol) || protocolOptions[0]
-  const selectedModel = models.find((item) => item.model === draft.upstream_model_id)
 
   const patch = (value: Partial<DraftEndpoint>) => {
     setDraft((current) => ({ ...current, ...value }))
@@ -1964,6 +1977,11 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     const acc = savedAccounts.find((a) => a.id === accId)
     if (acc) {
       const first = catalog.find((item) => item.provider_id === acc.provider_type)
+      if (first) {
+        setSelectedModelIds([first.model])
+      } else {
+        setSelectedModelIds([])
+      }
       setDraft((curr) => ({
         ...curr,
         provider_type: acc.provider_type,
@@ -1982,6 +2000,11 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     const provider = String(option.id)
     const first = catalog.find((item) => item.provider_id === provider)
     const protocol = /anthropic|claude/i.test(provider) ? 'anthropic' : 'openai'
+    if (first) {
+      setSelectedModelIds([first.model])
+    } else {
+      setSelectedModelIds([])
+    }
     setDraft({
       ...emptyEndpoint(),
       provider_type: provider,
@@ -1997,23 +2020,29 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
     setTestStatus('idle')
   }
 
-  function chooseModel(option: { id: string | number; name: string }) {
-    const model = models.find((item) => item.model === String(option.id))
-    if (!model) return
-    patch({
-      upstream_model_id: model.model,
-      base_url: useExisting ? (selectedAccount?.base_url || model.base_url) : model.base_url,
-      input_price_per_1m: String(model.input_price_per_1m),
-      output_price_per_1m: String(model.output_price_per_1m),
-      capability_score: inferDefaultCapability(model),
-      context_length: model.context_length ? String(model.context_length) : '',
+  function toggleModelSelection(m: CatalogOffering) {
+    setSelectedModelIds((prev) => {
+      const exists = prev.includes(m.model)
+      if (exists) {
+        return prev.filter((id) => id !== m.model)
+      } else {
+        return [...prev, m.model]
+      }
     })
-    if (model.input_price_per_1m || model.output_price_per_1m || model.context_length || model.supports_reasoning) setAdvanced(true)
+    patch({
+      upstream_model_id: m.model,
+      base_url: useExisting ? (selectedAccount?.base_url || m.base_url) : m.base_url,
+      input_price_per_1m: String(m.input_price_per_1m),
+      output_price_per_1m: String(m.output_price_per_1m),
+      capability_score: inferDefaultCapability(m),
+      context_length: m.context_length ? String(m.context_length) : '',
+    })
     setTestStatus('idle')
   }
 
   async function runTestKey() {
-    if (!draft.upstream_model_id.trim()) return
+    const modelToTest = draft.upstream_model_id.trim() || selectedModelIds[0] || ''
+    if (!modelToTest) return
     setTestStatus('testing')
     setTestMsg('')
     try {
@@ -2023,7 +2052,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
           protocol: useExisting ? (selectedAccount?.protocol || 'openai') : draft.protocol,
           base_url: useExisting ? (selectedAccount?.base_url || draft.base_url) : draft.base_url.trim(),
           api_key: draft.api_key.trim(),
-          upstream_model_id: draft.upstream_model_id.trim(),
+          upstream_model_id: modelToTest,
         }),
       })
       if (res.success && (res.data?.passed !== false)) {
@@ -2041,33 +2070,75 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!draft.upstream_model_id.trim()) {
-      setError('Upstream model name/ID is required.')
-      return
-    }
     if (!useExisting && (!draft.base_url.trim() || !draft.api_key.trim())) {
       setError('Base URL and API key are required for new provider accounts.')
+      return
+    }
+
+    const targetModels: Array<{
+      model: string
+      input_price?: number
+      output_price?: number
+      capability?: number
+      context_length?: number
+    }> = []
+
+    if (selectedModelIds.length > 0) {
+      for (const mId of selectedModelIds) {
+        const catItem = models.find((item) => item.model === mId)
+        if (catItem) {
+          targetModels.push({
+            model: catItem.model,
+            input_price: catItem.input_price_per_1m ? Number(catItem.input_price_per_1m) : undefined,
+            output_price: catItem.output_price_per_1m ? Number(catItem.output_price_per_1m) : undefined,
+            capability: Number(inferDefaultCapability(catItem)),
+            context_length: catItem.context_length ? Number(catItem.context_length) : undefined,
+          })
+        } else {
+          targetModels.push({
+            model: mId,
+            input_price: draft.input_price_per_1m ? Number(draft.input_price_per_1m) : undefined,
+            output_price: draft.output_price_per_1m ? Number(draft.output_price_per_1m) : undefined,
+            capability: Number(draft.capability_score || 0.7),
+            context_length: draft.context_length ? Number(draft.context_length) : undefined,
+          })
+        }
+      }
+    } else if (draft.upstream_model_id.trim()) {
+      targetModels.push({
+        model: draft.upstream_model_id.trim(),
+        input_price: draft.input_price_per_1m ? Number(draft.input_price_per_1m) : undefined,
+        output_price: draft.output_price_per_1m ? Number(draft.output_price_per_1m) : undefined,
+        capability: Number(draft.capability_score || 0.7),
+        context_length: draft.context_length ? Number(draft.context_length) : undefined,
+      })
+    }
+
+    if (targetModels.length === 0) {
+      setError('Please select or input at least one upstream model.')
       return
     }
 
     setBusy(true)
     setError('')
     try {
+      const endpointsPayload = targetModels.map((tm) => ({
+        account_id: useExisting ? selectedAccountId : undefined,
+        provider_type: useExisting ? undefined : (draft.provider_type === 'custom' ? draft.custom_provider_id : draft.provider_type),
+        provider_name: useExisting ? undefined : (draft.provider_type === 'custom' ? draft.custom_provider_id : selectedPresetProvider.name),
+        protocol: useExisting ? undefined : draft.protocol,
+        base_url: useExisting ? undefined : draft.base_url,
+        api_key: useExisting ? undefined : draft.api_key,
+        upstream_model_id: tm.model,
+        input_price_per_1m: tm.input_price,
+        output_price_per_1m: tm.output_price,
+        capability_score: tm.capability,
+        context_length: tm.context_length,
+      }))
+
       await saasFetch(`/api/saas/model-services/${serviceId}/endpoints`, {
         method: 'POST',
-        body: JSON.stringify({
-          account_id: useExisting ? selectedAccountId : undefined,
-          provider_type: useExisting ? undefined : (draft.provider_type === 'custom' ? draft.custom_provider_id : draft.provider_type),
-          provider_name: useExisting ? undefined : (draft.provider_type === 'custom' ? draft.custom_provider_id : selectedPresetProvider.name),
-          protocol: useExisting ? undefined : draft.protocol,
-          base_url: useExisting ? undefined : draft.base_url,
-          api_key: useExisting ? undefined : draft.api_key,
-          upstream_model_id: draft.upstream_model_id.trim(),
-          input_price_per_1m: draft.input_price_per_1m ? Number(draft.input_price_per_1m) : undefined,
-          output_price_per_1m: draft.output_price_per_1m ? Number(draft.output_price_per_1m) : undefined,
-          capability_score: Number(draft.capability_score || 0.7),
-          context_length: draft.context_length ? Number(draft.context_length) : undefined,
-        }),
+        body: JSON.stringify(endpointsPayload),
       })
       onSaved()
     } catch (e) {
@@ -2083,7 +2154,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">{t('services.add_provider') || 'Add provider'}</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Attach an upstream AI endpoint to this model service pool.</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Attach upstream AI models to this service pool for intelligent routing.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -2123,22 +2194,92 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                 selected={accountOptions.find((a) => a.id === selectedAccountId) || accountOptions[0]}
                 onChange={handleAccountChange}
               />
-              <div className="grid gap-4 sm:grid-cols-2">
+
+              {/* Searchable multi-select model catalog */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-zinc-700">
+                    {t('services.model_label') || 'Models to Connect'} ({selectedModelIds.length} selected)
+                  </label>
+                  {selectedModelIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModelIds([])}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-700"
+                    >
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+
+                {models.length > 0 && (
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search models (e.g. deepseek, claude, free, 70b)..."
+                      className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+                )}
+
                 {models.length > 0 ? (
-                  <Select
-                    label={t('services.model_label') || 'Model Preset'}
-                    options={modelOptions(models)}
-                    selected={selectedModel ? { id: selectedModel.model, name: selectedModel.model_name } : { id: '', name: t('services.select_model') || 'Select a model' }}
-                    onChange={chooseModel}
-                  />
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-zinc-200 bg-white p-2">
+                    {filteredModels.length > 0 ? (
+                      filteredModels.map((m) => {
+                        const isChecked = selectedModelIds.includes(m.model)
+                        return (
+                          <label
+                            key={m.model}
+                            className={`flex cursor-pointer items-start gap-2.5 rounded-md p-2 transition-colors ${
+                              isChecked ? 'bg-purple-50/80 border border-purple-200' : 'hover:bg-zinc-50 border border-transparent'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleModelSelection(m)}
+                              className="mt-0.5 h-3.5 w-3.5 rounded accent-purple-600"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-xs text-zinc-900 truncate">
+                                  {m.model_name || m.model}
+                                </span>
+                                <div className="shrink-0 text-[11px] font-mono text-zinc-500">
+                                  {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
+                                    <span className="text-emerald-600 font-semibold">FREE</span>
+                                  ) : (
+                                    <span>${m.input_price_per_1m}/1M</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-zinc-400 truncate">
+                                <code className="text-zinc-600">{m.model}</code>
+                                {m.context_length ? ` · ${m.context_length.toLocaleString()} ctx` : ''}
+                              </div>
+                            </div>
+                          </label>
+                        )
+                      })
+                    ) : (
+                      <div className="py-4 text-center text-xs text-zinc-400">
+                        No preset model matching "{modelSearch}". You can enter custom Model ID below.
+                      </div>
+                    )}
+                  </div>
                 ) : null}
-                <Field
-                  alignWithSelect
-                  label={t('services.upstream_model_id') || 'Upstream Model ID'}
-                  value={draft.upstream_model_id}
-                  onChange={(val) => patch({ upstream_model_id: val })}
-                  placeholder="e.g. deepseek/deepseek-r1:free"
-                />
+
+                <div className="mt-3">
+                  <Field
+                    label={t('services.custom_or_additional_model') || 'Or specify custom Model ID'}
+                    value={draft.upstream_model_id}
+                    onChange={(val) => patch({ upstream_model_id: val })}
+                    placeholder="e.g. deepseek/deepseek-r1:free or custom model identifier"
+                  />
+                </div>
               </div>
             </div>
           ) : (
@@ -2159,12 +2300,16 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
                     placeholder="my-openai-proxy"
                   />
                 ) : (
-                  <Select
-                    label={t('services.model_label') || 'Model'}
-                    options={modelOptions(models)}
-                    selected={selectedModel ? { id: selectedModel.model, name: selectedModel.model_name } : { id: '', name: t('services.select_model') || 'Select a model' }}
-                    onChange={chooseModel}
-                  />
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.model_label') || 'Model'}</label>
+                    <input
+                      type="text"
+                      value={draft.upstream_model_id}
+                      onChange={(e) => patch({ upstream_model_id: e.target.value })}
+                      placeholder="e.g. deepseek-chat or gpt-4o"
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2249,14 +2394,6 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
               <Field required={false} label={t('services.context_length') || 'Context length'} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
             </div>
           )}
-
-          {selectedModel && (
-            <div className="space-y-0.5 text-xs text-zinc-500 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
-              <div className="font-medium text-zinc-700">{selectedModel.model_name}</div>
-              <div>{selectedModel.description}</div>
-              <div>Context: {selectedModel.context_length ? `${selectedModel.context_length.toLocaleString()} tokens` : 'Standard'}</div>
-            </div>
-          )}
         </div>
 
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
@@ -2266,7 +2403,7 @@ function AddModelModal({ catalog, providers: _, serviceId, onClose, onSaved }: {
             {t('common.cancel') || 'Cancel'}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50">
-            {busy ? (t('common.creating') || 'Adding…') : (t('services.add_provider') || 'Add provider')}
+            {busy ? (t('common.creating') || 'Adding…') : (selectedModelIds.length > 1 ? `Add ${selectedModelIds.length} models` : (t('services.add_provider') || 'Add provider'))}
           </button>
         </div>
       </form>
