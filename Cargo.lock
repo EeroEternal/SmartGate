@@ -2833,9 +2833,9 @@ checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
 
 [[package]]
 name = "unigateway-core"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48720d1d15f70b6b7e85609feb2fdfd4797d4245adb4dcf02a51f953ce743284"
+checksum = "ddf557d63eb6f82bddb7f7b91e0f4904547e594af9b0d7b983f4082361a5daf6"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -2850,9 +2850,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-host"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db0c7b40af01e7126e798329828f5f6fa5d7679aed10b26e2711e674e542a000"
+checksum = "b82cb971a15e06f2f3b7780fa209ca748029b8478493dafa792519bc6b1e3ef3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2868,9 +2868,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-protocol"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94dff5f8647364e4accdb6b90ba570f752bca020ed057b7ea5aeaee0f067023d"
+checksum = "18f399b8426c1ff1372d87bf32571bb6a39c3a4b708a8e86a42601620a6cc1b8"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2884,9 +2884,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-sdk"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0ac955477be271811b22959a99e2a34d8b97c29b5ed71b43a4fa459830546b"
+checksum = "dfeba7bb518d20a558ad42798683253a616cb231c7d7efbae94b3a5f6f7979f6"
 dependencies = [
  "unigateway-core",
  "unigateway-host",
@@ -2896,9 +2896,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-session"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4291ca4b3f4396b5cdd43e9c7da7b7373ba8744acef4547f632319ba748ef540"
+checksum = "934a613f37ef1570da6f97a3f785e7fbdfa4c1fe7c928bb924e69ee48296516b"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -2911,9 +2911,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-session-redis"
-version = "2.14.2"
+version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33dbf47678dbd158ba6af3e1bf0d46faae989025d1505b3e050a78dc82735cd8"
+checksum = "c2c92868457aa7cbeea10d48ec36ad78b0bd21b395662703e5f78da0dec6b7a6"
 dependencies = [
  "redis",
  "serde",

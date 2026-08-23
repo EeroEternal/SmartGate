@@ -1,3 +1,5 @@
+pub mod openrouter;
+
 use crate::models::{EndpointMetric, ModelPool as DbModelPool, PoolEndpointMember};
 use crate::pricing::{EndpointProfile, UnitPrice};
 use dashmap::DashMap;

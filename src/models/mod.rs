@@ -191,3 +191,25 @@ pub struct PoolEndpointMember {
     pub priority: i32,
     pub weight: i32,
 }
+
+#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+pub struct OpenRouterMarketModel {
+    pub id: String,
+    pub name: String,
+    pub created_at: Option<i64>,
+    pub description: Option<String>,
+    pub context_length: i32,
+    pub prompt_price_per_1m: f64,
+    pub completion_price_per_1m: f64,
+    pub request_price: f64,
+    pub image_price: f64,
+    pub discount_ratio: f64,
+    pub is_free: i32,
+    pub top_provider_context_length: Option<i32>,
+    pub top_provider_max_completion_tokens: Option<i32>,
+    pub top_provider_is_moderated: i32,
+    pub raw_pricing_json: Option<String>,
+    pub architecture_json: Option<String>,
+    pub synced_at: DateTime<Utc>,
+}
+

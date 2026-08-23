@@ -9,7 +9,7 @@
 - **SmartGate 是控制面 / 数据面分离的全功能 AI 网关**。控制面负责产品配置、组织/项目/API Key、Provider Account、Endpoint、Virtual Model、Model Pool、路由策略打分、鉴权、配额/预算、Token 与花费统计、健康策略和 Admin UI。
 - **UniGateway 是数据面协议与执行引擎**，负责协议层语义转换、provider driver、上游请求渲染、下游响应归一化、流式协议处理、SSE chunk 解析/重写和具体 provider 行为。
 - **业务对象不得下沉到 UniGateway**：Org、Project、API Key、Provider Account、Model Pool、Virtual Model、Project Grant 等属于 SmartGate 控制面；UniGateway 不应依赖或理解这些产品层对象。
-- **协议细节不得上浮到 SmartGate 控制面**：OpenAI/Anthropic 协议字段转换、provider-specific 请求体/请求头渲染、reasoning/thinking 字段解析、工具调用差异、流式响应差异等应优先在 UniGateway 中实现。
+- **所有协议转换与提供商适配必须由 UniGateway 完成**：OpenAI/Anthropic 协议字段转换、provider-specific 请求体/请求头渲染、reasoning/thinking 字段解析、工具调用差异、流式响应归一化/SSE chunk 解析等，必须统一委托 UniGateway 引擎实现，严禁在 SmartGate 控制面或 API handler 中编写针对具体 provider/协议的转换逻辑。
 - SmartGate 可以维护 Endpoint 候选集、健康状态、优先级、权重、运行时指标和路由反馈分数，并将中立 metadata 或 `unigateway.*` hints 传给 UniGateway；但不得在 API handler 中把这些 metadata 翻译成特定 provider 的 body 参数。
 - SmartGate 的路由职责是 **策略计算**（Priority / LoadAware / CostAware / CapabilityAware 等），生成 UniGateway 可执行的候选顺序与 feedback。
 - UniGateway 的路由职责是 **执行机制**：按候选 endpoint、feedback 与中立 metadata 完成协议渲染、请求执行、fallback、响应归一化与报告。

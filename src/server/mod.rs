@@ -56,6 +56,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
     crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles, &metrics).await?;
 
+    // Spawn background sync worker for OpenRouter market catalog (every 6 hours)
+    crate::sync::openrouter::spawn_openrouter_sync_worker(db.clone(), std::time::Duration::from_secs(6 * 3600));
+
     let warm_store = Arc::new(
         crate::warm::WarmStore::try_with_config(&config.warm)
             .map_err(|error| anyhow::anyhow!("failed to initialize Warm store: {error}"))?,

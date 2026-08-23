@@ -7,6 +7,7 @@ mod analytics;
 mod api_keys;
 mod auth;
 mod model_services;
+pub mod openrouter;
 
 use axum::{
     async_trait,
@@ -157,6 +158,8 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/savings-baseline",
             get(analytics::get_savings_baseline).patch(analytics::update_savings_baseline),
         )
+        .route("/openrouter/market", get(openrouter::get_openrouter_market))
+        .route("/openrouter/sync", post(openrouter::trigger_openrouter_sync))
         .with_state(state)
 }
 

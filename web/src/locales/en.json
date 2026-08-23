@@ -3,6 +3,7 @@
     "overview": "Overview",
     "model_services": "Model services",
     "api_keys": "API keys",
+    "openrouter": "OpenRouter Radar",
     "evaluation": "Model evaluation",
     "codex": "Codex",
     "analytics": "Analytics",
@@ -542,5 +543,30 @@
     "not_found": "The requested resource was not found.",
     "server_error": "An internal server error occurred. Please try again later.",
     "upstream_error": "Upstream model provider error: {message}"
+  },
+  "openrouter": {
+    "title": "OpenRouter Market Radar",
+    "live_radar": "Live Market Intelligence",
+    "subtitle": "Discover 100% free endpoints, deep discounts, and provider arbitrage across the OpenRouter public catalog.",
+    "sync_catalog": "Sync Catalog",
+    "syncing": "Syncing…",
+    "stat_free_models": "100% Free Models",
+    "stat_free_models_hint": "Zero-cost promotional or sponsor endpoints",
+    "stat_discounted": "Discounted Models",
+    "stat_discounted_hint": "Models with active price discounts",
+    "stat_total_indexed": "Total Models Indexed",
+    "last_synced": "Last synced",
+    "search_placeholder": "Search models by name, ID, or description…",
+    "filter_all": "All Models",
+    "filter_free_only": "Free Models Only",
+    "filter_discounted_only": "Discounted Only",
+    "sort_smart": "Smart Ranking",
+    "sort_price_asc": "Lowest Price First",
+    "sort_discount_desc": "Highest Discount First",
+    "sort_context_desc": "Largest Context Window",
+    "prompt_price": "Input / 1M",
+    "completion_price": "Output / 1M",
+    "context_length": "Context Window",
+    "no_models_found": "No matching OpenRouter models found in catalog."
   }
 }
