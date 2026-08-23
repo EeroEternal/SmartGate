@@ -324,21 +324,20 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('common.name')}</label>
-          <input
-            required
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="OpenRouter Main"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
-          />
-        </div>
-
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">Protocol</label>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('common.name')}</label>
+            <input
+              required
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="OpenRouter Main"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label') || 'Protocol'}</label>
             <Select
               selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }}
               onChange={(opt) => setProtocol(String(opt.id))}
@@ -349,22 +348,23 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               size="sm"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">Base URL</label>
-            <input
-              required
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://openrouter.ai/api/v1"
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url') || 'Base URL'}</label>
+          <input
+            required
+            type="text"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://openrouter.ai/api/v1"
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
+          />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-medium text-zinc-700">API Key</label>
+            <label className="block text-xs font-medium text-zinc-700">{t('services.api_key') || 'API Key'}</label>
             <button
               type="button"
               onClick={handleTest}
@@ -372,7 +372,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400"
             >
               <Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} />
-              {testStatus === 'testing' ? 'Testing…' : 'Test Key'}
+              {testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test Key')}
             </button>
           </div>
           <input
@@ -471,20 +471,19 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
           </button>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('common.name')}</label>
-          <input
-            required
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
-          />
-        </div>
-
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">Protocol</label>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('common.name')}</label>
+            <input
+              required
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label') || 'Protocol'}</label>
             <Select
               selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }}
               onChange={(opt) => setProtocol(String(opt.id))}
@@ -495,16 +494,17 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
               size="sm"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">Base URL</label>
-            <input
-              required
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url') || 'Base URL'}</label>
+          <input
+            required
+            type="text"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
+          />
         </div>
 
         <div>
