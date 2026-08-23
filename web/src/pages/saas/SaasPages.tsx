@@ -72,7 +72,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
 
   return <div className="min-h-screen bg-zinc-50 text-zinc-950">
-    <header className="h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
+    <header className="relative z-10 h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
       <Link to="/app" className="flex items-center gap-3 font-semibold tracking-tight">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
         SmartGate
