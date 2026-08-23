@@ -8,6 +8,7 @@ mod api_keys;
 mod auth;
 mod model_services;
 pub mod openrouter;
+pub mod providers;
 
 use axum::{
     async_trait,
@@ -160,6 +161,14 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route("/openrouter/market", get(openrouter::get_openrouter_market))
         .route("/openrouter/sync", post(openrouter::trigger_openrouter_sync))
+        .route(
+            "/providers",
+            get(providers::list_providers).post(providers::create_provider),
+        )
+        .route(
+            "/providers/:id",
+            patch(providers::update_provider).delete(providers::delete_provider),
+        )
         .with_state(state)
 }
 

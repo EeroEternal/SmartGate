@@ -8,8 +8,9 @@ import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import OpenRouterPage from './OpenRouterPage'
+import ProvidersPage from './ProvidersPage'
 
-export { OpenRouterPage }
+export { OpenRouterPage, ProvidersPage }
 
 type Service = { id: string; name: string; model: string; provider_type: string; provider_types?: string[]; endpoint_count?: number; strategy: string; health_status: string }
 type Key = { id: string; name: string; prefix: string; enabled: boolean; daily_spend_limit?: number; created_at: string; last_used_at?: string; model_services?: { id: string; name: string }[] }
@@ -58,6 +59,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const links = [
     [t('nav.overview'), '/app'],
     [t('nav.model_services'), '/app/services'],
+    [t('nav.providers'), '/app/providers'],
     [t('nav.api_keys'), '/app/keys'],
     [t('nav.openrouter'), '/app/openrouter'],
     [t('nav.evaluation'), '/app/evaluation'],

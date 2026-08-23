@@ -576,5 +576,21 @@
     "err_path_title": "AbsolutePathBuf 경로 오류:",
     "err_path_desc": "독립 실행형 Profile에 {config} 절대 경로를 올바르게 유지하십시오.",
     "security_warning": "{token} 키를 안전하게 보관하십시오. 실제 키가 포함된 Profile 파일을 공개 저장소에 커밋하지 마십시오."
+  },
+  "providers": {
+    "account_vault": "제공자 계정 관리",
+    "subtitle": "업스트림 AI 제공자 계정, API 자격 증명 및 기본 URL을 한 곳에서 중앙 관리합니다.",
+    "connect_provider": "제공자 연결",
+    "connect_provider_desc": "여러 모델 서비스에서 재사용할 수 있도록 제공자 자격 증명을 저장합니다.",
+    "edit_provider": "제공자 계정 편집",
+    "select_preset": "제공자 사전 설정",
+    "bound_endpoints": "연결된 엔드포인트",
+    "provider_type": "제공자 유형",
+    "no_providers": "연결된 제공자 계정이 없습니다.",
+    "no_providers_hint": "엔드포인트를 연결할 첫 번째 제공자 계정(예: OpenRouter, DeepSeek, OpenAI)을 연결하세요.",
+    "connect_first": "첫 제공자 연결",
+    "delete_title": "제공자 계정 삭제",
+    "delete_confirm_desc": "제공자 계정 {name}을(를) 삭제하시겠습니까?",
+    "cannot_delete_has_endpoints": "제공자를 삭제할 수 없습니다: 현재 {count}개의 모델 엔드포인트가 이 계정에 연결되어 있습니다."
   }
 }

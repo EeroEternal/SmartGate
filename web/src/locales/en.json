@@ -576,5 +576,21 @@
     "no_models_found": "No matching OpenRouter models found in catalog.",
     "page_info": "Page {current} of {total} ({count} matching models)",
     "per_page": "{size} / page"
+  },
+  "providers": {
+    "account_vault": "Provider Accounts",
+    "subtitle": "Manage upstream AI provider accounts, credentials, and base URLs in one place.",
+    "connect_provider": "Connect Provider",
+    "connect_provider_desc": "Save upstream API credentials for use across multiple Model services.",
+    "edit_provider": "Edit Provider Account",
+    "select_preset": "Provider Preset",
+    "bound_endpoints": "Bound Endpoints",
+    "provider_type": "Provider Type",
+    "no_providers": "No provider accounts connected yet.",
+    "no_providers_hint": "Connect your first provider account (e.g. OpenRouter, DeepSeek, OpenAI) to link endpoints.",
+    "connect_first": "Connect First Provider",
+    "delete_title": "Delete Provider Account",
+    "delete_confirm_desc": "Are you sure you want to delete {name}?",
+    "cannot_delete_has_endpoints": "Cannot delete provider: {count} model endpoints are currently linked to it."
   }
 }

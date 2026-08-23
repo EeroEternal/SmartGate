@@ -576,5 +576,21 @@
     "err_path_title": "AbsolutePathBuf 路径解析错误：",
     "err_path_desc": "请确保独立 Profile 中正确配置了绝对路径 {config}。",
     "security_warning": "请妥善保管 {token} 密钥。切勿将包含真实密钥的 Profile 文件提交至公开代码仓库；建议设置本地只读权限并在密钥泄漏时立即轮换。"
+  },
+  "providers": {
+    "account_vault": "Provider 凭证中心",
+    "subtitle": "集中管理上游大模型服务商账户、API 密钥与 Base URL，支持多模型服务复用。",
+    "connect_provider": "连接 Provider",
+    "connect_provider_desc": "保存上游服务商凭证，以便在多个模型服务中一键挂载端点。",
+    "edit_provider": "编辑 Provider 账户",
+    "select_preset": "Provider 预设",
+    "bound_endpoints": "已挂载端点",
+    "provider_type": "服务商类型",
+    "no_providers": "暂无已连接的 Provider 账户",
+    "no_providers_hint": "连接您的首个 Provider 账户（如 OpenRouter、DeepSeek、OpenAI）以复用凭证。",
+    "connect_first": "连接首个 Provider",
+    "delete_title": "删除 Provider 账户",
+    "delete_confirm_desc": "确定要删除 Provider 账户 {name} 吗？",
+    "cannot_delete_has_endpoints": "无法删除该 Provider：当前仍有 {count} 个模型端点正在关联使用此账户。"
   }
 }

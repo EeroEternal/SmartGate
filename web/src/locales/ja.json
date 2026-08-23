@@ -576,5 +576,21 @@
     "err_path_title": "AbsolutePathBuf パスエラー:",
     "err_path_desc": "独立した Profile に {config} の絶対パスを正しく設定してください。",
     "security_warning": "{token} は秘密に保ってください。実際のキーが含まれる Profile ファイルを Git リポジトリにコミットしないでください。"
+  },
+  "providers": {
+    "account_vault": "プロバイダーアカウント",
+    "subtitle": "上流の AI プロバイダーアカウント、API 認証情報、ベース URL を一元管理します。",
+    "connect_provider": "プロバイダーを接続",
+    "connect_provider_desc": "複数のモデルサービスで再利用できるようにプロバイダー認証情報を保存します。",
+    "edit_provider": "プロバイダーアカウントを編集",
+    "select_preset": "プロバイダープリセット",
+    "bound_endpoints": "バインドされたエンドポイント",
+    "provider_type": "プロバイダータイプ",
+    "no_providers": "接続されたプロバイダーアカウントがありません。",
+    "no_providers_hint": "最初のアカウント（OpenRouter、DeepSeek、OpenAI など）を接続してエンドポイントをリンクします。",
+    "connect_first": "最初のプロバイダーを接続",
+    "delete_title": "プロバイダーアカウントの削除",
+    "delete_confirm_desc": "プロバイダーアカウント {name} を削除してもよろしいですか？",
+    "cannot_delete_has_endpoints": "プロバイダーを削除できません: 現在 {count} 個のモデルエンドポイントがこのアカウントにリンクされています。"
   }
 }
