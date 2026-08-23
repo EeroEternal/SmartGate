@@ -78,15 +78,9 @@ export default function ProvidersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">
-              {t('nav.providers')}
-            </h1>
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200/60">
-              <Server className="h-3.5 w-3.5" />
-              {t('providers.account_vault')}
-            </span>
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">
+            {t('nav.providers')}
+          </h1>
           <p className="mt-1 text-sm text-zinc-500 max-w-2xl">
             {t('providers.subtitle')}
           </p>
