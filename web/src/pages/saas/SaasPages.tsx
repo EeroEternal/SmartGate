@@ -888,6 +888,12 @@ const RADAR_PALETTES = [
   { stroke: '#6366f1', fill: 'rgba(99, 102, 241, 0.22)', dot: '#4f46e5', text: 'text-indigo-700', bg: 'bg-indigo-600', pill: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
 ]
 
+function formatShortModel(rawModel: string): string {
+  if (!rawModel) return ''
+  const parts = rawModel.split('/')
+  return parts[parts.length - 1] || rawModel
+}
+
 export function EvaluationPage() {
   const { t } = useI18n()
   const [endpoints, setEndpoints] = useState<(ServiceEndpoint & { serviceId: string; serviceName: string })[]>([])
@@ -1020,19 +1026,19 @@ export function EvaluationPage() {
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_coding') || 'Top Coding Model'}</div>
-          <div className="mt-2 text-xl font-bold text-purple-700 truncate">{topCoding?.model || '—'}</div>
+          <div className="mt-2 text-xl font-bold text-purple-700 truncate" title={topCoding?.model}>{topCoding ? formatShortModel(topCoding.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topCoding?.provider_name ? `${topCoding.provider_name} • ${topCoding.model_dna?.code_logic || 96} pts` : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_reasoning') || 'Top Reasoning Model'}</div>
-          <div className="mt-2 text-xl font-bold text-amber-600 truncate">{topReasoning?.model || '—'}</div>
+          <div className="mt-2 text-xl font-bold text-amber-600 truncate" title={topReasoning?.model}>{topReasoning ? formatShortModel(topReasoning.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topReasoning?.provider_name ? `${topReasoning.provider_name} • ${topReasoning.model_dna?.reasoning_math || 98} pts` : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash') || 'Top Speed & Cost Model'}</div>
-          <div className="mt-2 text-xl font-bold text-emerald-600 truncate">{topFlash?.model || '—'}</div>
+          <div className="mt-2 text-xl font-bold text-emerald-600 truncate" title={topFlash?.model}>{topFlash ? formatShortModel(topFlash.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${(topFlash.input_price_per_1m ?? 0.14).toFixed(2)}/1M tokens` : '—'}</div>
         </div>
       </div>
@@ -1213,13 +1219,15 @@ export function EvaluationPage() {
               {endpoints.filter((e) => selectedIds.includes(e.id)).map((ep) => {
                 const epIndex = endpoints.findIndex((e) => e.id === ep.id)
                 const palette = RADAR_PALETTES[epIndex % RADAR_PALETTES.length]
+                const shortName = formatShortModel(ep.model)
                 return (
                   <span
                     key={ep.id}
                     className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold border ${palette.pill}`}
+                    title={`${ep.model} (${ep.provider_name})`}
                   >
                     <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
-                    <span className="truncate max-w-[110px]">{ep.model}</span>
+                    <span className="truncate max-w-[110px]">{shortName}</span>
                     <button
                       type="button"
                       onClick={() => toggleEndpoint(ep.id)}
@@ -1280,6 +1288,7 @@ export function EvaluationPage() {
                   const isSelected = selectedIds.includes(ep.id)
                   const originalIdx = endpoints.findIndex((e) => e.id === ep.id)
                   const palette = RADAR_PALETTES[originalIdx % RADAR_PALETTES.length]
+                  const shortName = formatShortModel(ep.model)
                   const dna = ep.model_dna || {
                     code_logic: Math.round((ep.capability_score || 0.5) * 100),
                     reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
@@ -1310,8 +1319,12 @@ export function EvaluationPage() {
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: isSelected ? palette.dot : '#a1a1aa' }}
                           />
-                          <span className="font-semibold text-zinc-950 truncate text-xs">{ep.model}</span>
-                          <span className="text-[11px] text-zinc-400 truncate">({ep.provider_name})</span>
+                          <span className="font-semibold text-zinc-950 truncate text-xs" title={ep.model}>
+                            {shortName}
+                          </span>
+                          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 font-medium truncate max-w-[120px]">
+                            {ep.provider_name}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-mono font-medium text-zinc-700">
@@ -1446,7 +1459,7 @@ export function EvaluationPage() {
                   return (
                     <tr key={ep.id} className="hover:bg-zinc-50/50 transition-colors">
                       <td className="py-2.5 px-3">
-                        <div className="font-semibold text-zinc-950 whitespace-nowrap">{ep.model}</div>
+                        <div className="font-semibold text-zinc-950 whitespace-nowrap" title={ep.model}>{formatShortModel(ep.model)}</div>
                         <div className="text-[11px] text-zinc-400 whitespace-nowrap">{ep.provider_name}</div>
                       </td>
                       <td className="py-2.5 px-3">
