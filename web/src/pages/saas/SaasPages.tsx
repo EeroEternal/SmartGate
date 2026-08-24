@@ -1033,7 +1033,7 @@ export function EvaluationPage() {
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash') || 'Top Speed & Cost Model'}</div>
           <div className="mt-2 text-xl font-bold text-emerald-600 truncate">{topFlash?.model || '—'}</div>
-          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${topFlash.input_price_per_1m || 0.14}/1M tokens` : '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${(topFlash.input_price_per_1m ?? 0.14).toFixed(2)}/1M tokens` : '—'}</div>
         </div>
       </div>
 
@@ -1480,7 +1480,7 @@ export function EvaluationPage() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span className="text-xs font-mono text-zinc-600">
-                          ${ep.input_price_per_1m || 0.14} / ${ep.output_price_per_1m || 0.28}
+                          ${(ep.input_price_per_1m ?? 0.14).toFixed(2)} / ${(ep.output_price_per_1m ?? 0.28).toFixed(2)}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-right">
@@ -1592,7 +1592,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
 
   const judgeOptions = service.endpoints.map((ep) => ({
     id: ep.id,
-    name: `${ep.provider_name} - ${ep.model}${ep.input_price_per_1m ? ` ($${ep.input_price_per_1m}/1M)` : ''}`,
+    name: `${ep.provider_name} - ${ep.model}${ep.input_price_per_1m != null ? ` ($${ep.input_price_per_1m.toFixed(2)}/1M)` : ''}`,
   }))
   const selectedJudge = judgeOptions.find((opt) => opt.id === judgeEndpointId) || judgeOptions[0] || { id: '', name: 'No endpoints available' }
   const selectedShadowTarget = serviceOptions.find((opt) => opt.id === shadowVirtualModelId) || serviceOptions[0]
