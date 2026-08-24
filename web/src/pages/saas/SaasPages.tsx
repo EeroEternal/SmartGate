@@ -1487,9 +1487,10 @@ export function EvaluationPage() {
                         <button
                           type="button"
                           onClick={() => setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })}
-                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-purple-700 hover:bg-purple-50 transition-colors"
+                          title={t('evaluation.run_probe') || 'Run Probe'}
                         >
-                          <Sparkles className="h-3.5 w-3.5" /> {t('evaluation.run_probe') || 'Run Probe'}
+                          <Sparkles className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>
