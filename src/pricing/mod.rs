@@ -9,8 +9,9 @@ pub struct UnitPrice {
 }
 
 impl UnitPrice {
+    /// True when the endpoint has valid unit pricing (including $0 free models).
     pub fn is_priced(&self) -> bool {
-        self.input_per_1m > 0.0 || self.output_per_1m > 0.0
+        self.input_per_1m >= 0.0 && self.output_per_1m >= 0.0
     }
 
     /// Rough expected cost for estimated token counts.
