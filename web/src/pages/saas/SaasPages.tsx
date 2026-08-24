@@ -907,6 +907,15 @@ function formatShortModel(rawModel: string): string {
   return parts[parts.length - 1] || rawModel
 }
 
+function formatPriceInput(val?: number | string | null): string {
+  if (val === undefined || val === null || val === '') return ''
+  const num = typeof val === 'number' ? val : Number(val)
+  if (isNaN(num)) return String(val)
+  if (num === 0) return '0'
+  // Format to at most 4 decimal places without trailing zeros (e.g. 3.59999999996 -> 3.6, 0.0014 -> 0.0014)
+  return parseFloat(num.toFixed(4)).toString()
+}
+
 export function EvaluationPage() {
   const { t } = useI18n()
   const [endpoints, setEndpoints] = useState<(ServiceEndpoint & { serviceId: string; serviceName: string })[]>([])
@@ -1768,8 +1777,8 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
   const [baseUrl, setBaseUrl] = useState(endpoint.base_url)
   const [model, setModel] = useState(endpoint.model)
   const [apiKey, setApiKey] = useState('')
-  const [inputPrice, setInputPrice] = useState(endpoint.input_price_per_1m ? String(endpoint.input_price_per_1m) : '')
-  const [outputPrice, setOutputPrice] = useState(endpoint.output_price_per_1m ? String(endpoint.output_price_per_1m) : '')
+  const [inputPrice, setInputPrice] = useState(formatPriceInput(endpoint.input_price_per_1m))
+  const [outputPrice, setOutputPrice] = useState(formatPriceInput(endpoint.output_price_per_1m))
   const [capabilityScore, setCapabilityScore] = useState(String(endpoint.capability_score ?? '0.70'))
   const [contextLength, setContextLength] = useState(endpoint.context_length ? String(endpoint.context_length) : '')
   const [advanced, setAdvanced] = useState(false)
@@ -2065,8 +2074,8 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
         model: m.id,
         model_name: m.name,
         description: m.description || '',
-        input_price_per_1m: m.prompt_price_per_1m,
-        output_price_per_1m: m.completion_price_per_1m,
+        input_price_per_1m: formatPriceInput(m.prompt_price_per_1m) ? Number(formatPriceInput(m.prompt_price_per_1m)) : 0,
+        output_price_per_1m: formatPriceInput(m.completion_price_per_1m) ? Number(formatPriceInput(m.completion_price_per_1m)) : 0,
         cache_read_price_per_1m: 0,
         cache_write_price_per_1m: 0,
         supports_tools: true,
@@ -2236,8 +2245,8 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     patch({
       upstream_model_id: focus?.model || '',
       base_url: useExisting ? (selectedAccount?.base_url || focus?.base_url || '') : (focus?.base_url || ''),
-      input_price_per_1m: focus ? String(focus.input_price_per_1m) : '',
-      output_price_per_1m: focus ? String(focus.output_price_per_1m) : '',
+      input_price_per_1m: focus ? formatPriceInput(focus.input_price_per_1m) : '',
+      output_price_per_1m: focus ? formatPriceInput(focus.output_price_per_1m) : '',
       capability_score: focus ? inferDefaultCapability(focus) : '0.70',
       context_length: focus?.context_length ? String(focus.context_length) : '',
     })
@@ -2653,8 +2662,8 @@ function LegacyNewServicePage() {
       api_key: '',
       upstream_model_id: firstModel?.model || '',
       base_url: firstModel?.base_url || '',
-      input_price_per_1m: firstModel ? String(firstModel.input_price_per_1m) : '',
-      output_price_per_1m: firstModel ? String(firstModel.output_price_per_1m) : '',
+      input_price_per_1m: firstModel ? formatPriceInput(firstModel.input_price_per_1m) : '',
+      output_price_per_1m: firstModel ? formatPriceInput(firstModel.output_price_per_1m) : '',
       capability_score: firstModel ? inferDefaultCapability(firstModel) : '0.70',
       context_length: firstModel?.context_length ? String(firstModel.context_length) : '',
     })
@@ -2664,7 +2673,7 @@ function LegacyNewServicePage() {
   function selectModel(index: number, option: { id: string | number; name: string }) {
     const model = catalog.find((item) => item.provider_id === endpoints[index].provider_type && item.model === String(option.id))
     if (!model) return
-    updateEndpoint(index, { upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: String(model.input_price_per_1m), output_price_per_1m: String(model.output_price_per_1m), capability_score: inferDefaultCapability(model), context_length: model.context_length ? String(model.context_length) : '' })
+    updateEndpoint(index, { upstream_model_id: model.model, base_url: model.base_url, input_price_per_1m: formatPriceInput(model.input_price_per_1m), output_price_per_1m: formatPriceInput(model.output_price_per_1m), capability_score: inferDefaultCapability(model), context_length: model.context_length ? String(model.context_length) : '' })
     if (hasCatalogDetails(model)) setAdvanced((items) => items.includes(index) ? items : [...items, index])
   }
 

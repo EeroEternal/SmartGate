@@ -38,7 +38,11 @@ struct OpenRouterTopProvider {
 /// Helper to parse pricing string (which is price per 1 token) into price per 1M tokens.
 fn parse_price_per_1m(s: Option<&String>) -> f64 {
     match s {
-        Some(val) => val.parse::<f64>().unwrap_or(0.0) * 1_000_000.0,
+        Some(val) => {
+            let raw = val.parse::<f64>().unwrap_or(0.0) * 1_000_000.0;
+            // Round to 4 decimal places to eliminate floating point precision artifacts (e.g. 3.5999999999999996)
+            (raw * 10_000.0).round() / 10_000.0
+        }
         None => 0.0,
     }
 }
