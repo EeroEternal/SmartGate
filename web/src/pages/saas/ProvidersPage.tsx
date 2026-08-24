@@ -123,67 +123,67 @@ export default function ProvidersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {providers.map((p) => {
+            const count = p.endpoint_count || 0
+            const isHealthy = p.status === 'healthy' || p.status === 'active' || p.status === 'ready'
             return (
               <div
                 key={p.id}
-                className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm hover:border-zinc-300 transition-colors"
+                className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:border-zinc-300 transition-all"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-zinc-900">{p.name}</h3>
-                        <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 uppercase">
-                          {p.protocol}
-                        </span>
-                      </div>
-                      <div className="mt-1 font-mono text-xs text-zinc-400 break-all">
-                        {p.base_url}
-                      </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-zinc-950 text-base truncate" title={p.name}>
+                        {p.name}
+                      </h3>
                     </div>
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${
+                        isHealthy
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-zinc-100 text-zinc-600 border border-zinc-200'
+                      }`}
+                    >
                       {p.status}
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-zinc-50 p-2.5 border border-zinc-100">
-                      <div className="text-zinc-400 text-[11px]">{t('providers.bound_endpoints')}</div>
-                      <div className="mt-0.5 text-lg font-bold text-zinc-900 font-mono">
-                        {p.endpoint_count}
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-zinc-50 p-2.5 border border-zinc-100">
-                      <div className="text-zinc-400 text-[11px]">{t('providers.provider_type')}</div>
-                      <div className="mt-0.5 text-xs font-semibold text-zinc-800 capitalize truncate">
-                        {p.provider_type}
-                      </div>
-                    </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 border border-purple-200/70 capitalize">
+                      {p.provider_type}
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 uppercase">
+                      {p.protocol}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      <span className={`h-1.5 w-1.5 rounded-full ${count > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      {count === 1
+                        ? (t('services.providers_connected_single') || '1 endpoint connected')
+                        : t('services.providers_connected', { count }) || `${count} endpoints connected`}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 text-[11px] text-zinc-400">
+                    {new Date(p.created_at).toLocaleDateString()}
                   </div>
                 </div>
 
-                <div className="mt-5 pt-3.5 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-zinc-400">
-                    {new Date(p.created_at).toLocaleDateString()}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setEditingProvider(p)}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
-                      title={t('common.edit')}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(p)}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                      title={t('common.delete')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                <div className="mt-6 flex items-center justify-between border-t border-zinc-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProvider(p)}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
+                  >
+                    {t('common.edit') || 'Edit'} →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p)}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    title={t('common.delete') || 'Delete'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )
@@ -333,7 +333,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="OpenRouter Main"
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
             />
           </div>
           <div>
@@ -358,7 +358,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder="https://openrouter.ai/api/v1"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
+            className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-mono focus:border-zinc-900 focus:outline-none"
           />
         </div>
 
@@ -384,7 +384,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               setTestStatus('idle')
             }}
             placeholder="sk-or-v1-..."
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
           />
           {testStatus === 'passed' && (
             <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600">
@@ -479,7 +479,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
             />
           </div>
           <div>
@@ -503,7 +503,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
             type="text"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-zinc-900 focus:outline-none"
+            className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-mono focus:border-zinc-900 focus:outline-none"
           />
         </div>
 
@@ -516,7 +516,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="••••••••••••••••"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
           />
         </div>
 
