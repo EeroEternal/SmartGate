@@ -450,33 +450,21 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
     {
       id: 'cost_aware',
       title: t('services.strategy_cost_title') || 'Cost-Efficient Pareto',
-      desc: t('services.strategy_cost_desc') || 'Automatically downshifts low-complexity queries to high-throughput Flash models, reserving flagship Pro models for complex tasks.',
-      badge: 'Auto Downshift',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       icon: TrendingDown,
     },
     {
       id: 'capability_aware',
       title: t('services.strategy_dna_title') || '5D Capability-Weighted',
-      desc: t('services.strategy_dna_desc') || 'Dynamically scores endpoints based on calibrated 5D capability benchmarks tailored to your workload intent.',
-      badge: '5D Model DNA',
-      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
       icon: Sparkles,
     },
     {
       id: 'load_aware',
       title: t('services.strategy_load_title') || 'Load-Balanced & Low-Latency',
-      desc: t('services.strategy_load_desc') || 'Sends traffic toward providers with lowest active load and fastest response latency.',
-      badge: 'Low Latency',
-      badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
       icon: Activity,
     },
     {
       id: 'round_robin',
       title: t('services.strategy_round_robin_title') || 'Even Distribution',
-      desc: t('services.strategy_round_robin_desc') || 'Distributes requests sequentially across all healthy connected providers with automatic fallback.',
-      badge: 'Equal Weight',
-      badgeClass: 'bg-zinc-100 text-zinc-700 border-zinc-200',
       icon: CheckCheck,
     },
   ]
@@ -493,21 +481,18 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
               type="button"
               onClick={() => onSelect(card.id)}
               aria-pressed={isSelected}
-              className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left transition-all ${
+              className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-3.5 text-left transition-all ${
                 isSelected
                   ? 'border-zinc-950 bg-zinc-50/90 ring-1 ring-zinc-950 shadow-sm'
                   : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/40'
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
                   <Icon className="h-4 w-4" />
                 </div>
-                <span className="min-w-0 text-sm font-medium leading-snug text-zinc-950">{card.title}</span>
+                <span className="min-w-0 text-sm font-semibold leading-snug text-zinc-950">{card.title}</span>
               </div>
-              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${card.badgeClass}`}>
-                {card.badge}
-              </span>
             </button>
           )
         })}
@@ -708,7 +693,6 @@ export function NewServicePage() {
       <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title') || 'Create a model service'}</h1>
-          <p className="mt-1 text-sm text-zinc-500">Configure your model service entry point and visual routing strategy.</p>
         </div>
 
         <Field label={t('services.name_label') || 'Model service name'} value={name} onChange={setName} placeholder="fusion" />
