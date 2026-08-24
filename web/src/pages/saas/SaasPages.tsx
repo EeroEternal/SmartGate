@@ -754,6 +754,9 @@ export function ServiceDetailsPage() {
           <Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← {t('nav.model_services') || 'Model services'}</Link>
           <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate text-xl font-semibold tracking-tight">{service.name}</h1>
+            <button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('services.edit_name') || 'Edit name'}>
+              <Pencil className="h-4 w-4" />
+            </button>
             <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy') || 'Copy model service name'}>
               <Copy className="h-4 w-4" />
             </button>
@@ -1450,6 +1453,7 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
 
 function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetails; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
+  const [serviceName, setServiceName] = useState(service.name)
   const [nextStrategy, setNextStrategy] = useState(service.strategy)
   const [preset, setPreset] = useState('coding')
   const [judgeEnabled, setJudgeEnabled] = useState(Boolean(service.judge_enabled))
@@ -1485,6 +1489,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
       await saasFetch(`/api/saas/model-services/${service.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
+          name: serviceName.trim() ? serviceName.trim() : undefined,
           strategy: nextStrategy,
           judge_enabled: nextStrategy === 'capability_aware' ? judgeEnabled : false,
           judge_endpoint_id: nextStrategy === 'capability_aware' && judgeEnabled ? (selectedJudge.id || undefined) : undefined,
@@ -1507,6 +1512,18 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.service_name') || 'Model Service Name'}</label>
+          <input
+            required
+            type="text"
+            value={serviceName}
+            onChange={(e) => setServiceName(e.target.value)}
+            placeholder="fast-chat"
+            className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
+          />
         </div>
 
         <StrategyMatrixCardSelector selectedStrategy={nextStrategy} onSelect={setNextStrategy} />

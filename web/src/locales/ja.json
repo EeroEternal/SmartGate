@@ -118,6 +118,8 @@
     "add_provider": "プロバイダーを追加",
     "add_model": "モデルを追加",
     "add_n_models": "{count} 個のモデルを追加",
+    "edit_name": "名前を変更",
+    "edit_name_title": "モデルサービス名を変更",
     "edit_provider": "プロバイダーを編集",
     "edit_model": "モデルを編集",
     "setup_needed": "設定が必要",

@@ -66,7 +66,10 @@ pub(super) struct ModelServiceRequest {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct UpdateModelServiceRequest {
-    strategy: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    strategy: Option<String>,
     #[serde(default)]
     judge_enabled: Option<bool>,
     #[serde(default)]
@@ -611,9 +614,8 @@ pub(super) async fn update_model_service(
     Path(model_id): Path<String>,
     Json(input): Json<UpdateModelServiceRequest>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let strategy = saas_strategy(&input.strategy)?;
-    let pool: Option<(String,)> = sqlx::query_as(
-        "SELECT mp.id FROM virtual_models vm
+    let pool: Option<(String, String)> = sqlx::query_as(
+        "SELECT mp.id, mp.strategy FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          WHERE vm.id = $1 AND mp.org_id = $2 AND EXISTS (
              SELECT 1 FROM project_model_grants g
@@ -626,15 +628,53 @@ pub(super) async fn update_model_service(
     .fetch_optional(&state.db)
     .await
     .map_err(db_error)?;
-    let Some((pool_id,)) = pool else {
+    let Some((pool_id, existing_strategy)) = pool else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse::error("Model service not found")),
         ));
     };
+
+    let strategy = match input.strategy.as_deref() {
+        Some(s) if !s.trim().is_empty() => saas_strategy(s)?,
+        _ => existing_strategy,
+    };
+
     let judge_enabled = input.judge_enabled.map(|v| if v { 1 } else { 0 });
     let shadow_enabled = input.shadow_enabled.map(|v| if v { 1 } else { 0 });
     let shadow_sample_rate = input.shadow_sample_rate.map(|v| v.clamp(0.0, 1.0));
+
+    let mut tx = state.db.begin().await.map_err(db_error)?;
+
+    if let Some(ref raw_name) = input.name {
+        let trimmed_name = raw_name.trim();
+        if trimmed_name.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Model service name cannot be empty")),
+            ));
+        }
+        if trimmed_name.len() > 120 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("Model service name must be 120 characters or fewer")),
+            ));
+        }
+        sqlx::query("UPDATE virtual_models SET name = $1 WHERE id = $2")
+            .bind(trimmed_name)
+            .bind(&model_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| conflict_error("Model name is already in use"))?;
+
+        sqlx::query("UPDATE model_pools SET name = $1 WHERE id = $2")
+            .bind(trimmed_name)
+            .bind(&pool_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+    }
+
     sqlx::query(
         "UPDATE model_pools SET strategy = $1,
             judge_enabled = COALESCE($2, judge_enabled),
@@ -653,12 +693,16 @@ pub(super) async fn update_model_service(
     .bind(shadow_enabled)
     .bind(input.shadow_virtual_model_id.as_deref().filter(|s| !s.trim().is_empty()))
     .bind(shadow_sample_rate)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(db_error)?;
+
+    tx.commit().await.map_err(db_error)?;
     sync(&state).await;
+
     Ok(Json(ApiResponse::success(json!({
         "id": model_id,
+        "name": input.name.as_deref().map(str::trim),
         "strategy": strategy,
         "shadow_enabled": input.shadow_enabled.unwrap_or(false),
         "shadow_sample_rate": input.shadow_sample_rate.unwrap_or(0.0),

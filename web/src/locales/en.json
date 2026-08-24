@@ -118,6 +118,8 @@
     "add_provider": "Add provider",
     "add_model": "Add model",
     "add_n_models": "Add {count} models",
+    "edit_name": "Edit name",
+    "edit_name_title": "Rename Model Service",
     "edit_provider": "Edit provider",
     "edit_model": "Edit model",
     "setup_needed": "Setup needed",

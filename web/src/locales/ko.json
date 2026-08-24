@@ -118,6 +118,8 @@
     "add_provider": "제공자 추가",
     "add_model": "모델 추가",
     "add_n_models": "모델 {count}개 추가",
+    "edit_name": "이름 수정",
+    "edit_name_title": "모델 서비스 이름 변경",
     "edit_provider": "제공자 편집",
     "edit_model": "모델 편집",
     "setup_needed": "설정 필요",

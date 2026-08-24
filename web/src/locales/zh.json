@@ -118,6 +118,8 @@
     "add_provider": "添加 Provider",
     "add_model": "添加模型",
     "add_n_models": "添加 {count} 个模型",
+    "edit_name": "修改名称",
+    "edit_name_title": "修改模型服务名称",
     "edit_provider": "编辑 Provider",
     "edit_model": "编辑模型",
     "setup_needed": "待配置",
