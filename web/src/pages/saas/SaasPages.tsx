@@ -2604,6 +2604,54 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   )}
                 </div>
 
+                {/* Smart preset bundles for rapid tier-setup */}
+                {models.length > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-zinc-500 mr-1 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-purple-600" />
+                      {t('services.smart_bundles') || 'Smart Bundles'}:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Pick 1 free / cheap small, 1 solid mid, 1 top reasoning
+                        const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
+                        const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
+                        const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
+                        const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
+                        setSelectedModelIds(Array.from(new Set(targetIds)))
+                      }}
+                      className="rounded-md border border-purple-200 bg-purple-50/70 px-2 py-1 text-[11px] font-medium text-purple-800 hover:bg-purple-100 transition-colors"
+                    >
+                      ⚡ {t('services.bundle_balanced') || 'Balanced Multi-Tier'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
+                        if (freeModels.length > 0) {
+                          setSelectedModelIds(freeModels)
+                        }
+                      }}
+                      className="rounded-md border border-emerald-200 bg-emerald-50/70 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 transition-colors"
+                    >
+                      🎁 {t('services.bundle_free') || '100% Free Tier'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
+                        if (reasoningModels.length > 0) {
+                          setSelectedModelIds(reasoningModels)
+                        }
+                      }}
+                      className="rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                    >
+                      🧠 {t('services.bundle_reasoning') || 'Flagship Reasoning & Coding'}
+                    </button>
+                  </div>
+                )}
+
                 <div className="relative mb-2">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
                   <input
