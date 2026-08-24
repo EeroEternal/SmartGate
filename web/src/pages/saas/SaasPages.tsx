@@ -2754,7 +2754,6 @@ export function KeysPage() {
   const { dialog, showConfirm } = useDialog()
   const [raw, setRaw] = useState('')
   const [createdServiceNames, setCreatedServiceNames] = useState<string[]>([])
-  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<Key | null>(null)
@@ -2795,11 +2794,6 @@ export function KeysPage() {
     if (!await showConfirm(t('keys.delete_confirm_msg') || 'This cannot be undone.', t('keys.delete_confirm_title') || 'Delete this API key permanently?')) return
     try { await saasFetch(`/api/saas/api-keys/${id}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
-  function copyKeyText(text: string, id: string) {
-    navigator.clipboard.writeText(text)
-    setCopiedKeyId(id)
-    setTimeout(() => setCopiedKeyId(null), 2000)
-  }
 
   return (
     <Page
@@ -2828,7 +2822,6 @@ export function KeysPage() {
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {keys.map((key) => {
             const masked = formatMaskedKey(key.prefix)
-            const isCopied = copiedKeyId === key.id
             return (
               <div
                 key={key.id}
@@ -2852,16 +2845,9 @@ export function KeysPage() {
                     </span>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2 border border-zinc-100">
+                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 border border-zinc-100">
+                    <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">{t('keys.key_prefix') || 'Key'}:</span>
                     <code className="font-mono text-xs text-zinc-700 truncate">{masked}</code>
-                    <button
-                      type="button"
-                      onClick={() => copyKeyText(key.prefix, key.id)}
-                      className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900 transition-colors"
-                      title={t('common.copy') || 'Copy'}
-                    >
-                      {isCopied ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    </button>
                   </div>
 
                   <div className="mt-3">
