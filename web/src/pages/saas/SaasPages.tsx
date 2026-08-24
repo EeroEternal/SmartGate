@@ -269,7 +269,7 @@ export function ServicesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {services.map((service) => {
-            const routing = routingInfo(service.strategy)
+            const routing = routingInfo(service.strategy, t)
             const count = service.endpoint_count || 0
             const isDraft = service.health_status === 'draft' || count === 0
             return (
@@ -374,22 +374,35 @@ function inferDefaultCapability(model?: CatalogOffering, modelId?: string): stri
   return '0.70'
 }
 
-const STRATEGIES = [
-  { id: 'cost_aware', name: 'Cost-first routing' },
-  { id: 'capability_aware', name: 'Capability-first routing' },
-  { id: 'load_aware', name: 'Load-balanced routing' },
-  { id: 'round_robin', name: 'Even distribution' },
-]
-
-const ROUTING_INFO: Record<string, { label: string; description: string }> = {
-  cost_aware: { label: 'Cost-first routing', description: 'Prefers the lower-cost provider when it can handle the request.' },
-  capability_aware: { label: 'Capability-first routing', description: 'Prefers the provider with the strongest fit for the request.' },
-  load_aware: { label: 'Load-balanced routing', description: 'Sends traffic toward providers with more available capacity.' },
-  round_robin: { label: 'Even distribution', description: 'Distributes requests evenly across connected providers.' },
+function getStrategyOptions(t: (key: string, params?: Record<string, string | number>) => string) {
+  return [
+    { id: 'cost_aware', name: t('services.routing_cost') || 'Cost-first routing' },
+    { id: 'capability_aware', name: t('services.routing_capability') || 'Capability-first routing' },
+    { id: 'load_aware', name: t('services.routing_load') || 'Load-balanced routing' },
+    { id: 'round_robin', name: t('services.routing_round_robin') || 'Even distribution' },
+  ]
 }
 
-function routingInfo(strategy: string) {
-  return ROUTING_INFO[strategy] || { label: strategy.replaceAll('_', ' '), description: 'Routes requests across your connected providers.' }
+function routingInfo(strategy: string, t: (key: string, params?: Record<string, string | number>) => string) {
+  const map: Record<string, { label: string; description: string }> = {
+    cost_aware: {
+      label: t('services.routing_cost') || 'Cost-first routing',
+      description: t('services.strategy_cost_desc') || 'Prefers the lower-cost provider when it can handle the request.',
+    },
+    capability_aware: {
+      label: t('services.routing_capability') || 'Capability-first routing',
+      description: t('services.strategy_dna_desc') || 'Prefers the provider with the strongest fit for the request.',
+    },
+    load_aware: {
+      label: t('services.routing_load') || 'Load-balanced routing',
+      description: t('services.strategy_load_desc') || 'Sends traffic toward providers with more available capacity.',
+    },
+    round_robin: {
+      label: t('services.routing_round_robin') || 'Even distribution',
+      description: t('services.strategy_round_robin_desc') || 'Distributes requests evenly across connected providers.',
+    },
+  }
+  return map[strategy] || { label: strategy.replaceAll('_', ' '), description: 'Routes requests across your connected providers.' }
 }
 
 function serviceStatusLabel(status: string) {
@@ -707,7 +720,7 @@ export function ServiceDetailsPage() {
     }
   }
   const providers = Array.from(new Map(catalog.map((item) => [item.provider_id, { id: item.provider_id, name: item.provider_name, modelCount: new Set(catalog.filter((model) => model.provider_id === item.provider_id).map((model) => model.model)).size }])).values())
-  const routing = service ? routingInfo(service.strategy) : null
+  const routing = service ? routingInfo(service.strategy, t) : null
   return <Page>
     {dialog}
     {error && <ErrorMessage text={error} />}
@@ -2597,6 +2610,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 }
 
 function LegacyNewServicePage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -2698,7 +2712,7 @@ function LegacyNewServicePage() {
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completedCount ? 100 : 0}%` }} /></div>
         </div>
         <Field label="Model service name" value={name} onChange={setName} placeholder="Balanced AI routing" />
-        <Select label="Routing strategy" options={STRATEGIES} selected={STRATEGIES.find((item) => item.id === strategy) || STRATEGIES[0]} onChange={(option) => setStrategy(String(option.id))} />
+        <Select label="Routing strategy" options={getStrategyOptions(t)} selected={getStrategyOptions(t).find((item) => item.id === strategy) || getStrategyOptions(t)[0]} onChange={(option) => setStrategy(String(option.id))} />
         <div className="flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>All upstreams share one public model. You can use different providers and model names; requests will still be sent through the same Virtual Model.</span></div>
         {catalogLoading && <p className="text-xs text-zinc-500">Loading the provider and model catalog…</p>}
         {catalogError && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{catalogError}</p>}
