@@ -1781,7 +1781,6 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
   const [outputPrice, setOutputPrice] = useState(formatPriceInput(endpoint.output_price_per_1m))
   const [capabilityScore, setCapabilityScore] = useState(String(endpoint.capability_score ?? '0.70'))
   const [contextLength, setContextLength] = useState(endpoint.context_length ? String(endpoint.context_length) : '')
-  const [advanced, setAdvanced] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle')
@@ -1847,7 +1846,86 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
       onSaved()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{t('services.edit_provider') || 'Edit provider'}</h2></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Field label={t('services.provider_name') || 'Provider name'} value={providerName} onChange={setProviderName} placeholder="DeepSeek" /><label className="block text-sm font-medium text-zinc-700">{t('services.provider_id') || 'Provider ID'}<input readOnly value={endpoint.provider_id} className="mt-2 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-zinc-500 outline-none" /></label></div><div className="grid gap-5 sm:grid-cols-2"><Field label={t('services.model_label') || 'Model'} value={model} onChange={(val) => { setModel(val); setTestStatus('idle') }} placeholder="deepseek-chat" /><Select label={t('services.protocol_label') || 'Protocol'} options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => { setProtocol(String(option.id)); setTestStatus('idle') }} /></div><Field label={t('services.base_url') || 'Provider API base URL'} value={baseUrl} onChange={(val) => { setBaseUrl(val); setTestStatus('idle') }} placeholder="https://api.example.com/v1" /><div><div className="flex items-center justify-between"><label className="block text-sm font-medium">{t('services.api_key_new') || 'New Provider API key (optional)'}</label><button type="button" onClick={runTest} disabled={testStatus === 'testing' || !baseUrl.trim() || !model.trim()} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed" title="Verify if API key and upstream endpoint are reachable"><Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} /><span>{testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test connection')}</span></button></div><div className="relative mt-2"><Field required={false} label="" value={apiKey} onChange={(val) => { setApiKey(val); setTestStatus('idle') }} placeholder={t('services.api_key_placeholder') || 'Leave blank to keep the current key'} type="password" /></div>{testStatus === 'passed' && <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5 shrink-0" /><span>{testMsg || (t('services.test_passed') || 'Connection verified successfully')}</span></div>}{testStatus === 'failed' && <div className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /><span className="break-all">{testMsg || (t('services.test_failed') || 'Connection failed')}</span></div>}</div><button type="button" onClick={() => setAdvanced((value) => !value)} className="text-sm text-zinc-700 hover:text-zinc-950">{advanced ? (t('services.hide_advanced') || 'Hide advanced settings') : (t('services.advanced_settings') || 'Price and capability settings')}</button>{advanced && <div className="grid gap-5 rounded-lg bg-zinc-50 p-4 sm:grid-cols-3 text-zinc-900"><Field required={false} label={t('services.input_price') || 'Input $/1M'} value={inputPrice} onChange={setInputPrice} placeholder="0.14" /><Field required={false} label={t('services.output_price') || 'Output $/1M'} value={outputPrice} onChange={setOutputPrice} placeholder="0.28" /><Field required={false} label={t('services.capability_range') || 'Capability 0–1'} value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" /><Field required={false} label={t('services.context_length') || 'Context length'} value={contextLength} onChange={setContextLength} placeholder="128000" /></div>}</div>{error && <ErrorMessage text={error} />}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel') || 'Cancel'}</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}</button></div></form></div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+      <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">{t('services.edit_model') || 'Edit model'}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('services.provider_name') || 'Provider name'} value={providerName} onChange={setProviderName} placeholder="DeepSeek" />
+            <label className="block text-xs font-medium text-zinc-700">
+              {t('services.provider_id') || 'Provider ID'}
+              <input readOnly value={endpoint.provider_id} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500 outline-none" />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('services.model_label') || 'Model'} value={model} onChange={(val) => { setModel(val); setTestStatus('idle') }} placeholder="deepseek-chat" />
+            <Select label={t('services.protocol_label') || 'Protocol'} options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => { setProtocol(String(option.id)); setTestStatus('idle') }} />
+          </div>
+
+          <Field label={t('services.base_url') || 'Provider API base URL'} value={baseUrl} onChange={(val) => { setBaseUrl(val); setTestStatus('idle') }} placeholder="https://api.example.com/v1" />
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-zinc-700">{t('services.api_key_new') || 'New Provider API key (optional)'}</label>
+              <button type="button" onClick={runTest} disabled={testStatus === 'testing' || !baseUrl.trim() || !model.trim()} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed" title="Verify if API key and upstream endpoint are reachable">
+                <Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} />
+                <span>{testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test connection')}</span>
+              </button>
+            </div>
+            <div className="relative mt-1">
+              <Field required={false} label="" value={apiKey} onChange={(val) => { setApiKey(val); setTestStatus('idle') }} placeholder={t('services.api_key_placeholder') || 'Leave blank to keep the current key'} type="password" />
+            </div>
+            {testStatus === 'passed' && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>{testMsg || (t('services.test_passed') || 'Connection verified successfully')}</span>
+              </div>
+            )}
+            {testStatus === 'failed' && (
+              <div className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span className="break-all">{testMsg || (t('services.test_failed') || 'Connection failed')}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Compact pricing and capability parameters directly expanded */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+              {t('services.advanced_settings') || 'Price & Capability Settings'}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-4 text-zinc-900">
+              <Field size="sm" required={false} label={t('services.input_price') || 'Input $/1M'} value={inputPrice} onChange={setInputPrice} placeholder="0.14" />
+              <Field size="sm" required={false} label={t('services.output_price') || 'Output $/1M'} value={outputPrice} onChange={setOutputPrice} placeholder="0.28" />
+              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability (0-1)'} value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" />
+              <Field size="sm" required={false} label={t('services.context_length') || 'Context length'} value={contextLength} onChange={setContextLength} placeholder="128000" />
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
+
+        <div className="mt-6 flex justify-end gap-3 border-t border-zinc-100 pt-3">
+          <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
+            {t('common.cancel') || 'Cancel'}
+          </button>
+          <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
+            {busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 function ModelProbeModal({
@@ -2589,18 +2667,18 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             </div>
           )}
 
-          <button type="button" onClick={() => setAdvanced((value) => !value)} className="text-[11px] font-medium text-zinc-500 hover:text-zinc-900 transition-colors">
-            {advanced ? (t('services.hide_advanced') || 'Hide advanced settings') : (t('services.advanced_settings') || 'Price and capability settings')}
-          </button>
-
-          {advanced && (
-            <div className="grid gap-2.5 rounded-lg bg-zinc-50 p-2.5 sm:grid-cols-4 text-zinc-900 border border-zinc-200 text-xs">
+          {/* Compact pricing and capability parameters directly expanded */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+              {t('services.advanced_settings') || 'Price & Capability Settings'}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-4 text-zinc-900">
               <Field size="sm" required={false} label={t('services.input_price') || 'Input $/1M'} value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" />
               <Field size="sm" required={false} label={t('services.output_price') || 'Output $/1M'} value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" />
-              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability 0–1'} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.70" />
+              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability (0-1)'} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.70" />
               <Field size="sm" required={false} label={t('services.context_length') || 'Context length'} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
             </div>
-          )}
+          </div>
         </div>
 
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
