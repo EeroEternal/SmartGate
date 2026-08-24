@@ -523,41 +523,55 @@ interface WorkloadPresetSelectorProps {
 
 function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPresetSelectorProps) {
   const { t } = useI18n()
+  const [showWeightsModal, setShowWeightsModal] = useState(false)
 
   const presets = [
     {
       id: 'coding',
-      name: t('services.preset_coding') || 'Coding Agent (90% Code + 10% Tools)',
+      name: t('services.preset_coding') || 'Coding & Software Dev',
       icon: '💻',
-      desc: 'SWE benchmarks, syntax synthesis, patch tools',
+      weights: { code: 90, math: 10, tools: 10, lang: 0, ctx: 0 },
     },
     {
       id: 'reasoning',
-      name: t('services.preset_reasoning') || 'Reasoning & Math (85% Reasoning + 15% Code)',
+      name: t('services.preset_reasoning') || 'Deep Reasoning & Math',
       icon: '🧠',
-      desc: 'Multi-step logic, math proofs, deep chain-of-thought',
+      weights: { code: 15, math: 85, tools: 0, lang: 0, ctx: 10 },
     },
     {
       id: 'tools',
-      name: t('services.preset_tools') || 'Autonomous Agent (60% Tools + 40% Reasoning)',
+      name: t('services.preset_tools') || 'Agent & Tool Execution',
       icon: '🛠️',
-      desc: 'Schema adherence, tool execution, multi-agent workflow',
+      weights: { code: 10, math: 30, tools: 60, lang: 0, ctx: 10 },
     },
     {
       id: 'general',
-      name: t('services.preset_general') || 'General Assistant (70% NLP + 30% Context)',
+      name: t('services.preset_general') || 'General Chat & QA',
       icon: '🌐',
-      desc: 'Balanced conversational NLP and context retention',
+      weights: { code: 0, math: 10, tools: 10, lang: 70, ctx: 30 },
     },
   ]
 
+  const currentPreset = presets.find((p) => p.id === selectedPreset) || presets[0]
+
   return (
-    <div className="rounded-xl border border-purple-200/80 bg-purple-50/40 p-3">
-      <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
-        <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-        {t('services.workload_presets') || 'Workload Intent Presets'}
-      </label>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="rounded-xl border border-purple-200/80 bg-purple-50/40 p-3.5">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+          {t('services.workload_presets') || 'Workload Scenario'}
+        </label>
+        <button
+          type="button"
+          onClick={() => setShowWeightsModal(true)}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 hover:text-purple-900 transition-colors"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+          <span>{t('services.workload_details_btn') || 'Learn More / Weights'}</span>
+        </button>
+      </div>
+
+      <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {presets.map((preset) => {
           const isSelected = selectedPreset === preset.id
           return (
@@ -565,18 +579,106 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               key={preset.id}
               type="button"
               onClick={() => onSelectPreset(preset.id)}
-              className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all ${
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-all ${
                 isSelected
                   ? 'border-purple-600 bg-white ring-1 ring-purple-600 shadow-xs'
                   : 'border-purple-200/60 bg-white/70 hover:border-purple-300 hover:bg-white'
               }`}
             >
-              <span className="text-base leading-none">{preset.icon}</span>
-              <span className={`min-w-0 text-xs leading-snug ${isSelected ? 'font-semibold text-zinc-900' : 'text-zinc-700'}`}>{preset.name}</span>
+              <span className="text-lg leading-none">{preset.icon}</span>
+              <span className={`min-w-0 text-xs truncate ${isSelected ? 'font-semibold text-zinc-950' : 'font-medium text-zinc-700'}`}>
+                {preset.name}
+              </span>
             </button>
           )
         })}
       </div>
+
+      {showWeightsModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-zinc-950 flex items-center gap-2">
+                  <span>{currentPreset.icon}</span>
+                  <span>{t('services.workload_details_title') || 'Workload Scenario Weights'}</span>
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {t('services.workload_details_desc') || 'The SmartGate 5D engine weighs candidate endpoints across five core capability dimensions based on your selected workload intent.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWeightsModal(false)}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+              <div className="text-xs font-semibold text-zinc-900 mb-2">
+                {currentPreset.name}
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-zinc-600">
+                  <span>{t('radar.code') || 'Coding & Syntax Logic'}</span>
+                  <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.code}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
+                  <div className="h-full bg-purple-600 rounded-full" style={{ width: `${currentPreset.weights.code}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-zinc-600">
+                  <span>{t('radar.math') || 'Reasoning & Math Proofs'}</span>
+                  <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.math}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full" style={{ width: `${currentPreset.weights.math}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-zinc-600">
+                  <span>{t('radar.tools') || 'Agent & Tool Calling'}</span>
+                  <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.tools}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
+                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${currentPreset.weights.tools}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-zinc-600">
+                  <span>{t('radar.lang') || 'Multilingual NLP'}</span>
+                  <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.lang}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${currentPreset.weights.lang}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-zinc-600">
+                  <span>{t('radar.context') || 'Context Retention'}</span>
+                  <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.ctx}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
+                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${currentPreset.weights.ctx}%` }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowWeightsModal(false)}
+                className="rounded-lg bg-zinc-950 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 transition-colors"
+              >
+                {t('common.close') || 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
