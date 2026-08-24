@@ -134,3 +134,9 @@ Required dimensions:
 4. **Observability & Analytics**: Prompt cache savings calculation, usage dashboard, and query inspection.
 5. **Admin UI & SaaS Portal**: Multi-tenant console, provider setup, endpoint testing, and real-time metric visualization.
 6. **Hardening**: Redis session warming, concurrency throttling, and automated failover.
+
+## 6. UI & Visual Design Principles
+- **Text & Label Completeness**: Card titles, badges, and labels must display full recognizable identifiers. Never let long prefixes or narrow containers truncate critical model names.
+- **Progressive Disclosure & Hierarchy**: For composite identifiers (e.g. `provider/model-name`), extract and highlight the core model name, while placing provider metadata into compact badges or secondary slots with full tooltip fallbacks.
+- **Consistent Control Sizing**: Maintain uniform sizing and alignment across inputs, custom dropdowns (`Select.tsx`), and modal action triggers.
+- **Data Display Precision**: Format all float currency values and scores up to 2 decimal places (`.toFixed(2)`).
