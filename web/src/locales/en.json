@@ -237,6 +237,11 @@
     "radar_desc": "Visualizing capability footprints and structural strengths across connected LLMs.",
     "select_all": "Select All",
     "clear_all": "Clear All",
+    "search_models": "Search models or providers…",
+    "max_compare_hint": "Comparing {count}/4 models",
+    "filter_all": "All",
+    "filter_pro": "Pro Tier",
+    "filter_flash": "Flash Tier",
     "benchmarks_title": "Model Benchmark Cards",
     "matrix_title": "Multi-Dimensional Model Matrix & Leaderboard",
     "matrix_subtitle": "Full benchmark breakdown and cost-efficiency comparison.",
@@ -250,6 +255,7 @@
     "col_context": "Context",
     "col_price": "Price (In/Out)",
     "no_models": "No models or endpoints connected yet. Create a model service and add providers to view evaluations.",
+    "no_matching_models": "No matching models found.",
     "run_probe": "Run Probe"
   },
   "keys": {

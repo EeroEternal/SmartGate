@@ -933,16 +933,39 @@ export function EvaluationPage() {
     loadData()
   }, [])
 
+  const [searchQuery, setSearchQuery] = useState('')
+  const [tierFilter, setTierFilter] = useState<'all' | 'pro' | 'flash'>('all')
+
   const toggleEndpoint = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? (prev.length > 1 ? prev.filter((item) => item !== id) : prev) : [...prev, id]
-    )
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.length > 1 ? prev.filter((item) => item !== id) : prev
+      }
+      if (prev.length >= 4) {
+        return [...prev.slice(1), id]
+      }
+      return [...prev, id]
+    })
   }
 
-  const selectAll = () => setSelectedIds(endpoints.map((e) => e.id))
+  const selectTop4 = () => setSelectedIds(endpoints.slice(0, 4).map((e) => e.id))
   const clearAll = () => {
     if (endpoints.length > 0) setSelectedIds([endpoints[0].id])
   }
+
+  const filteredEndpoints = endpoints.filter((ep) => {
+    const matchesSearch =
+      ep.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ep.provider_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ep.serviceName.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesTier =
+      tierFilter === 'all'
+        ? true
+        : tierFilter === 'pro'
+        ? ep.preferred_for_hard_requests
+        : !ep.preferred_for_hard_requests
+    return matchesSearch && matchesTier
+  })
 
   const RADAR_DIMENSIONS = [
     { id: 'code_logic', name: t('radar.code_logic'), short: t('radar.code_short'), icon: '💻', anchor: 'middle' as const, dx: 0, dy: -12 },
@@ -1021,6 +1044,9 @@ export function EvaluationPage() {
             <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
               {t('radar.badge')}
             </span>
+            <span className="text-xs text-zinc-500 font-medium">
+              {t('evaluation.max_compare_hint', { count: selectedIds.length }) || `Comparing ${selectedIds.length}/4 models`}
+            </span>
             <span title={t('evaluation.radar_desc') || t('radar.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
             </span>
@@ -1029,10 +1055,10 @@ export function EvaluationPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={selectAll}
+              onClick={selectTop4}
               className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
             >
-              {t('evaluation.select_all') || 'Select All'}
+              {t('evaluation.select_all') || 'Top 4'}
             </button>
             <span className="text-zinc-300">|</span>
             <button
@@ -1045,243 +1071,331 @@ export function EvaluationPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {endpoints.map((ep, idx) => {
-            const isSelected = selectedIds.includes(ep.id)
-            const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
-            return (
-              <button
-                key={ep.id}
-                type="button"
-                onClick={() => toggleEndpoint(ep.id)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all ${
-                  isSelected
-                    ? `${palette.pill} shadow-xs font-semibold`
-                    : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:text-zinc-700'
-                }`}
-              >
-                <span
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: isSelected ? palette.dot : '#a1a1aa' }}
-                />
-                <span>{ep.model}</span>
-                <span className="text-[10px] opacity-70">({ep.provider_name})</span>
-              </button>
-            )
-          })}
-        </div>
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 items-start">
+          {/* Left Column: Fixed / Sticky Radar Comparison Visualizer */}
+          <div className="sticky top-4 flex flex-col items-center justify-center p-4 rounded-2xl bg-zinc-50/70 border border-zinc-200/80">
+            <div className="w-full flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                {t('evaluation.radar_title') || '5D Radar Compare'}
+              </span>
+              <span className="text-[11px] text-zinc-400 font-mono">
+                {selectedIds.length}/4
+              </span>
+            </div>
 
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 items-center">
-          <div className="relative flex flex-col items-center justify-center p-3 rounded-2xl bg-zinc-50/70 border border-zinc-100">
-            <svg viewBox="0 0 340 300" className="w-full max-w-[360px] h-[300px] select-none">
-              {gridLevels.map((lvl) => {
-                const pts = angles
-                  .map((a) => {
-                    const r = (lvl / 100) * maxR
-                    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
-                  })
-                  .join(' ')
-                return (
-                  <polygon
-                    key={lvl}
-                    points={pts}
-                    fill="none"
-                    stroke="#e4e4e7"
-                    strokeWidth={lvl === 100 ? '1.5' : '1'}
-                    strokeDasharray={lvl === 100 ? 'none' : '2,2'}
-                  />
-                )
-              })}
-
-              {angles.map((a, i) => (
-                <line
-                  key={i}
-                  x1={cx}
-                  y1={cy}
-                  x2={cx + maxR * Math.cos(a)}
-                  y2={cy + maxR * Math.sin(a)}
-                  stroke="#e4e4e7"
-                  strokeWidth="1"
-                />
-              ))}
-
-              {RADAR_DIMENSIONS.map((dim, i) => {
-                const a = angles[i]
-                const labelR = maxR + 24
-                const lx = cx + labelR * Math.cos(a) + dim.dx
-                const ly = cy + labelR * Math.sin(a) + dim.dy
-                return (
-                  <text
-                    key={dim.id}
-                    x={lx}
-                    y={ly}
-                    textAnchor={dim.anchor}
-                    className="text-[11px] font-medium fill-zinc-600"
-                  >
-                    {dim.icon} {dim.short}
-                  </text>
-                )
-              })}
-
-              {endpoints.map((ep, idx) => {
-                if (!selectedIds.includes(ep.id)) return null
-                const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
-                const dna = ep.model_dna || {
-                  code_logic: Math.round((ep.capability_score || 0.5) * 100),
-                  reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
-                  agent_tools: ep.supports_tools ? 92 : 60,
-                  multilingual_nlp: 90,
-                  context_retention: 88,
-                  strengths: [],
-                }
-                const scores = [
-                  dna.code_logic,
-                  dna.reasoning_math,
-                  dna.agent_tools,
-                  dna.multilingual_nlp,
-                  dna.context_retention,
-                ]
-                const pts = scores.map((s, i) => getCoord(s, i))
-                const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ')
-
-                return (
-                  <g key={ep.id} className="transition-all duration-300">
+            <div className="relative w-full flex items-center justify-center">
+              <svg viewBox="0 0 340 300" className="w-full max-w-[340px] h-[280px] select-none">
+                {gridLevels.map((lvl) => {
+                  const pts = angles
+                    .map((a) => {
+                      const r = (lvl / 100) * maxR
+                      return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
+                    })
+                    .join(' ')
+                  return (
                     <polygon
-                      points={ptsStr}
-                      fill={palette.fill}
-                      stroke={palette.stroke}
-                      strokeWidth="2"
-                      className="hover:opacity-90 transition-opacity"
+                      key={lvl}
+                      points={pts}
+                      fill="none"
+                      stroke="#e4e4e7"
+                      strokeWidth={lvl === 100 ? '1.5' : '1'}
+                      strokeDasharray={lvl === 100 ? 'none' : '2,2'}
                     />
-                    {pts.map((p, pIdx) => (
-                      <circle
-                        key={pIdx}
-                        cx={p.x}
-                        cy={p.y}
-                        r="4"
-                        fill={palette.dot}
-                        stroke="#fff"
-                        strokeWidth="1.5"
-                        className="cursor-pointer hover:r-6 transition-all"
-                        onMouseEnter={() =>
-                          setHoveredPoint({
-                            model: ep.model,
-                            dim: RADAR_DIMENSIONS[pIdx].name,
-                            score: scores[pIdx],
-                            x: p.x,
-                            y: p.y,
-                          })
-                        }
-                        onMouseLeave={() => setHoveredPoint(null)}
+                  )
+                })}
+
+                {angles.map((a, i) => (
+                  <line
+                    key={i}
+                    x1={cx}
+                    y1={cy}
+                    x2={cx + maxR * Math.cos(a)}
+                    y2={cy + maxR * Math.sin(a)}
+                    stroke="#e4e4e7"
+                    strokeWidth="1"
+                  />
+                ))}
+
+                {RADAR_DIMENSIONS.map((dim, i) => {
+                  const a = angles[i]
+                  const labelR = maxR + 24
+                  const lx = cx + labelR * Math.cos(a) + dim.dx
+                  const ly = cy + labelR * Math.sin(a) + dim.dy
+                  return (
+                    <text
+                      key={dim.id}
+                      x={lx}
+                      y={ly}
+                      textAnchor={dim.anchor}
+                      className="text-[11px] font-medium fill-zinc-600"
+                    >
+                      {dim.icon} {dim.short}
+                    </text>
+                  )
+                })}
+
+                {endpoints.map((ep, idx) => {
+                  if (!selectedIds.includes(ep.id)) return null
+                  const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
+                  const dna = ep.model_dna || {
+                    code_logic: Math.round((ep.capability_score || 0.5) * 100),
+                    reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
+                    agent_tools: ep.supports_tools ? 92 : 60,
+                    multilingual_nlp: 90,
+                    context_retention: 88,
+                    strengths: [],
+                  }
+                  const scores = [
+                    dna.code_logic,
+                    dna.reasoning_math,
+                    dna.agent_tools,
+                    dna.multilingual_nlp,
+                    dna.context_retention,
+                  ]
+                  const pts = scores.map((s, i) => getCoord(s, i))
+                  const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ')
+
+                  return (
+                    <g key={ep.id} className="transition-all duration-300">
+                      <polygon
+                        points={ptsStr}
+                        fill={palette.fill}
+                        stroke={palette.stroke}
+                        strokeWidth="2"
+                        className="hover:opacity-90 transition-opacity"
                       />
-                    ))}
-                  </g>
+                      {pts.map((p, pIdx) => (
+                        <circle
+                          key={pIdx}
+                          cx={p.x}
+                          cy={p.y}
+                          r="4"
+                          fill={palette.dot}
+                          stroke="#fff"
+                          strokeWidth="1.5"
+                          className="cursor-pointer hover:r-6 transition-all"
+                          onMouseEnter={() =>
+                            setHoveredPoint({
+                              model: ep.model,
+                              dim: RADAR_DIMENSIONS[pIdx].name,
+                              score: scores[pIdx],
+                              x: p.x,
+                              y: p.y,
+                            })
+                          }
+                          onMouseLeave={() => setHoveredPoint(null)}
+                        />
+                      ))}
+                    </g>
+                  )
+                })}
+              </svg>
+
+              {hoveredPoint && (
+                <div
+                  className="pointer-events-none absolute z-50 rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1 text-xs shadow-md backdrop-blur-xs"
+                  style={{
+                    left: `${(hoveredPoint.x / 340) * 100}%`,
+                    top: `${(hoveredPoint.y / 300) * 100 - 18}%`,
+                    transform: 'translate(-50%, -100%)',
+                  }}
+                >
+                  <div className="font-semibold text-zinc-950">{hoveredPoint.model}</div>
+                  <div className="text-zinc-500 text-[11px]">
+                    {hoveredPoint.dim}: <span className="font-mono font-bold text-zinc-900">{hoveredPoint.score}/100</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Currently Active Radar Pills */}
+            <div className="w-full mt-3 pt-3 border-t border-zinc-200/80 flex flex-wrap gap-1.5 justify-center">
+              {endpoints.filter((e) => selectedIds.includes(e.id)).map((ep) => {
+                const epIndex = endpoints.findIndex((e) => e.id === ep.id)
+                const palette = RADAR_PALETTES[epIndex % RADAR_PALETTES.length]
+                return (
+                  <span
+                    key={ep.id}
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold border ${palette.pill}`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
+                    <span className="truncate max-w-[110px]">{ep.model}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleEndpoint(ep.id)}
+                      className="ml-0.5 opacity-60 hover:opacity-100 hover:text-rose-600 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </span>
                 )
               })}
-            </svg>
-
-            {hoveredPoint && (
-              <div
-                className="pointer-events-none absolute z-50 rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1 text-xs shadow-md backdrop-blur-xs"
-                style={{
-                  left: `${(hoveredPoint.x / 340) * 100}%`,
-                  top: `${(hoveredPoint.y / 300) * 100 - 18}%`,
-                  transform: 'translate(-50%, -100%)',
-                }}
-              >
-                <div className="font-semibold text-zinc-950">{hoveredPoint.model}</div>
-                <div className="text-zinc-500 text-[11px]">
-                  {hoveredPoint.dim}: <span className="font-mono font-bold text-zinc-900">{hoveredPoint.score}/100</span>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-400">
-              <span>{t('radar.inner_ring')}</span>
-              <span>{t('radar.mid_ring')}</span>
-              <span>{t('radar.outer_perimeter')}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {endpoints.map((ep, idx) => {
-              const isSelected = selectedIds.includes(ep.id)
-              const palette = RADAR_PALETTES[idx % RADAR_PALETTES.length]
-              const dna = ep.model_dna || {
-                code_logic: Math.round((ep.capability_score || 0.5) * 100),
-                reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
-                agent_tools: ep.supports_tools ? 92 : 60,
-                multilingual_nlp: 90,
-                context_retention: 88,
-                strengths: ['Adaptive Reasoning', 'Low-Latency Synthesis'],
-              }
-              return (
-                <div
-                  key={ep.id}
-                  onClick={() => toggleEndpoint(ep.id)}
-                  className={`cursor-pointer rounded-xl border p-3 transition-all ${
-                    isSelected
-                      ? 'border-zinc-300 bg-white shadow-xs'
-                      : 'border-zinc-200 bg-zinc-50/50 opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: palette.dot }} />
-                      <span className="font-semibold text-zinc-900 truncate text-sm">{ep.model}</span>
-                      <span className="text-xs text-zinc-400 truncate">({ep.provider_name})</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-700">
-                        {t('radar.cap_score', { score: (ep.capability_score ?? 0.5).toFixed(2) })}
-                      </span>
-                      {ep.preferred_for_hard_requests && (
-                        <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
-                          {t('radar.pro_tier')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+          {/* Right Column: Search, Filter, and Scrollable Compact Model Cards */}
+          <div className="flex flex-col gap-3 min-w-0">
+            {/* Search & Filter Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder={t('evaluation.search_models') || 'Search models or providers…'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-9 rounded-md border border-zinc-200 bg-zinc-50/50 pl-8 pr-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:bg-white focus:border-zinc-900 focus:outline-none transition-colors"
+                />
+              </div>
+              <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 bg-zinc-50 text-xs">
+                {(['all', 'pro', 'flash'] as const).map((tier) => (
+                  <button
+                    key={tier}
+                    type="button"
+                    onClick={() => setTierFilter(tier)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                      tierFilter === tier
+                        ? 'bg-white text-zinc-950 font-semibold shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-950'
+                    }`}
+                  >
+                    {tier === 'all'
+                      ? (t('evaluation.filter_all') || 'All')
+                      : tier === 'pro'
+                      ? (t('evaluation.filter_pro') || 'Pro')
+                      : (t('evaluation.filter_flash') || 'Flash')}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  <div className="mt-3 grid grid-cols-5 gap-1 text-center text-[10px]">
-                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                      <div className="text-zinc-400 text-[9px]">{t('radar.code_short')}</div>
-                      <div className="font-bold text-zinc-900 font-mono">{dna.code_logic}</div>
-                    </div>
-                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                      <div className="text-zinc-400 text-[9px]">{t('radar.math_short')}</div>
-                      <div className="font-bold text-zinc-900 font-mono">{dna.reasoning_math}</div>
-                    </div>
-                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                      <div className="text-zinc-400 text-[9px]">{t('radar.tools_short')}</div>
-                      <div className="font-bold text-zinc-900 font-mono">{dna.agent_tools}</div>
-                    </div>
-                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                      <div className="text-zinc-400 text-[9px]">{t('radar.lang_short')}</div>
-                      <div className="font-bold text-zinc-900 font-mono">{dna.multilingual_nlp}</div>
-                    </div>
-                    <div className="rounded bg-zinc-50 p-1 border border-zinc-100">
-                      <div className="text-zinc-400 text-[9px]">{t('radar.context_short')}</div>
-                      <div className="font-bold text-zinc-900 font-mono">{dna.context_retention}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5">
-                    <span className="text-xs text-zinc-400">{ep.serviceName}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })
-                      }}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" /> {t('evaluation.run_probe') || 'Run Probe'}
-                    </button>
-                  </div>
+            {/* Scrollable Container */}
+            <div className="max-h-[520px] overflow-y-auto pr-1 space-y-2.5">
+              {filteredEndpoints.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center text-xs text-zinc-400">
+                  {t('evaluation.no_matching_models') || 'No matching models found.'}
                 </div>
-              )
-            })}
+              ) : (
+                filteredEndpoints.map((ep) => {
+                  const isSelected = selectedIds.includes(ep.id)
+                  const originalIdx = endpoints.findIndex((e) => e.id === ep.id)
+                  const palette = RADAR_PALETTES[originalIdx % RADAR_PALETTES.length]
+                  const dna = ep.model_dna || {
+                    code_logic: Math.round((ep.capability_score || 0.5) * 100),
+                    reasoning_math: Math.round((ep.capability_score || 0.5) * 98),
+                    agent_tools: ep.supports_tools ? 92 : 60,
+                    multilingual_nlp: 90,
+                    context_retention: 88,
+                    strengths: ['Adaptive Reasoning', 'Low-Latency Synthesis'],
+                  }
+                  return (
+                    <div
+                      key={ep.id}
+                      onClick={() => toggleEndpoint(ep.id)}
+                      className={`cursor-pointer rounded-xl border p-3 transition-all ${
+                        isSelected
+                          ? 'border-zinc-400 bg-white shadow-xs ring-1 ring-zinc-900/5'
+                          : 'border-zinc-200 bg-zinc-50/40 hover:bg-white hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="h-3.5 w-3.5 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 shrink-0"
+                          />
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: isSelected ? palette.dot : '#a1a1aa' }}
+                          />
+                          <span className="font-semibold text-zinc-950 truncate text-xs">{ep.model}</span>
+                          <span className="text-[11px] text-zinc-400 truncate">({ep.provider_name})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-mono font-medium text-zinc-700">
+                            {t('radar.cap_score', { score: (ep.capability_score ?? 0.5).toFixed(2) })}
+                          </span>
+                          {ep.preferred_for_hard_requests ? (
+                            <span className="rounded-md bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700">
+                              {t('radar.pro_tier')}
+                            </span>
+                          ) : (
+                            <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
+                              {t('radar.flash_tier')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 5-Dimensional Horizontal Bar Distribution */}
+                      <div className="mt-2.5 grid grid-cols-5 gap-2 text-center text-[10px]">
+                        <div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 mb-0.5">
+                            <span>{t('radar.code_short')}</span>
+                            <span className="font-mono font-bold text-zinc-700">{dna.code_logic}</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${dna.code_logic}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 mb-0.5">
+                            <span>{t('radar.math_short')}</span>
+                            <span className="font-mono font-bold text-zinc-700">{dna.reasoning_math}</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${dna.reasoning_math}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 mb-0.5">
+                            <span>{t('radar.tools_short')}</span>
+                            <span className="font-mono font-bold text-zinc-700">{dna.agent_tools}</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className="h-full bg-sky-500 rounded-full" style={{ width: `${dna.agent_tools}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 mb-0.5">
+                            <span>{t('radar.lang_short')}</span>
+                            <span className="font-mono font-bold text-zinc-700">{dna.multilingual_nlp}</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${dna.multilingual_nlp}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 mb-0.5">
+                            <span>{t('radar.context_short')}</span>
+                            <span className="font-mono font-bold text-zinc-700">{dna.context_retention}</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${dna.context_retention}%` }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between border-t border-zinc-100 pt-2 text-xs">
+                        <span className="text-[11px] text-zinc-400 truncate max-w-[180px]">{ep.serviceName}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                        >
+                          <Sparkles className="h-3 w-3" /> {t('evaluation.run_probe') || 'Run Probe'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
       </section>

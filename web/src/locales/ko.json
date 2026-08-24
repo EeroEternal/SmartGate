@@ -237,6 +237,11 @@
     "radar_desc": "연결된 모든 LLM의 다차원 역량 분포 및 강점 구조를 시각화합니다.",
     "select_all": "전체 선택",
     "clear_all": "지우기",
+    "search_models": "모델 또는 제공자 검색…",
+    "max_compare_hint": "{count}/4 모델 비교 중",
+    "filter_all": "전체",
+    "filter_pro": "Pro 계층",
+    "filter_flash": "Flash 계층",
     "benchmarks_title": "모델 벤치마크 카드",
     "matrix_title": "다차원 모델 매트릭스 및 순위표",
     "matrix_subtitle": "연결된 모든 모델의 세부 벤치마크 점수 및 비용 효율성 비교.",
@@ -250,6 +255,7 @@
     "col_context": "컨텍스트",
     "col_price": "가격 (In/Out)",
     "no_models": "연결된 모델이 없습니다. 모델 서비스를 생성하고 제공자를 추가하십시오.",
+    "no_matching_models": "일치하는 모델이 없습니다.",
     "run_probe": "프로브 실행"
   },
   "keys": {

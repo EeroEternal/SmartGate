@@ -237,6 +237,11 @@
     "radar_desc": "接続されたすべての LLM の多次元能力分布と強み構造を可視化します。",
     "select_all": "すべて選択",
     "clear_all": "クリア",
+    "search_models": "モデルまたは提供者を検索…",
+    "max_compare_hint": "{count}/4 モデルを比較中",
+    "filter_all": "すべて",
+    "filter_pro": "Pro ティア",
+    "filter_flash": "Flash ティア",
     "benchmarks_title": "モデルベンチマークカード",
     "matrix_title": "多次元能力マトリックス＆ランキング",
     "matrix_subtitle": "接続された全モデルのベンチマーク内訳とコストパフォーマンス比較。",
@@ -250,6 +255,7 @@
     "col_context": "コンテキスト",
     "col_price": "価格 (In/Out)",
     "no_models": "接続されているモデルがありません。モデルサービスを作成してプロバイダーを追加してください。",
+    "no_matching_models": "一致するモデルが見つかりません。",
     "run_probe": "プローブを実行"
   },
   "keys": {
