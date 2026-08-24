@@ -2592,39 +2592,24 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
               />
 
               {/* Searchable multi-select model catalog */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-zinc-700">
-                    {t('services.models_to_connect') || 'Models to connect'} ({selectedModelIds.length} {t('services.selected_count') || 'selected'})
-                  </label>
-                  {selectedModelIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedModelIds([])}
-                      className="text-[11px] text-zinc-400 hover:text-zinc-700"
-                    >
-                      {t('services.clear_selection') || 'Clear selection'}
-                    </button>
-                  )}
-                </div>
-
+              <div className="space-y-3">
                 {/* Smart preset bundles for rapid tier-setup */}
                 {models.length > 0 && (
-                  <div className="mb-3 space-y-2">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-800">
                         {t('services.smart_bundles') || 'Smart Bundles'}
                       </span>
-                      {selectedBundle !== 'custom' && (
+                      {selectedModelIds.length > 0 && (
                         <button
                           type="button"
                           onClick={() => {
                             setSelectedBundle('custom')
                             setSelectedModelIds([])
                           }}
-                          className="text-[11px] text-zinc-500 hover:text-zinc-900 transition-colors"
+                          className="text-[11px] text-zinc-400 hover:text-zinc-700 transition-colors"
                         >
-                          {t('services.clear_selection') || 'Clear / Custom'}
+                          {t('services.clear_selection') || 'Clear selection'}
                         </button>
                       )}
                     </div>
