@@ -2683,7 +2683,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         {t('services.custom_or_additional_model') || 'Switch to manual selection'}
                       </button>
                     </div>
-                    <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 pr-1">
+                    <div className="h-44 overflow-y-auto divide-y divide-zinc-100 pr-1">
                       {selectedModels.map((m) => (
                         <div key={m.model} className="flex items-center justify-between py-2 text-xs">
                           <div className="min-w-0 pr-2">
@@ -2897,7 +2897,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             {t('common.cancel') || 'Cancel'}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50">
-            {busy ? (t('common.creating') || 'Adding…') : (selectedModelIds.length > 1 ? (t('services.add_n_models', { count: selectedModelIds.length }) || `Add ${selectedModelIds.length} models`) : (t('services.add_model') || 'Add model'))}
+            {busy ? (t('common.creating') || 'Adding…') : (t('services.add_model') || 'Add model')}
           </button>
         </div>
       </form>
