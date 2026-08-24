@@ -2221,6 +2221,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle')
   const [testMsg, setTestMsg] = useState('')
   const [modelSearch, setModelSearch] = useState('')
+  const [selectedBundle, setSelectedBundle] = useState<'custom' | 'balanced' | 'free' | 'reasoning'>('balanced')
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([])
   const [openRouterModels, setOpenRouterModels] = useState<CatalogOffering[]>([])
 
@@ -2306,6 +2307,25 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const models = useMemo(() => {
     return fullCatalog.filter((item) => item.provider_id === currentProviderType)
   }, [fullCatalog, currentProviderType])
+
+  // Automatically populate selectedModelIds if a smart bundle is active and selection is empty
+  useEffect(() => {
+    if (models.length > 0 && selectedBundle !== 'custom' && selectedModelIds.length === 0) {
+      if (selectedBundle === 'balanced') {
+        const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
+        const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
+        const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
+        const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
+        setSelectedModelIds(Array.from(new Set(targetIds)))
+      } else if (selectedBundle === 'free') {
+        const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
+        setSelectedModelIds(freeModels)
+      } else if (selectedBundle === 'reasoning') {
+        const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
+        setSelectedModelIds(reasoningModels)
+      }
+    }
+  }, [models, selectedBundle, selectedModelIds.length])
 
   const modelQuery = modelSearch.trim().toLowerCase()
   const filteredModels = models
@@ -2590,115 +2610,185 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
                 {/* Smart preset bundles for rapid tier-setup */}
                 {models.length > 0 && (
-                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-zinc-500 mr-1 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3 text-purple-600" />
-                      {t('services.smart_bundles') || 'Smart Bundles'}:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Pick 1 free / cheap small, 1 solid mid, 1 top reasoning
-                        const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
-                        const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
-                        const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
-                        const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
-                        setSelectedModelIds(Array.from(new Set(targetIds)))
-                      }}
-                      className="rounded-md border border-purple-200 bg-purple-50/70 px-2 py-1 text-[11px] font-medium text-purple-800 hover:bg-purple-100 transition-colors"
-                    >
-                      ⚡ {t('services.bundle_balanced') || 'Balanced Multi-Tier'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
-                        if (freeModels.length > 0) {
-                          setSelectedModelIds(freeModels)
-                        }
-                      }}
-                      className="rounded-md border border-emerald-200 bg-emerald-50/70 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 transition-colors"
-                    >
-                      🎁 {t('services.bundle_free') || '100% Free Tier'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
-                        if (reasoningModels.length > 0) {
-                          setSelectedModelIds(reasoningModels)
-                        }
-                      }}
-                      className="rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-                    >
-                      🧠 {t('services.bundle_reasoning') || 'Flagship Reasoning & Coding'}
-                    </button>
+                  <div className="mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-800">
+                        {t('services.smart_bundles') || 'Smart Bundles'}
+                      </span>
+                      {selectedBundle !== 'custom' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBundle('custom')
+                            setSelectedModelIds([])
+                          }}
+                          className="text-[11px] text-zinc-500 hover:text-zinc-900 transition-colors"
+                        >
+                          {t('services.clear_selection') || 'Clear / Custom'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBundle('balanced')
+                          const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
+                          const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
+                          const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
+                          const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
+                          setSelectedModelIds(Array.from(new Set(targetIds)))
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-all ${
+                          selectedBundle === 'balanced'
+                            ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                            : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {t('services.bundle_balanced') || 'Balanced Multi-Tier'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBundle('free')
+                          const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
+                          if (freeModels.length > 0) {
+                            setSelectedModelIds(freeModels)
+                          }
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-all ${
+                          selectedBundle === 'free'
+                            ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                            : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {t('services.bundle_free') || '100% Free Tier'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBundle('reasoning')
+                          const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
+                          if (reasoningModels.length > 0) {
+                            setSelectedModelIds(reasoningModels)
+                          }
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-all ${
+                          selectedBundle === 'reasoning'
+                            ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                            : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {t('services.bundle_reasoning') || 'Flagship Reasoning & Coding'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                <div className="relative mb-2">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    value={modelSearch}
-                    onChange={(e) => setModelSearch(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                    placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
-                    className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
-                  />
-                </div>
-
-                <div className="h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2">
-                  {visibleModels.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {visibleModels.map((m) => {
-                        const isChecked = selectedModelIds.includes(m.model)
-                        return (
-                          <label
-                            key={m.model}
-                            className={`flex cursor-pointer items-start gap-2.5 rounded-md p-2 transition-colors ${
-                              isChecked ? 'bg-purple-50/80 border border-purple-200' : 'hover:bg-zinc-50 border border-transparent'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleModelSelection(m)}
-                              className="mt-0.5 h-3.5 w-3.5 rounded accent-purple-600"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-medium text-xs text-zinc-900 truncate">
-                                  {m.model_name || m.model}
-                                </span>
-                                <div className="shrink-0 text-[11px] font-mono text-zinc-500">
-                                  {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
-                                    <span className="text-emerald-600 font-semibold">FREE</span>
-                                  ) : (
-                                    <span>{formatPrice(m.input_price_per_1m)}/1M</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="mt-0.5 text-[11px] text-zinc-400 truncate">
-                                <code className="text-zinc-600">{m.model}</code>
-                                {m.context_length ? ` ${m.context_length.toLocaleString()} ctx` : ''}
-                              </div>
+                {selectedBundle !== 'custom' ? (
+                  /* Template mode: simply display framed models cleanly without requiring manual checkboxes */
+                  <div className="rounded-xl border border-zinc-200 bg-white p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-zinc-900 border-b border-zinc-100 pb-2">
+                      <span>{t('services.models_to_connect') || 'Models to connect'} ({selectedModelIds.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBundle('custom')}
+                        className="text-[11px] font-normal text-primary hover:underline"
+                      >
+                        {t('services.custom_or_additional_model') || 'Switch to manual selection'}
+                      </button>
+                    </div>
+                    <div className="divide-y divide-zinc-100">
+                      {selectedModels.map((m) => (
+                        <div key={m.model} className="flex items-center justify-between py-2 text-xs">
+                          <div className="min-w-0 pr-2">
+                            <div className="font-medium text-zinc-900 truncate">{m.model_name || m.model}</div>
+                            <div className="text-[11px] text-zinc-400 font-mono truncate">{m.model}</div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="font-mono font-medium text-zinc-700">
+                              {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
+                                <span className="text-emerald-600 font-semibold">FREE</span>
+                              ) : (
+                                <span>{formatPrice(m.input_price_per_1m)}/1M</span>
+                              )}
                             </div>
-                          </label>
-                        )
-                      })}
+                            {m.context_length && (
+                              <div className="text-[10px] text-zinc-400">{m.context_length.toLocaleString()} ctx</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-zinc-400">
-                      {models.length === 0
-                        ? (t('common.loading') || 'Loading models…')
-                        : (t('services.no_models_match') || 'No models match your search.')}
+                  </div>
+                ) : (
+                  /* Custom manual search and selection mode */
+                  <div>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={modelSearch}
+                        onChange={(e) => setModelSearch(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                        placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
+                        className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
+                      />
                     </div>
-                  )}
-                </div>
+
+                    <div className="h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2">
+                      {visibleModels.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {visibleModels.map((m) => {
+                            const isChecked = selectedModelIds.includes(m.model)
+                            return (
+                              <label
+                                key={m.model}
+                                className={`flex cursor-pointer items-start gap-2.5 rounded-md p-2 transition-colors ${
+                                  isChecked ? 'bg-zinc-100 border border-zinc-300' : 'hover:bg-zinc-50 border border-transparent'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => toggleModelSelection(m)}
+                                  className="mt-0.5 h-3.5 w-3.5 rounded accent-zinc-900"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium text-xs text-zinc-900 truncate">
+                                      {m.model_name || m.model}
+                                    </span>
+                                    <div className="shrink-0 text-[11px] font-mono text-zinc-500">
+                                      {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
+                                        <span className="text-emerald-600 font-semibold">FREE</span>
+                                      ) : (
+                                        <span>{formatPrice(m.input_price_per_1m)}/1M</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] text-zinc-400 truncate">
+                                    <code className="text-zinc-600">{m.model}</code>
+                                    {m.context_length ? ` ${m.context_length.toLocaleString()} ctx` : ''}
+                                  </div>
+                                </div>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-zinc-400">
+                          {models.length === 0
+                            ? (t('common.loading') || 'Loading models…')
+                            : (t('services.no_models_match') || 'No models match your search.')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
