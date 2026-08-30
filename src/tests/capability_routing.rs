@@ -72,6 +72,7 @@ fn profile_with_family(
         family_capability_score: family_capability,
         supports_tools: Some(true),
         context_length: Some(128_000),
+        ..Default::default()
     }
 }
 

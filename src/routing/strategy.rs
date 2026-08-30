@@ -86,6 +86,61 @@ pub fn expected_agentic_cost(
         * (1.0 + err)
 }
 
+/// Effective marginal cost factoring in economic billing tier (FreeTier, Subscription sunk-cost, PayAsYouGo),
+/// rolling window watermark limits, and near-reset depletion urgency.
+pub fn effective_marginal_cost(
+    profile: &EndpointProfile,
+    input: u32,
+    output: u32,
+    error_rate: f64,
+    agentic: bool,
+) -> f64 {
+    use crate::pricing::BillingTier;
+
+    let base_cost = if agentic {
+        expected_agentic_cost(profile, input, output, error_rate)
+    } else {
+        expected_cost(profile, input, output, error_rate)
+    };
+
+    match profile.billing_tier {
+        BillingTier::FreeTier => 0.000001 * (1.0 + error_rate.clamp(0.0, 0.95)),
+        BillingTier::SubscriptionRolling => {
+            let (utilization, urgency_mult) = if let Some(q) = profile.quota_status {
+                let u = q.utilization.clamp(0.0, 1.0);
+                let urgency = if u < 0.50 {
+                    if let Some(rem) = q.reset_in_secs {
+                        if rem <= 3600 {
+                            (rem as f64 / 3600.0).clamp(0.2, 1.0)
+                        } else {
+                            1.0
+                        }
+                    } else {
+                        1.0
+                    }
+                } else {
+                    1.0
+                };
+                (u, urgency)
+            } else {
+                (0.0, 1.0)
+            };
+
+            // Soft conservation penalty if utilization reaches 80%
+            let watermark_mult = if utilization >= 0.80 {
+                let excess = (utilization - 0.80) / 0.15;
+                1.0 + 10.0 * excess * excess
+            } else {
+                1.0
+            };
+
+            // Treat prepaid subscription as 99% cheaper sunk cost
+            (base_cost * 0.01 * watermark_mult * urgency_mult).max(1e-9)
+        }
+        BillingTier::PayAsYouGo => base_cost,
+    }
+}
+
 pub const CAPABILITY_TIER_SCALE: f64 = 1_000_000_000.0;
 /// One 0.01 configured capability step outranks family profile and price.
 pub const CAPABILITY_RANK_SCALE: f64 = 1_000_000.0;
@@ -120,21 +175,13 @@ pub fn capability_qualified(
 pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
     let strategy = canonicalize(strategy);
     let err = input.error_rate.clamp(0.0, 0.95);
-    let base_cost = if input.agentic {
-        expected_agentic_cost(
-            &input.profile,
-            input.input_tokens,
-            input.output_tokens,
-            err,
-        )
-    } else {
-        expected_cost(
-            &input.profile,
-            input.input_tokens,
-            input.output_tokens,
-            err,
-        )
-    };
+    let base_cost = effective_marginal_cost(
+        &input.profile,
+        input.input_tokens,
+        input.output_tokens,
+        err,
+        input.agentic,
+    );
 
     match strategy {
         "priority" => {
@@ -158,7 +205,7 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             Some(lat_score * load_penalty * (1.0 - 0.5 * err).max(0.1))
         }
         "cost_aware" => {
-            if !input.profile.price.is_priced() {
+            if !input.profile.price.is_priced() && input.profile.billing_tier != crate::pricing::BillingTier::FreeTier {
                 Some(UNPRICED_SCORE)
             } else {
                 Some(1.0 / (base_cost + 1e-12))
@@ -170,7 +217,8 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             let capable =
                 capability_qualified(capability, input.difficulty, input.max_pool_capability);
             let near_capable = capability >= (req - 0.10);
-            let normalized_cost = if input.profile.price.is_priced() {
+            let is_priced = input.profile.price.is_priced() || input.profile.billing_tier == crate::pricing::BillingTier::FreeTier;
+            let normalized_cost = if is_priced {
                 (1.0 / (base_cost + 1e-6)).clamp(0.0, COST_TERM_MAX)
             } else {
                 UNPRICED_SCORE
@@ -202,7 +250,7 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             } else {
                 // Easy tasks: any qualified endpoint answers well, so spend less.
                 // Cost is the primary differentiator (cheaper = higher score).
-                let cost_score = if input.profile.price.is_priced() {
+                let cost_score = if is_priced {
                     (1.0 / (base_cost + 1e-12)).min(CAPABILITY_TIER_SCALE - 1_000_000.0)
                 } else {
                     UNPRICED_SCORE
@@ -477,5 +525,185 @@ mod tests {
         // Agentic sessions replay the prefix, so the explicit cheaper
         // cache-read price wins.
         assert!(build(cache_cheap, true) > build(cache_default, true));
+    }
+
+    #[test]
+    fn free_tier_outranks_paid_models_in_cost_aware() {
+        let m = member();
+        let free_ep = EndpointProfile {
+            billing_tier: crate::pricing::BillingTier::FreeTier,
+            ..Default::default()
+        };
+        let paid_ep = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 0.1,
+                output_per_1m: 0.2,
+                ..Default::default()
+            },
+            billing_tier: crate::pricing::BillingTier::PayAsYouGo,
+            ..Default::default()
+        };
+        let s_free = score(
+            "cost_aware",
+            ScoreInput {
+                member: &m,
+                profile: free_ep,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 1000,
+                output_tokens: 500,
+                difficulty: 0.2,
+                max_pool_capability: 1.0,
+                agentic: false,
+            },
+        )
+        .unwrap();
+        let s_paid = score(
+            "cost_aware",
+            ScoreInput {
+                member: &m,
+                profile: paid_ep,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 1000,
+                output_tokens: 500,
+                difficulty: 0.2,
+                max_pool_capability: 1.0,
+                agentic: false,
+            },
+        )
+        .unwrap();
+        assert!(s_free > s_paid);
+    }
+
+    #[test]
+    fn active_subscription_sunk_cost_outranks_pay_as_you_go() {
+        let m = member();
+        let sub_ep = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 2.0,
+                output_per_1m: 5.0,
+                ..Default::default()
+            },
+            billing_tier: crate::pricing::BillingTier::SubscriptionRolling,
+            quota_status: Some(crate::pricing::QuotaWindowStatus {
+                utilization: 0.20,
+                reset_in_secs: Some(7200),
+            }),
+            ..Default::default()
+        };
+        let payg_ep = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 1.0,
+                output_per_1m: 2.5,
+                ..Default::default()
+            },
+            billing_tier: crate::pricing::BillingTier::PayAsYouGo,
+            ..Default::default()
+        };
+        let s_sub = score(
+            "cost_aware",
+            ScoreInput {
+                member: &m,
+                profile: sub_ep,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 2000,
+                output_tokens: 1000,
+                difficulty: 0.2,
+                max_pool_capability: 1.0,
+                agentic: false,
+            },
+        )
+        .unwrap();
+        let s_payg = score(
+            "cost_aware",
+            ScoreInput {
+                member: &m,
+                profile: payg_ep,
+                active: 0,
+                success_latency_ms: 0.0,
+                all_latency_ms: 0.0,
+                error_rate: 0.0,
+                input_tokens: 2000,
+                output_tokens: 1000,
+                difficulty: 0.2,
+                max_pool_capability: 1.0,
+                agentic: false,
+            },
+        )
+        .unwrap();
+        // Sunk-cost subscription has effectively 99% discount, beating cheaper PAYG token pricing
+        assert!(s_sub > s_payg);
+    }
+
+    #[test]
+    fn subscription_watermark_and_urgency_scoring() {
+        let m = member();
+        let base_profile = EndpointProfile {
+            price: UnitPrice {
+                input_per_1m: 2.0,
+                output_per_1m: 5.0,
+                ..Default::default()
+            },
+            billing_tier: crate::pricing::BillingTier::SubscriptionRolling,
+            ..Default::default()
+        };
+
+        // 1. Normal usage
+        let mut normal = base_profile;
+        normal.quota_status = Some(crate::pricing::QuotaWindowStatus {
+            utilization: 0.30,
+            reset_in_secs: Some(10000),
+        });
+
+        // 2. High watermark (92% used)
+        let mut high_watermark = base_profile;
+        high_watermark.quota_status = Some(crate::pricing::QuotaWindowStatus {
+            utilization: 0.92,
+            reset_in_secs: Some(10000),
+        });
+
+        // 3. Urgent depletion (15 mins left before reset, 20% used)
+        let mut urgent = base_profile;
+        urgent.quota_status = Some(crate::pricing::QuotaWindowStatus {
+            utilization: 0.20,
+            reset_in_secs: Some(900),
+        });
+
+        let compute = |p: EndpointProfile| {
+            score(
+                "cost_aware",
+                ScoreInput {
+                    member: &m,
+                    profile: p,
+                    active: 0,
+                    success_latency_ms: 0.0,
+                    all_latency_ms: 0.0,
+                    error_rate: 0.0,
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                    difficulty: 0.2,
+                    max_pool_capability: 1.0,
+                    agentic: false,
+                },
+            )
+            .unwrap()
+        };
+
+        let s_normal = compute(normal);
+        let s_high_wm = compute(high_watermark);
+        let s_urgent = compute(urgent);
+
+        // Urgent window gets highest score to burn unused quota before reset
+        assert!(s_urgent > s_normal);
+        // High watermark gets penalized to conserve remaining quota
+        assert!(s_normal > s_high_wm);
     }
 }

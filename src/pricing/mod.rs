@@ -44,6 +44,25 @@ impl UnitPrice {
     }
 }
 
+/// Economic billing model for an endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BillingTier {
+    #[default]
+    PayAsYouGo,
+    SubscriptionRolling,
+    FreeTier,
+}
+
+/// Rolling window utilization and reset metadata for subscription/free endpoints.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+pub struct QuotaWindowStatus {
+    /// 0.0 to 1.0 utilization ratio in current rolling window
+    pub utilization: f64,
+    /// Seconds remaining until the short-term window resets (if applicable)
+    pub reset_in_secs: Option<u64>,
+}
+
 /// Endpoint profile used by CostAware / CapabilityAware feedback.
 #[derive(Debug, Clone, Copy)]
 pub struct EndpointProfile {
@@ -56,6 +75,8 @@ pub struct EndpointProfile {
     /// None = undeclared (do not hard-filter).
     pub supports_tools: Option<bool>,
     pub context_length: Option<i32>,
+    pub billing_tier: BillingTier,
+    pub quota_status: Option<QuotaWindowStatus>,
 }
 
 impl Default for EndpointProfile {
@@ -66,6 +87,8 @@ impl Default for EndpointProfile {
             family_capability_score: 0.5,
             supports_tools: None,
             context_length: None,
+            billing_tier: BillingTier::PayAsYouGo,
+            quota_status: None,
         }
     }
 }

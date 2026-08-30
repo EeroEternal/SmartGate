@@ -131,6 +131,7 @@ pub async fn sync_all_pools(
                         ),
                         supports_tools: r.supports_tools.map(|v| v != 0).or(Some(true)),
                         context_length: r.context_length,
+                        ..Default::default()
                     },
                 );
                 PoolEndpointMember {
