@@ -1,0 +1,81 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M1H4WRAE065EB33TCTXZZDG9",
+  "session_id": "01a0617a-67f1-7f92-8bbe-cb9b8057fd46",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-02T13:28:19.564543Z",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "save_step_count": 4,
+  "files_touched": [
+    "web/src/locales/en.json",
+    "web/src/locales/ja.json",
+    "web/src/locales/ko.json",
+    "web/src/locales/zh.json",
+    "web/src/pages/saas/SaasDashboard.tsx",
+    "web/src/pages/saas/SaasPages.tsx"
+  ],
+  "agent": "Pi",
+  "model": "grok-4.6",
+  "turn_id": "278fd55a87bc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 496801,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3020160,
+    "output_tokens": 30482,
+    "api_call_count": 53
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-02T13:28:19.526843Z",
+    "agent_lines": 220,
+    "agent_removed": 70,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 220,
+    "total_lines_changed": 290,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 220,
+      "agent_lines_removed": 70
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 220,
+      "agent_lines_removed": 70
+    }
+  ]
+}

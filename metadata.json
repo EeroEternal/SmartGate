@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M1H4WRAE065EB33TCTXZZDG9",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "web/src/locales/en.json",
+    "web/src/locales/ja.json",
+    "web/src/locales/ko.json",
+    "web/src/locales/zh.json",
+    "web/src/pages/saas/SaasDashboard.tsx",
+    "web/src/pages/saas/SaasPages.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 496801,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3020160,
+    "output_tokens": 30482,
+    "api_call_count": 53
+  }
+}
