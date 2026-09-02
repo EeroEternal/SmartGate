@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Activity, ArrowUpRight, KeyRound, Plus, Route, Sparkles } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, HelpCircle, KeyRound, Route, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
 import { SaasLayout } from './SaasPages'
 import { useI18n } from '../../lib/i18n'
 
 interface Service { id: string; name: string; endpoint_count?: number; strategy: string; health_status: string }
+interface Provider { id: string }
+interface ApiKey { id: string }
 
-const routingLabels: Record<string, string> = { cost_aware: 'Cost-first routing', capability_aware: 'Capability-first routing', load_aware: 'Load-balanced routing', round_robin: 'Even distribution' }
-const routingLabel = (strategy: string) => routingLabels[strategy] || 'Standard routing'
-const serviceStatus = (status: string) => status === 'draft' ? 'Setup needed' : 'Ready'
 interface Usage { requests: number; total_tokens: number; estimated_spend: number; success_rate: number; trimmed_chars: number; budget: { status: string; spent_today: number; daily_limit: number | null; remaining_today: number | null } }
 
 const money = (value = 0) => `$${value.toFixed(4)}`
@@ -23,6 +22,8 @@ const compactTokens = (value = 0) => {
 export default function SaasDashboard() {
   const { t } = useI18n()
   const [services, setServices] = useState<Service[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [keys, setKeys] = useState<ApiKey[]>([])
   const [usage, setUsage] = useState<Usage | null>(null)
   const [error, setError] = useState('')
 
@@ -39,24 +40,97 @@ export default function SaasDashboard() {
     Promise.all([
       saasFetch<Service[]>('/api/saas/model-services'),
       saasFetch<Usage>('/api/saas/usage?range=30d'),
+      saasFetch<Provider[]>('/api/saas/providers'),
+      saasFetch<ApiKey[]>('/api/saas/api-keys'),
     ])
-      .then(([s, u]) => {
+      .then(([s, u, p, k]) => {
         setServices(s.data || [])
         setUsage(u.data || null)
+        setProviders(p.data || [])
+        setKeys(k.data || [])
       })
       .catch((e) => setError(e.message))
   }, [])
 
+  const hasProviders = providers.length > 0
+  const draftService = services.find((service) => (service.endpoint_count || 0) === 0 || service.health_status === 'draft')
+  const hasReadyService = services.some((service) => (service.endpoint_count || 0) > 0 && service.health_status !== 'draft')
+  const hasKeys = keys.length > 0
+  const hasTraffic = (usage?.requests || 0) > 0
+  const setupSteps = [
+    {
+      done: hasProviders,
+      title: t('overview.step1_title'),
+      desc: t('overview.step1_desc'),
+      href: '/app/providers',
+      action: t('overview.step1_action'),
+    },
+    {
+      done: hasReadyService,
+      title: t('overview.step2_title'),
+      desc: t('overview.step2_desc'),
+      href: !services.length ? '/app/services/new' : draftService ? `/app/services/${draftService.id}` : '/app/services',
+      action: t('overview.step2_action'),
+    },
+    {
+      done: hasKeys,
+      title: t('overview.step3_title'),
+      desc: t('overview.step3_desc'),
+      href: '/app/keys',
+      action: t('overview.step3_action'),
+    },
+    {
+      done: hasTraffic,
+      title: t('overview.step4_title'),
+      desc: t('overview.step4_desc'),
+      href: '/app/codex',
+      action: t('overview.step4_action'),
+    },
+  ]
+  const doneCount = setupSteps.filter((step) => step.done).length
+  const setupDone = doneCount === setupSteps.length
+
   return (
     <SaasLayout>
       <div>
-        <div className="flex justify-end">
-          <Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white">
-            <Plus className="w-4 h-4" /> {t('services.create_button') || 'Add service'}
-          </Link>
-        </div>
-        {error && <div className="mt-6 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
-        <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {error && <div className="mb-6 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+        {!setupDone && (
+          <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">{t('overview.quick_start')}</h2>
+                <span title={t('overview.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600">
+                  <HelpCircle className="h-4 w-4" />
+                </span>
+              </div>
+              <span className="text-xs text-zinc-400">{t('overview.progress', { done: doneCount, total: setupSteps.length })}</span>
+            </div>
+            <ol className="mt-4 space-y-2">
+              {setupSteps.map((step, index) => (
+                <li key={step.title}>
+                  <Link
+                    to={step.href}
+                    className={`flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors ${
+                      step.done
+                        ? 'border-zinc-100 bg-zinc-50/60 text-zinc-500'
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${step.done ? 'text-emerald-600' : 'bg-zinc-950 text-[11px] font-medium text-white'}`}>
+                      {step.done ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-medium ${step.done ? 'text-zinc-500' : 'text-zinc-950'}`}>{step.title}</div>
+                      <div className="mt-0.5 text-xs leading-5 text-zinc-500">{step.desc}</div>
+                    </div>
+                    {!step.done && <span className="shrink-0 self-center text-xs font-medium text-primary">{step.action} →</span>}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card title={t('usage.total_spend') || 'Estimated spend'} value={money(usage?.estimated_spend)} detail={t('overview.last_30_days') || 'last 30 days'} />
           <Card title={t('overview.total_requests') || 'Total requests'} value={(usage?.requests || 0).toLocaleString()} detail={t('overview.success_rate_detail', { rate: ((usage?.success_rate || 0) * 100).toFixed(1) }) || `${((usage?.success_rate || 0) * 100).toFixed(1)}% successful`} />
           <Card title={t('usage.tokens_consumed') || 'Tokens consumed'} value={compactTokens(usage?.total_tokens || 0)} fullValue={(usage?.total_tokens || 0).toLocaleString()} detail={t('overview.input_output') || 'input + output'} />
@@ -125,8 +199,8 @@ export default function SaasDashboard() {
             <div className="text-sm font-medium">{t('keys.ready_to_connect') || 'Ready to connect an app?'}</div>
             <div className="text-xs text-zinc-500 mt-1">{t('keys.ready_desc') || 'Create an API key and connect using OpenAI Chat, OpenAI Responses, or Anthropic Messages.'}</div>
           </div>
-          <Link to="/app/keys" className="text-sm font-medium">
-            {t('keys.manage_keys') || 'Manage keys'} <ArrowUpRight className="inline w-3 h-3" />
+          <Link to={hasKeys ? '/app/codex' : '/app/keys'} className="text-sm font-medium">
+            {hasKeys ? (t('overview.step4_action') || 'View setup') : (t('keys.manage_keys') || 'Manage keys')} <ArrowUpRight className="inline w-3 h-3" />
           </Link>
         </div>
       </div>

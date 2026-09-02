@@ -57,17 +57,34 @@ export function SaasLayout({ children }: { children: ReactNode }) {
     window.location.href = '/'
   }
 
-  const links = [
-    [t('nav.overview'), '/app'],
-    [t('nav.model_services'), '/app/services'],
-    [t('nav.providers'), '/app/providers'],
-    [t('nav.api_keys'), '/app/keys'],
-    [t('nav.openrouter'), '/app/openrouter'],
-    [t('nav.evaluation'), '/app/evaluation'],
-    [t('nav.codex'), '/app/codex'],
-    [t('nav.analytics'), '/app/analytics'],
-    [t('nav.quality'), '/app/quality'],
-    [t('nav.usage'), '/app/usage'],
+  const navGroups: { label?: string; items: { label: string; href: string }[] }[] = [
+    {
+      items: [{ label: t('nav.overview'), href: '/app' }],
+    },
+    {
+      label: t('nav.group_setup'),
+      items: [
+        { label: t('nav.providers'), href: '/app/providers' },
+        { label: t('nav.model_services'), href: '/app/services' },
+        { label: t('nav.api_keys'), href: '/app/keys' },
+      ],
+    },
+    {
+      label: t('nav.group_monitor'),
+      items: [
+        { label: t('nav.usage'), href: '/app/usage' },
+        { label: t('nav.analytics'), href: '/app/analytics' },
+        { label: t('nav.quality'), href: '/app/quality' },
+      ],
+    },
+    {
+      label: t('nav.group_explore'),
+      items: [
+        { label: t('nav.openrouter'), href: '/app/openrouter' },
+        { label: t('nav.evaluation'), href: '/app/evaluation' },
+        { label: t('nav.codex'), href: '/app/codex' },
+      ],
+    },
   ]
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
 
@@ -93,9 +110,26 @@ export function SaasLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
     </header>
-    <div className="mx-auto grid max-w-[1440px] min-w-0 gap-8 px-6 py-8 md:px-10 lg:grid-cols-[200px_minmax(0,1fr)]">
-      <aside className="min-w-0 space-y-1">
-        {links.map(([label, href]) => <Link key={href} to={href} className={`block rounded-lg px-3 py-2.5 text-sm ${isActive(href) ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-600 hover:bg-white hover:text-zinc-950'}`}>{label}</Link>)}
+    <div className="mx-auto grid max-w-[1440px] min-w-0 gap-8 px-6 py-8 md:px-10 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="min-w-0 space-y-5 lg:sticky lg:top-8 lg:self-start">
+        {navGroups.map((group, groupIndex) => (
+          <div key={group.label || `group-${groupIndex}`} className="space-y-1">
+            {group.label && (
+              <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                {group.label}
+              </div>
+            )}
+            {group.items.map(({ label, href }) => (
+              <Link
+                key={href}
+                to={href}
+                className={`block rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-600 hover:bg-white hover:text-zinc-950'}`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        ))}
       </aside>
       <main className="min-w-0">{children}</main>
     </div>
@@ -3134,7 +3168,13 @@ export function KeysPage() {
       )}
       {error && <ErrorMessage text={error} />}
       {!keys.length ? (
-        <Empty text={t('keys.no_keys') || 'No API keys yet.'} href="/app/services" />
+        services.length ? (
+          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+            {t('keys.no_keys') || 'No API keys yet.'}
+          </div>
+        ) : (
+          <Empty text={t('keys.need_service') || 'Create a model service first, then issue an API key.'} href="/app/services/new" />
+        )
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {keys.map((key) => {
