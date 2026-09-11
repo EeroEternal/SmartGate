@@ -229,8 +229,10 @@ impl GatewayHooks for SmartGateHooks {
                 .get("context_epoch")
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(0);
-            let affinity_enabled = report.metadata.get("affinity_enabled") == Some(&"1".to_string());
-            let affinity_applied = report.metadata.get("affinity_applied") == Some(&"1".to_string());
+            let affinity_enabled =
+                report.metadata.get("affinity_enabled") == Some(&"1".to_string());
+            let affinity_applied =
+                report.metadata.get("affinity_applied") == Some(&"1".to_string());
             let sticky_endpoint_id = report.metadata.get("sticky_endpoint_id").cloned();
             let affinity_ttl_secs = report
                 .metadata
@@ -276,7 +278,10 @@ impl GatewayHooks for SmartGateHooks {
             metadata_values.insert("usage_confidence".to_string(), usage_confidence.to_string());
             metadata_values.insert("pricing_source".to_string(), pricing_source.to_string());
             metadata_values.insert("attempts".to_string(), attempts.join(","));
-            metadata_values.insert("attempt_count".to_string(), report.attempts.len().to_string());
+            metadata_values.insert(
+                "attempt_count".to_string(),
+                report.attempts.len().to_string(),
+            );
             metadata_values.insert(
                 "fallback".to_string(),
                 if fallback_used { "true" } else { "false" }.to_string(),

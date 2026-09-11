@@ -38,7 +38,7 @@ pub fn effective_daily_limit(key_limit: Option<f64>, project_limit: Option<f64>)
     }
 }
 
-pub async fn spent_today_for_key(db: &PgPool, key_id: &str) -> f64 {
+pub async fn spent_today_for_key(db: &PgPool, key_id: &str) -> Result<f64, sqlx::Error> {
     let start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap();
     let start = start.and_utc();
     let row: (Option<f64>,) = sqlx::query_as(
@@ -47,9 +47,8 @@ pub async fn spent_today_for_key(db: &PgPool, key_id: &str) -> f64 {
     .bind(key_id)
     .bind(start)
     .fetch_one(db)
-    .await
-    .unwrap_or((Some(0.0),));
-    row.0.unwrap_or(0.0)
+    .await?;
+    Ok(row.0.unwrap_or(0.0))
 }
 
 pub fn evaluate(spent: f64, limit: Option<f64>) -> BudgetOutcome {

@@ -6,6 +6,7 @@ use axum::{
     response::Response,
 };
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 pub async fn admin_auth_middleware(
     State(state): State<Arc<AppState>>,
@@ -18,7 +19,8 @@ pub async fn admin_auth_middleware(
         .and_then(|h| h.to_str().ok())
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    if auth_header != format!("Bearer {}", state.config.admin_token) {
+    let expected = format!("Bearer {}", state.config.admin_token);
+    if expected.as_bytes().ct_ne(auth_header.as_bytes()).into() {
         return Err(StatusCode::UNAUTHORIZED);
     }
 

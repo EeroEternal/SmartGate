@@ -4,6 +4,9 @@ use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
 use crate::usage::SmartGateHooks;
 use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
     Router,
 };
@@ -16,8 +19,25 @@ use tower_http::{
 };
 use unigateway_sdk::core::UniGatewayEngine;
 
-async fn health_check() -> &'static str {
-    "OK"
+async fn health_check(State(state): State<Arc<AppState>>) -> Response {
+    // Cheap liveness probe that also verifies DB connectivity.
+    let db_ok = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        sqlx::query("SELECT 1").execute(&state.db),
+    )
+    .await
+    .map(|r| r.is_ok())
+    .unwrap_or(false);
+
+    if db_ok {
+        (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))).into_response()
+    } else {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"status": "unavailable", "reason": "database"})),
+        )
+            .into_response()
+    }
 }
 
 pub async fn run(config: Config) -> anyhow::Result<()> {
@@ -57,7 +77,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles, &metrics).await?;
 
     // Spawn background sync worker for OpenRouter market catalog (every 6 hours)
-    crate::sync::openrouter::spawn_openrouter_sync_worker(db.clone(), std::time::Duration::from_secs(6 * 3600));
+    crate::sync::openrouter::spawn_openrouter_sync_worker(
+        db.clone(),
+        std::time::Duration::from_secs(6 * 3600),
+    );
 
     let warm_store = Arc::new(
         crate::warm::WarmStore::try_with_config(&config.warm)
@@ -170,7 +193,35 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     };
 
     let listener = tokio::net::TcpListener::bind(config.addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("Shutdown signal received, stopping server");
 }

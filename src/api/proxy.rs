@@ -90,12 +90,17 @@ async fn chat_proxy(
         }
     };
 
-    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+    let pool = match sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
         .bind(&virtual_model.pool_id)
         .fetch_optional(&state.db)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(pool) => pool,
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
 
     let strategy = pool
         .as_ref()
@@ -119,7 +124,18 @@ async fn chat_proxy(
         auth.api_key.daily_spend_limit,
         auth.project.daily_spend_limit,
     );
-    let spent = spent_today_for_key(&state.db, &auth.api_key.id).await;
+    let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
+        Ok(spent) => spent,
+        Err(error) => {
+            // Fail closed: without spend data we cannot enforce budgets.
+            tracing::error!("Database error fetching spend for budget check: {}", error);
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Spend tracking temporarily unavailable",
+            )
+                .into_response();
+        }
+    };
     let budget = evaluate_budget(spent, limit);
     if budget.is_blocked() {
         let headers = budget_headers(&budget, spent, limit);
@@ -228,7 +244,10 @@ async fn chat_proxy(
                         difficulty = judge_tier.score();
                         difficulty_source = "judge";
                         judge_used = true;
-                        signals.push(format!("Auxiliary Judge: {}", judge_tier.as_str().to_uppercase()));
+                        signals.push(format!(
+                            "Auxiliary Judge: {}",
+                            judge_tier.as_str().to_uppercase()
+                        ));
                     }
                 }
             }
@@ -277,9 +296,9 @@ async fn chat_proxy(
             affinity_ttl,
         )
     });
-    let is_prefix_stable = session_id.as_ref().and_then(|sid| {
-        prefix_stable(&virtual_model.pool_id, sid, context_epoch, pfx_hash)
-    });
+    let is_prefix_stable = session_id
+        .as_ref()
+        .and_then(|sid| prefix_stable(&virtual_model.pool_id, sid, context_epoch, pfx_hash));
 
     let route_hint = RouteHint {
         input_tokens,
@@ -526,22 +545,29 @@ async fn chat_proxy(
             // Shadow Flighting: mirror a sample of non-streaming requests to the configured
             // flagship model in the background and compare response previews.
             let (status, body) = response.into_parts();
-            let is_json = matches!(&body, unigateway_sdk::protocol::ProtocolResponseBody::Json(_));
+            let is_json = matches!(
+                &body,
+                unigateway_sdk::protocol::ProtocolResponseBody::Json(_)
+            );
+            let shadow_config = pool.as_ref().and_then(|p| {
+                if p.shadow_enabled == 0 {
+                    return None;
+                }
+                let threshold = (p.shadow_sample_rate.max(0.0).min(1.0) * 1_000_000.0) as u128;
+                p.shadow_virtual_model_id
+                    .clone()
+                    .map(|name| (name, threshold))
+            });
             let should_shadow = is_json
-                && pool.as_ref().is_some_and(|p| p.shadow_enabled != 0)
-                && pool
-                    .as_ref()
-                    .and_then(|p| p.shadow_virtual_model_id.as_ref())
-                    .is_some()
-                && {
-                    let sample = uuid::Uuid::new_v4().as_u128() % 1_000_000;
-                    let threshold = (pool.as_ref().unwrap().shadow_sample_rate.max(0.0).min(1.0) * 1_000_000.0) as u128;
-                    sample < threshold
-                };
+                && shadow_config.as_ref().is_some_and(|(_, threshold)| {
+                    uuid::Uuid::new_v4().as_u128() % 1_000_000 < *threshold
+                });
 
             let main_preview = if is_json {
                 match &body {
-                    unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => crate::api::shadow::extract_json_preview(json),
+                    unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => {
+                        crate::api::shadow::extract_json_preview(json)
+                    }
                     _ => String::new(),
                 }
             } else {
@@ -549,40 +575,38 @@ async fn chat_proxy(
             };
 
             if should_shadow {
-                let state_clone = Arc::clone(&state);
-                let auth_clone = auth.clone();
-                let headers_clone = headers.clone();
-                let payload_clone = payload.clone();
-                let shadow_model_name = pool
-                    .as_ref()
-                    .unwrap()
-                    .shadow_virtual_model_id
-                    .as_ref()
-                    .unwrap()
-                    .clone();
-                let request_preview = prompt_preview.clone();
-                let is_openai = protocol == ChatProtocol::OpenAi;
-                tokio::spawn(async move {
-                    run_shadow(
-                        state_clone,
-                        auth_clone,
-                        headers_clone,
-                        payload_clone,
-                        shadow_model_name,
-                        request_preview,
-                        main_preview,
-                        is_openai,
-                    )
-                    .await;
-                });
+                if let Some((shadow_model_name, _)) = shadow_config {
+                    let state_clone = Arc::clone(&state);
+                    let auth_clone = auth.clone();
+                    let headers_clone = headers.clone();
+                    let payload_clone = payload.clone();
+                    let request_preview = prompt_preview.clone();
+                    let is_openai = protocol == ChatProtocol::OpenAi;
+                    tokio::spawn(async move {
+                        run_shadow(
+                            state_clone,
+                            auth_clone,
+                            headers_clone,
+                            payload_clone,
+                            shadow_model_name,
+                            request_preview,
+                            main_preview,
+                            is_openai,
+                        )
+                        .await;
+                    });
+                }
             }
 
-            let response = unigateway_sdk::protocol::ProtocolHttpResponse::json(status, match body {
-                unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => json,
-                unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
-                    return (StatusCode::OK, Json(serde_json::Value::Null)).into_response();
-                }
-            });
+            let response = unigateway_sdk::protocol::ProtocolHttpResponse::json(
+                status,
+                match body {
+                    unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => json,
+                    unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
+                        return (StatusCode::OK, Json(serde_json::Value::Null)).into_response();
+                    }
+                },
+            );
             let mut resp = protocol_response_to_axum(response);
             for (name, value) in budget_headers(&budget, spent, limit) {
                 if let Some(name) = name {
@@ -713,12 +737,17 @@ pub async fn responses(
         }
     };
 
-    let pool = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+    let pool = match sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
         .bind(&virtual_model.pool_id)
         .fetch_optional(&state.db)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(pool) => pool,
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
     let strategy = pool
         .as_ref()
         .map(|pool| canonicalize_strategy(&pool.strategy).to_string())
@@ -728,7 +757,18 @@ pub async fn responses(
         auth.api_key.daily_spend_limit,
         auth.project.daily_spend_limit,
     );
-    let spent = spent_today_for_key(&state.db, &auth.api_key.id).await;
+    let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
+        Ok(spent) => spent,
+        Err(error) => {
+            // Fail closed: without spend data we cannot enforce budgets.
+            tracing::error!("Database error fetching spend for budget check: {}", error);
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Spend tracking temporarily unavailable",
+            )
+                .into_response();
+        }
+    };
     let budget = evaluate_budget(spent, limit);
     if budget.is_blocked() {
         return (
@@ -983,7 +1023,7 @@ fn protocol_response_to_axum(resp: unigateway_sdk::protocol::ProtocolHttpRespons
                 .header("cache-control", "no-cache")
                 .header("connection", "keep-alive")
                 .body(body)
-                .unwrap()
+                .expect("valid static response headers")
         }
     }
 }

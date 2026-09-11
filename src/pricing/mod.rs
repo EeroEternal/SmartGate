@@ -141,10 +141,7 @@ pub const CAPABILITY_SPREAD_MIN: f64 = 0.05;
 /// Capability actually used for routing: cold-start placeholders fall back to the
 /// model family profile, deliberate values are kept.
 pub fn effective_capability_score(model_id: &str, configured: f64) -> f64 {
-    if configured <= 0.0
-        || (configured - 0.50).abs() < 1e-5
-        || (configured - 0.70).abs() < 1e-5
-    {
+    if configured <= 0.0 || (configured - 0.50).abs() < 1e-5 || (configured - 0.70).abs() < 1e-5 {
         default_capability_score(model_id, None)
     } else {
         configured.clamp(0.0, 1.0)
@@ -189,9 +186,20 @@ pub struct ModelDna {
     pub strengths: Vec<String>,
 }
 
-pub fn derive_model_dna(model_id: &str, capability_score: f64, supports_tools: Option<bool>) -> ModelDna {
+pub fn derive_model_dna(
+    model_id: &str,
+    capability_score: f64,
+    supports_tools: Option<bool>,
+) -> ModelDna {
     let lower = model_id.to_ascii_lowercase();
-    let is_pro = capability_score >= 0.88 || lower.contains("pro") || lower.contains("max") || lower.contains("r1") || lower.contains("reasoner") || lower.contains("gpt-4") || lower.contains("sonnet") || lower.contains("opus");
+    let is_pro = capability_score >= 0.88
+        || lower.contains("pro")
+        || lower.contains("max")
+        || lower.contains("r1")
+        || lower.contains("reasoner")
+        || lower.contains("gpt-4")
+        || lower.contains("sonnet")
+        || lower.contains("opus");
     let is_deepseek = lower.contains("deepseek");
     let is_qwen = lower.contains("qwen") || lower.contains("bailian") || lower.contains("tongyi");
     let is_claude = lower.contains("claude");
@@ -242,13 +250,14 @@ pub fn derive_model_dna(model_id: &str, capability_score: f64, supports_tools: O
             ModelDna {
                 code_logic: base.min(95),
                 reasoning_math: base.min(95),
-                agent_tools: if supports_tools.unwrap_or(true) { base.min(94) } else { 60 },
+                agent_tools: if supports_tools.unwrap_or(true) {
+                    base.min(94)
+                } else {
+                    60
+                },
                 multilingual_nlp: base.min(94),
                 context_retention: base.min(94),
-                strengths: vec![
-                    "High-End Reasoning".into(),
-                    "Broad Domain Knowledge".into(),
-                ],
+                strengths: vec!["High-End Reasoning".into(), "Broad Domain Knowledge".into()],
             }
         }
     } else {
@@ -284,7 +293,11 @@ pub fn derive_model_dna(model_id: &str, capability_score: f64, supports_tools: O
             ModelDna {
                 code_logic: base,
                 reasoning_math: base.saturating_sub(4),
-                agent_tools: if supports_tools.unwrap_or(true) { base + 2 } else { 55 },
+                agent_tools: if supports_tools.unwrap_or(true) {
+                    base + 2
+                } else {
+                    55
+                },
                 multilingual_nlp: base + 3,
                 context_retention: base,
                 strengths: vec![
@@ -310,8 +323,14 @@ mod tests {
             ("deepseek-v4-pro".to_string(), 0.80),
         ];
         let resolved = resolve_pool_capabilities(&members);
-        assert_eq!(resolved[0], default_capability_score("deepseek-v4-flash", None));
-        assert_eq!(resolved[2], default_capability_score("deepseek-v4-pro", None));
+        assert_eq!(
+            resolved[0],
+            default_capability_score("deepseek-v4-flash", None)
+        );
+        assert_eq!(
+            resolved[2],
+            default_capability_score("deepseek-v4-pro", None)
+        );
         assert!(resolved[2] > resolved[0]);
     }
 
@@ -323,7 +342,10 @@ mod tests {
             ("deepseek-v4-pro".to_string(), 0.65),
         ];
         let resolved = resolve_pool_capabilities(&members);
-        assert_eq!(resolved[2], default_capability_score("deepseek-v4-pro", None));
+        assert_eq!(
+            resolved[2],
+            default_capability_score("deepseek-v4-pro", None)
+        );
         assert!(resolved[2] > resolved[0]);
     }
 
@@ -379,7 +401,10 @@ mod tests {
 
     #[test]
     fn test_default_capability_score() {
-        assert!(default_capability_score("deepseek-v4-pro", None) > default_capability_score("deepseek-v4-flash", None));
+        assert!(
+            default_capability_score("deepseek-v4-pro", None)
+                > default_capability_score("deepseek-v4-flash", None)
+        );
         assert!(default_capability_score("deepseek-reasoner", None) >= 0.95);
         assert_eq!(default_capability_score("qwen3.6-flash", None), 0.65);
     }

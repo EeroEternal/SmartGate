@@ -216,12 +216,14 @@ pub(super) async fn get_api_key_profile(
                     LEFT JOIN provider_accounts pa ON pa.id = u.provider_account_id
                     WHERE u.project_id = $1 AND u.key_id = $2";
     let rows: Vec<ApiKeyProfileRow> = if let Some(value) = since {
-        sqlx::query_as(&format!("{base_sql} AND u.timestamp >= $3 ORDER BY u.timestamp ASC"))
-            .bind(&ctx.project_id)
-            .bind(&key_id)
-            .bind(value)
-            .fetch_all(&state.db)
-            .await
+        sqlx::query_as(&format!(
+            "{base_sql} AND u.timestamp >= $3 ORDER BY u.timestamp ASC"
+        ))
+        .bind(&ctx.project_id)
+        .bind(&key_id)
+        .bind(value)
+        .fetch_all(&state.db)
+        .await
     } else {
         sqlx::query_as(&format!("{base_sql} ORDER BY u.timestamp ASC"))
             .bind(&ctx.project_id)
@@ -320,7 +322,8 @@ fn profile_rate_f64(numerator: f64, denominator: i64) -> Option<f64> {
 }
 
 fn profile_average(values: &[i32]) -> Option<f64> {
-    (!values.is_empty()).then(|| values.iter().map(|value| *value as f64).sum::<f64>() / values.len() as f64)
+    (!values.is_empty())
+        .then(|| values.iter().map(|value| *value as f64).sum::<f64>() / values.len() as f64)
 }
 
 fn profile_percentile(values: &[i32], fraction: f64) -> Option<f64> {
@@ -337,14 +340,23 @@ fn profile_json_flag<const N: usize>(raw_values: [Option<&String>; N], key: &str
     raw_values
         .into_iter()
         .filter_map(|raw| raw.and_then(|value| serde_json::from_str::<Value>(value).ok()))
-        .any(|value| profile_json_value(&value, key).is_some_and(|item| {
-            item.as_bool().unwrap_or_else(|| item.as_str().is_some_and(|text| matches!(text, "true" | "1")))
-        }))
+        .any(|value| {
+            profile_json_value(&value, key).is_some_and(|item| {
+                item.as_bool().unwrap_or_else(|| {
+                    item.as_str()
+                        .is_some_and(|text| matches!(text, "true" | "1"))
+                })
+            })
+        })
 }
 
 fn profile_json_value<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
     match value {
-        Value::Object(object) => object.get(key).or_else(|| object.values().find_map(|item| profile_json_value(item, key))),
+        Value::Object(object) => object.get(key).or_else(|| {
+            object
+                .values()
+                .find_map(|item| profile_json_value(item, key))
+        }),
         Value::Array(items) => items.iter().find_map(|item| profile_json_value(item, key)),
         _ => None,
     }
@@ -371,14 +383,16 @@ fn profile_difficulty_tier(raw: Option<&str>) -> Option<String> {
         }
     }
     let difficulty = profile_json_value(&value, "difficulty").and_then(Value::as_f64)?;
-    Some(if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
-        "high"
-    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
-        "medium"
-    } else {
-        "low"
-    }
-    .to_string())
+    Some(
+        if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
+            "high"
+        } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
+            "medium"
+        } else {
+            "low"
+        }
+        .to_string(),
+    )
 }
 
 pub(super) async fn create_api_key(
@@ -677,7 +691,9 @@ mod tests {
         let rows = vec![
             profile_row(
                 Some(200),
-                Some(r#"{"difficulty_tier":"medium","difficulty_source":"judge","has_tools":true,"fallback":true}"#),
+                Some(
+                    r#"{"difficulty_tier":"medium","difficulty_source":"judge","has_tools":true,"fallback":true}"#,
+                ),
                 None,
                 Some("session-1"),
                 Some(100),
@@ -732,7 +748,10 @@ mod tests {
             "prompt_preview": "must not be returned"
         })
         .to_string();
-        assert_eq!(profile_difficulty_tier(Some(&decision)).as_deref(), Some("high"));
+        assert_eq!(
+            profile_difficulty_tier(Some(&decision)).as_deref(),
+            Some("high")
+        );
         assert!(profile_json_flag([Some(&decision)], "has_tools"));
         assert!(profile_json_flag([Some(&decision)], "fallback"));
         assert!(!profile_json_flag([Some(&decision)], "prompt_preview"));

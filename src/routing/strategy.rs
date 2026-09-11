@@ -184,9 +184,7 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
     );
 
     match strategy {
-        "priority" => {
-            Some(input.member.priority as f64 * 1_000.0 + input.member.weight as f64)
-        }
+        "priority" => Some(input.member.priority as f64 * 1_000.0 + input.member.weight as f64),
         "least_connections" => Some(1.0 / (1.0 + input.active as f64)),
         "load_aware" | "latency_based" => {
             let latency = if input.success_latency_ms > 0.0 {
@@ -196,16 +194,14 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             } else {
                 0.0
             };
-            let lat_score = if latency > 0.0 {
-                1000.0 / latency
-            } else {
-                1.0
-            };
+            let lat_score = if latency > 0.0 { 1000.0 / latency } else { 1.0 };
             let load_penalty = 1.0 / (1.0 + input.active as f64);
             Some(lat_score * load_penalty * (1.0 - 0.5 * err).max(0.1))
         }
         "cost_aware" => {
-            if !input.profile.price.is_priced() && input.profile.billing_tier != crate::pricing::BillingTier::FreeTier {
+            if !input.profile.price.is_priced()
+                && input.profile.billing_tier != crate::pricing::BillingTier::FreeTier
+            {
                 Some(UNPRICED_SCORE)
             } else {
                 Some(1.0 / (base_cost + 1e-12))
@@ -217,7 +213,8 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
             let capable =
                 capability_qualified(capability, input.difficulty, input.max_pool_capability);
             let near_capable = capability >= (req - 0.10);
-            let is_priced = input.profile.price.is_priced() || input.profile.billing_tier == crate::pricing::BillingTier::FreeTier;
+            let is_priced = input.profile.price.is_priced()
+                || input.profile.billing_tier == crate::pricing::BillingTier::FreeTier;
             let normalized_cost = if is_priced {
                 (1.0 / (base_cost + 1e-6)).clamp(0.0, COST_TERM_MAX)
             } else {
@@ -235,12 +232,8 @@ pub fn score(strategy: &str, input: ScoreInput<'_>) -> Option<f64> {
                 // profile (so two endpoints sharing a score do not fall back to
                 // price), and only then on cost.
                 let capability_rank = (capability.clamp(0.0, 1.0) * 100.0).round();
-                let family_rank = (input
-                    .profile
-                    .family_capability_score
-                    .clamp(0.0, 1.0)
-                    * 100.0)
-                    .round();
+                let family_rank =
+                    (input.profile.family_capability_score.clamp(0.0, 1.0) * 100.0).round();
                 Some(
                     tier * CAPABILITY_TIER_SCALE
                         + capability_rank * CAPABILITY_RANK_SCALE

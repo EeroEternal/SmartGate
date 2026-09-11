@@ -13,7 +13,9 @@ use std::sync::Arc;
 use crate::{
     api::models::ApiResponse,
     config::AppState,
-    policy::{evaluate_budget, BudgetOutcome, DIFFICULTY_HIGH_THRESHOLD, DIFFICULTY_MEDIUM_THRESHOLD},
+    policy::{
+        evaluate_budget, BudgetOutcome, DIFFICULTY_HIGH_THRESHOLD, DIFFICULTY_MEDIUM_THRESHOLD,
+    },
 };
 
 use super::{db_error, range_since, RangeQuery, SaasContext};
@@ -31,7 +33,23 @@ pub(super) async fn get_usage(
         ("", None)
     };
     let sql = format!("SELECT COUNT(*), COALESCE(SUM(u.prompt_tokens),0), COALESCE(SUM(u.completion_tokens),0), COALESCE(SUM(u.total_tokens),0), COALESCE(SUM(u.estimated_cost),0), COALESCE(AVG(u.latency_ms)::double precision, 0.0), COALESCE(SUM(CASE WHEN u.status_code >= 200 AND u.status_code < 300 THEN 1 ELSE 0 END),0), COALESCE(SUM(u.trimmed_chars),0), COALESCE(SUM(u.cache_hit_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_hit_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_hit_tokens), COALESCE(SUM(CASE WHEN u.cache_hit_tokens IS NOT NULL THEN u.prompt_tokens ELSE 0 END),0), COALESCE(SUM(u.cache_write_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_write_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_write_tokens) FROM usage_logs u JOIN projects p ON p.id = u.project_id WHERE p.org_id = $1 {where_sql}");
-    let row: (i64, i64, i64, i64, f64, f64, i64, i64, i64, i64, i64, i64, i64, i64, i64) = if let Some(value) = since_value {
+    let row: (
+        i64,
+        i64,
+        i64,
+        i64,
+        f64,
+        f64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+    ) = if let Some(value) = since_value {
         sqlx::query_as(&sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -92,23 +110,24 @@ pub(super) async fn get_usage(
         i64,
         i64,
         i64,
-    )> =
-        if let Some(value) = since_value {
-            sqlx::query_as(&breakdown_sql)
-                .bind(&ctx.org_id)
-                .bind(value)
-                .fetch_all(&state.db)
-                .await
-        } else {
-            sqlx::query_as(&breakdown_sql)
-                .bind(&ctx.org_id)
-                .fetch_all(&state.db)
-                .await
-        }
-        .map_err(db_error)?;
+    )> = if let Some(value) = since_value {
+        sqlx::query_as(&breakdown_sql)
+            .bind(&ctx.org_id)
+            .bind(value)
+            .fetch_all(&state.db)
+            .await
+    } else {
+        sqlx::query_as(&breakdown_sql)
+            .bind(&ctx.org_id)
+            .fetch_all(&state.db)
+            .await
+    }
+    .map_err(db_error)?;
 
-    let mut provider_groups: BTreeMap<String, (i64, i64, i64, i64, f64, i64, i64)> = BTreeMap::new();
-    let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64, i64, i64)> = BTreeMap::new();
+    let mut provider_groups: BTreeMap<String, (i64, i64, i64, i64, f64, i64, i64)> =
+        BTreeMap::new();
+    let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64, i64, i64)> =
+        BTreeMap::new();
     let mut provider_reported_requests = 0_i64;
     let mut priced_requests = 0_i64;
     let mut missing_usage_groups: BTreeMap<(String, String), (i64, i64, i64)> = BTreeMap::new();
@@ -175,15 +194,17 @@ pub(super) async fn get_usage(
     let missing_usage_requests = row.0 - provider_reported_requests;
     let missing_usage_breakdown = missing_usage_groups
         .into_iter()
-        .map(|((provider, model), (missing, local_estimate, unavailable))| {
-            json!({
-                "provider": provider,
-                "model": model,
-                "requests": missing,
-                "local_estimate_requests": local_estimate,
-                "unavailable_requests": unavailable,
-            })
-        })
+        .map(
+            |((provider, model), (missing, local_estimate, unavailable))| {
+                json!({
+                    "provider": provider,
+                    "model": model,
+                    "requests": missing,
+                    "local_estimate_requests": local_estimate,
+                    "unavailable_requests": unavailable,
+                })
+            },
+        )
         .collect::<Vec<_>>();
     let usage_coverage = if row.0 > 0 {
         provider_reported_requests as f64 / row.0 as f64
@@ -326,7 +347,8 @@ pub(super) async fn get_routing_analytics(
         strategy,
         decision_str,
         metadata_str,
-    ) in rows {
+    ) in rows
+    {
         total_cost += cost;
         total_latency += latency_ms as i64;
         total_tokens += tokens as i64;
@@ -406,11 +428,12 @@ pub(super) async fn get_routing_analytics(
             }
         }
 
-        let clean_service_name = if service_name.len() > 37 && service_name.chars().nth(36) == Some('-') {
-            service_name[37..].to_string()
-        } else {
-            service_name.clone()
-        };
+        let clean_service_name =
+            if service_name.len() > 37 && service_name.chars().nth(36) == Some('-') {
+                service_name[37..].to_string()
+            } else {
+                service_name.clone()
+            };
 
         if prompt_preview.is_empty() {
             prompt_preview = format!("{} tokens query via {}", prompt_tokens, clean_service_name);
@@ -581,7 +604,9 @@ pub(super) async fn get_quality_analytics(
     let baseline_config = load_savings_baseline(&state, &ctx)
         .await
         .map_err(db_error)?;
-    let baseline_pair = baseline_config.as_ref().map(|row| (row.0.clone(), row.1.clone()));
+    let baseline_pair = baseline_config
+        .as_ref()
+        .map(|row| (row.0.clone(), row.1.clone()));
 
     for QualityAnalyticsRow {
         id,
@@ -602,8 +627,10 @@ pub(super) async fn get_quality_analytics(
         metadata: _,
         trimmed_chars,
         tool_message_chars,
-    } in rows {
-        let is_baseline = baseline_pair.as_ref() == Some(&(virtual_model_id.clone(), endpoint_id.clone()));
+    } in rows
+    {
+        let is_baseline =
+            baseline_pair.as_ref() == Some(&(virtual_model_id.clone(), endpoint_id.clone()));
 
         total_cost += cost;
         total_latency += latency_ms as i64;
@@ -674,7 +701,9 @@ pub(super) async fn get_quality_analytics(
             }
         }
 
-        let is_correction = signals.iter().any(|s| s.contains("Correction") || s.contains("Follow-up") || s.contains("Clarification"));
+        let is_correction = signals.iter().any(|s| {
+            s.contains("Correction") || s.contains("Follow-up") || s.contains("Clarification")
+        });
         if is_correction {
             correction_count += 1;
             if is_baseline {
@@ -702,7 +731,8 @@ pub(super) async fn get_quality_analytics(
             )
         };
 
-        let clean_service_name = service_name.replace(|c: char| c == '-' && c.is_ascii_punctuation(), "-");
+        let clean_service_name =
+            service_name.replace(|c: char| c == '-' && c.is_ascii_punctuation(), "-");
         quality_records.push(json!({
             "id": id,
             "timestamp": timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -731,22 +761,30 @@ pub(super) async fn get_quality_analytics(
     let p90_latency = profile_percentile(&latencies, 0.90).map(|value| value.round() as i64);
     let treatment_successful_count = successful_count.saturating_sub(baseline_successful_count);
     let treatment_correction_count = correction_count.saturating_sub(baseline_correction_count);
-    let treatment_schema_success_count = schema_success_count.saturating_sub(baseline_schema_success_count);
+    let treatment_schema_success_count =
+        schema_success_count.saturating_sub(baseline_schema_success_count);
     let user_correction_rate = (treatment_queries > 0).then(|| {
         (treatment_correction_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
     let success_rate = (treatment_queries > 0).then(|| {
         (treatment_successful_count as f64 / treatment_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
-    let schema_compliance_rate = (schema_request_count > baseline_schema_request_count).then(|| {
-        (treatment_schema_success_count as f64 / (schema_request_count - baseline_schema_request_count) as f64 * 100.0 * 10.0).round() / 10.0
-    });
+    let schema_compliance_rate =
+        (schema_request_count > baseline_schema_request_count).then(|| {
+            (treatment_schema_success_count as f64
+                / (schema_request_count - baseline_schema_request_count) as f64
+                * 100.0
+                * 10.0)
+                .round()
+                / 10.0
+        });
 
     let baseline_avg_cost = (baseline_queries > 0)
         .then(|| (baseline_cost / baseline_queries as f64 * 10_000.0).round() / 10_000.0);
     let baseline_avg_latency = (baseline_queries > 0)
         .then(|| (baseline_latency as f64 / baseline_queries as f64).round() as i64);
-    let baseline_p90_latency = profile_percentile(&baseline_latencies, 0.90).map(|value| value.round() as i64);
+    let baseline_p90_latency =
+        profile_percentile(&baseline_latencies, 0.90).map(|value| value.round() as i64);
     let baseline_correction_rate = (baseline_queries > 0).then(|| {
         (baseline_correction_count as f64 / baseline_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
@@ -754,7 +792,9 @@ pub(super) async fn get_quality_analytics(
         (baseline_successful_count as f64 / baseline_queries as f64 * 100.0 * 10.0).round() / 10.0
     });
     let baseline_schema_compliance_rate = (baseline_schema_request_count > 0).then(|| {
-        (baseline_schema_success_count as f64 / baseline_schema_request_count as f64 * 100.0 * 10.0).round() / 10.0
+        (baseline_schema_success_count as f64 / baseline_schema_request_count as f64 * 100.0 * 10.0)
+            .round()
+            / 10.0
     });
 
     let quality_preserved_rate = if baseline_queries > 0 && treatment_queries > 0 {
@@ -769,7 +809,10 @@ pub(super) async fn get_quality_analytics(
         None
     };
 
-    let speedup_pct = if baseline_avg_latency.is_some() && baseline_avg_latency.unwrap() > 0 && actual_avg_latency.is_some() {
+    let speedup_pct = if baseline_avg_latency.is_some()
+        && baseline_avg_latency.unwrap() > 0
+        && actual_avg_latency.is_some()
+    {
         let baseline_ms = baseline_avg_latency.unwrap() as f64;
         let actual_ms = actual_avg_latency.unwrap() as f64;
         Some((((baseline_ms - actual_ms) / baseline_ms * 100.0) * 10.0).round() / 10.0)
@@ -802,30 +845,39 @@ pub(super) async fn get_quality_analytics(
             .await
     }
     .map_err(db_error)?;
-    let shadow_agreement_score = (shadow_total > 0).then(|| {
-        (shadow_agreed as f64 / shadow_total as f64 * 100.0 * 10.0).round() / 10.0
-    });
+    let shadow_agreement_score = (shadow_total > 0)
+        .then(|| (shadow_agreed as f64 / shadow_total as f64 * 100.0 * 10.0).round() / 10.0);
 
-    let comparison_status = if baseline_config.is_some() { "available" } else { "unavailable" };
+    let comparison_status = if baseline_config.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
     let (baseline_summary, cost_saved_pct) = match &baseline_config {
-        Some((virtual_model_id, endpoint_id, service_name, model, provider_name, _input_price, _output_price)) => {
-            (
-                json!({
-                    "name": format!("{service_name} · {model}"),
-                    "virtual_model_id": virtual_model_id,
-                    "endpoint_id": endpoint_id,
-                    "model": model,
-                    "provider_name": provider_name,
-                    "cost_per_req": baseline_avg_cost,
-                    "avg_latency_ms": baseline_avg_latency,
-                    "p90_latency_ms": baseline_p90_latency,
-                    "task_success_rate": baseline_success_rate,
-                    "correction_rate": baseline_correction_rate,
-                    "schema_compliance_rate": baseline_schema_compliance_rate,
-                }),
-                cost_saved_percentage(baseline_cost, total_cost),
-            )
-        }
+        Some((
+            virtual_model_id,
+            endpoint_id,
+            service_name,
+            model,
+            provider_name,
+            _input_price,
+            _output_price,
+        )) => (
+            json!({
+                "name": format!("{service_name} · {model}"),
+                "virtual_model_id": virtual_model_id,
+                "endpoint_id": endpoint_id,
+                "model": model,
+                "provider_name": provider_name,
+                "cost_per_req": baseline_avg_cost,
+                "avg_latency_ms": baseline_avg_latency,
+                "p90_latency_ms": baseline_p90_latency,
+                "task_success_rate": baseline_success_rate,
+                "correction_rate": baseline_correction_rate,
+                "schema_compliance_rate": baseline_schema_compliance_rate,
+            }),
+            cost_saved_percentage(baseline_cost, total_cost),
+        ),
         None => (Value::Null, None),
     };
 
@@ -851,15 +903,19 @@ pub(super) async fn get_quality_analytics(
          LIMIT 20"
     };
     let session_rows: Vec<(String, i64, i64, i64)> = match since_value {
-        Some(value) => sqlx::query_as(session_cache_sql)
-            .bind(&ctx.project_id)
-            .bind(value)
-            .fetch_all(&state.db)
-            .await,
-        None => sqlx::query_as(session_cache_sql)
-            .bind(&ctx.project_id)
-            .fetch_all(&state.db)
-            .await,
+        Some(value) => {
+            sqlx::query_as(session_cache_sql)
+                .bind(&ctx.project_id)
+                .bind(value)
+                .fetch_all(&state.db)
+                .await
+        }
+        None => {
+            sqlx::query_as(session_cache_sql)
+                .bind(&ctx.project_id)
+                .fetch_all(&state.db)
+                .await
+        }
     }
     .map_err(db_error)?;
     let session_health: Vec<Value> = session_rows
@@ -889,7 +945,11 @@ pub(super) async fn get_quality_analytics(
         let sum: f64 = session_rows
             .iter()
             .map(|(_, _, prompt, hits)| {
-                if *prompt > 0 { *hits as f64 / *prompt as f64 * 100.0 } else { 0.0 }
+                if *prompt > 0 {
+                    *hits as f64 / *prompt as f64 * 100.0
+                } else {
+                    0.0
+                }
             })
             .sum();
         Some(((sum / session_rows.len() as f64) * 10.0).round() / 10.0)
@@ -1025,7 +1085,16 @@ pub(super) async fn get_savings_baseline(
         .await
         .map_err(db_error)?;
 
-    let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
+    let Some((
+        virtual_model_id,
+        endpoint_id,
+        service_name,
+        model,
+        provider_name,
+        input_price,
+        output_price,
+    )) = baseline
+    else {
         return Ok(Json(ApiResponse::success(json!({"configured": false}))));
     };
     Ok(Json(ApiResponse::success(json!({
@@ -1064,7 +1133,9 @@ pub(super) async fn update_savings_baseline(
     if valid.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("The selected model endpoint is not available to this project")),
+            Json(ApiResponse::error(
+                "The selected model endpoint is not available to this project",
+            )),
         ));
     }
 
@@ -1103,7 +1174,16 @@ pub(super) async fn get_savings(
         .await
         .map_err(db_error)?;
 
-    let Some((virtual_model_id, endpoint_id, service_name, model, provider_name, input_price, output_price)) = baseline else {
+    let Some((
+        virtual_model_id,
+        endpoint_id,
+        service_name,
+        model,
+        provider_name,
+        input_price,
+        output_price,
+    )) = baseline
+    else {
         return Ok(Json(ApiResponse::success(json!({
             "estimated_spend": Value::Null,
             "estimated_savings": Value::Null,
@@ -1191,9 +1271,8 @@ fn calculate_savings(
 
 /// Percentage of spend saved by actual routing versus the baseline, rounded to one decimal.
 fn cost_saved_percentage(actual_spend: f64, baseline_spend: f64) -> Option<f64> {
-    (baseline_spend > 0.0).then(|| {
-        (((1.0 - actual_spend / baseline_spend) * 100.0) * 10.0).round() / 10.0
-    })
+    (baseline_spend > 0.0)
+        .then(|| (((1.0 - actual_spend / baseline_spend) * 100.0) * 10.0).round() / 10.0)
 }
 
 #[cfg(test)]

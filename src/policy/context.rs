@@ -320,7 +320,10 @@ mod tests {
         let two = slim_tool_messages(turn_two, &cfg);
         let m1 = &one.body["messages"][1]["content"];
         let m2_old = &two.body["messages"][1]["content"];
-        assert_eq!(m1, m2_old, "old tool must not be re-rendered as history grows");
+        assert_eq!(
+            m1, m2_old,
+            "old tool must not be re-rendered as history grows"
+        );
     }
 
     #[test]

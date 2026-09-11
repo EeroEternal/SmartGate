@@ -109,10 +109,8 @@ pub(super) async fn classify_with_judge(
     let pool_host = SmartGatePoolHost {
         engine: state.engine.as_ref(),
     };
-    let host_context = unigateway_sdk::host::HostContext::from_parts(
-        state.engine.as_ref(),
-        &pool_host,
-    );
+    let host_context =
+        unigateway_sdk::host::HostContext::from_parts(state.engine.as_ref(), &pool_host);
     let dispatch = tokio::time::timeout(
         JUDGE_TIMEOUT,
         unigateway_sdk::host::dispatch_request(
@@ -172,11 +170,8 @@ fn build_judge_request(
             HostProtocol::AnthropicMessages,
         )),
         _ => Some((
-            unigateway_sdk::protocol::openai_payload_to_chat_request(
-                &payload,
-                "smartgate-judge",
-            )
-            .ok()?,
+            unigateway_sdk::protocol::openai_payload_to_chat_request(&payload, "smartgate-judge")
+                .ok()?,
             HostProtocol::OpenAiChat,
         )),
     }
@@ -228,11 +223,12 @@ mod judge_tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use unigateway_sdk::core::transport::{
-        HttpTransport, TransportRequest, TransportResponse, StreamingTransportResponse,
+        HttpTransport, StreamingTransportResponse, TransportRequest, TransportResponse,
     };
     use unigateway_sdk::core::{
-        Endpoint, EndpointCapabilities, GatewayError, InMemoryDriverRegistry, LoadBalancingStrategy,
-        ModelPolicy, ProviderKind, ProviderPool, RetryPolicy, SecretString, UniGatewayEngine,
+        Endpoint, EndpointCapabilities, GatewayError, InMemoryDriverRegistry,
+        LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool, RetryPolicy, SecretString,
+        UniGatewayEngine,
     };
     use unigateway_sdk::host::{
         dispatch_request, HostContext, HostDispatchOutcome, HostDispatchTarget, HostFuture,
@@ -355,7 +351,10 @@ mod judge_tests {
             metadata: HashMap::new(),
             forward_metadata_as_headers: None,
         };
-        engine.upsert_pool(pool.clone()).await.expect("register Judge pool");
+        engine
+            .upsert_pool(pool.clone())
+            .await
+            .expect("register Judge pool");
         let host = TestPoolHost;
         let context = HostContext::from_parts(engine, &host);
         let outcome = dispatch_request(
@@ -374,11 +373,11 @@ mod judge_tests {
         let (_, body) = response.into_parts();
         match body {
             unigateway_sdk::protocol::ProtocolResponseBody::Json(body) => Ok(body),
-            unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => Err(
-                unigateway_sdk::host::HostError::CoreInvalidRequest(
+            unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
+                Err(unigateway_sdk::host::HostError::CoreInvalidRequest(
                     "Judge test expected a JSON response".to_string(),
-                ),
-            ),
+                ))
+            }
         }
     }
 
@@ -411,16 +410,21 @@ mod judge_tests {
             .await
             .expect("OpenAI Judge dispatch");
 
-        assert_eq!(classify_judge_response(&response), Some(DifficultyTier::High));
+        assert_eq!(
+            classify_judge_response(&response),
+            Some(DifficultyTier::High)
+        );
         let requests = seen.lock().expect("transport request lock");
         assert_eq!(requests.len(), 1);
-        let body: serde_json::Value = serde_json::from_slice(
-            requests[0].body.as_deref().expect("Judge request body"),
-        )
-        .expect("Judge request JSON");
+        let body: serde_json::Value =
+            serde_json::from_slice(requests[0].body.as_deref().expect("Judge request body"))
+                .expect("Judge request JSON");
         assert_eq!(body["model"], "judge-model");
         assert_eq!(body["messages"][1]["content"], "Design a lock-free queue.");
-        assert_eq!(requests[0].method, unigateway_sdk::core::transport::HttpMethod::Post);
+        assert_eq!(
+            requests[0].method,
+            unigateway_sdk::core::transport::HttpMethod::Post
+        );
     }
 
     #[tokio::test]
@@ -445,14 +449,19 @@ mod judge_tests {
             .await
             .expect("Anthropic Judge dispatch");
 
-        assert_eq!(classify_judge_response(&response), Some(DifficultyTier::Low));
+        assert_eq!(
+            classify_judge_response(&response),
+            Some(DifficultyTier::Low)
+        );
         let requests = seen.lock().expect("transport request lock");
-        let body: serde_json::Value = serde_json::from_slice(
-            requests[0].body.as_deref().expect("Judge request body"),
-        )
-        .expect("Judge request JSON");
+        let body: serde_json::Value =
+            serde_json::from_slice(requests[0].body.as_deref().expect("Judge request body"))
+                .expect("Judge request JSON");
         assert_eq!(body["model"], "judge-model");
-        assert!(body["system"].as_str().unwrap_or_default().contains("classifier"));
+        assert!(body["system"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("classifier"));
         assert!(body["messages"]
             .as_array()
             .unwrap_or(&Vec::new())
@@ -468,25 +477,34 @@ mod judge_tests {
         }));
         let mut endpoint = endpoint(ProviderKind::OpenAiCompatible);
         endpoint.driver_id = "missing-driver".to_string();
-        let (request, protocol) = build_judge_request(&endpoint, "A borderline prompt.")
-            .expect("Judge request");
+        let (request, protocol) =
+            build_judge_request(&endpoint, "A borderline prompt.").expect("Judge request");
         let result = dispatch_judge(endpoint, request, protocol, &engine).await;
-        assert!(result.is_err(), "missing driver must not produce a Judge result");
+        assert!(
+            result.is_err(),
+            "missing driver must not produce a Judge result"
+        );
     }
 
     #[tokio::test]
     async fn judge_timeout_is_a_recoverable_failure() {
         let engine = engine(Arc::new(BlockingTransport));
         let endpoint = endpoint(ProviderKind::OpenAiCompatible);
-        let (request, protocol) = build_judge_request(&endpoint, "A borderline prompt.")
-            .expect("Judge request");
+        let (request, protocol) =
+            build_judge_request(&endpoint, "A borderline prompt.").expect("Judge request");
         let result = tokio::time::timeout(
             JUDGE_TIMEOUT + std::time::Duration::from_millis(100),
             dispatch_judge(endpoint, request, protocol, &engine),
         )
         .await;
-        assert!(result.is_ok(), "UniGateway timeout should be returned to the caller");
-        assert!(result.unwrap().is_err(), "Judge timeout must be recoverable");
+        assert!(
+            result.is_ok(),
+            "UniGateway timeout should be returned to the caller"
+        );
+        assert!(
+            result.unwrap().is_err(),
+            "Judge timeout must be recoverable"
+        );
     }
 
     #[test]

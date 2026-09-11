@@ -536,7 +536,14 @@ pub async fn get_key_usage(
         auth.api_key.daily_spend_limit,
         auth.project.daily_spend_limit,
     );
-    let spent_today = spent_today_for_key(&state.db, &auth.api_key.id).await;
+    let spent_today = spent_today_for_key(&state.db, &auth.api_key.id)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
     let budget = evaluate_budget(spent_today, daily_limit);
     let (budget_status, budget_warning) = match budget {
         BudgetOutcome::Ok => ("ok", false),
@@ -623,7 +630,9 @@ mod tests {
 
     fn test_row(status_code: i32) -> UsageStatRow {
         UsageStatRow {
-            timestamp: chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc),
+            timestamp: chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
             project_id: None,
             project_name: None,
             key_id: None,

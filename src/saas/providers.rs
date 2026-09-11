@@ -96,7 +96,9 @@ pub async fn create_provider(
     if name.is_empty() || base_url.is_empty() || api_key.is_empty() || provider_type.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Name, provider type, base URL and API key are required")),
+            Json(ApiResponse::error(
+                "Name, provider type, base URL and API key are required",
+            )),
         ));
     }
 
@@ -128,7 +130,7 @@ pub async fn create_provider(
             0::bigint as endpoint_count,
             pa.created_at
          FROM provider_accounts pa
-         WHERE pa.id = $1"
+         WHERE pa.id = $1",
     )
     .bind(&id)
     .fetch_one(&state.db)
@@ -218,13 +220,12 @@ pub async fn delete_provider(
     let mut tx = state.db.begin().await.map_err(db_error)?;
 
     // Check if provider has active endpoints
-    let count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*)::bigint FROM endpoints WHERE account_id = $1"
-    )
-    .bind(&id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(db_error)?;
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*)::bigint FROM endpoints WHERE account_id = $1")
+            .bind(&id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_error)?;
 
     if count.0 > 0 {
         return Err((

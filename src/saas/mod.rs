@@ -23,10 +23,7 @@ use sqlx::FromRow;
 use std::sync::Arc;
 
 use crate::{
-    api::models::ApiResponse,
-    auth::hash_token,
-    config::AppState,
-    routing::canonicalize_strategy,
+    api::models::ApiResponse, auth::hash_token, config::AppState, routing::canonicalize_strategy,
 };
 
 const SESSION_COOKIE: &str = "smartgate_session";
@@ -131,10 +128,7 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/model-services/:id/endpoints/:endpoint_id/probe",
             post(model_services::probe_model_service_endpoint),
         )
-        .route(
-            "/test-connection",
-            post(model_services::test_connection),
-        )
+        .route("/test-connection", post(model_services::test_connection))
         .route(
             "/model-services/:id",
             get(model_services::get_model_service)
@@ -160,7 +154,10 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(analytics::get_savings_baseline).patch(analytics::update_savings_baseline),
         )
         .route("/openrouter/market", get(openrouter::get_openrouter_market))
-        .route("/openrouter/sync", post(openrouter::trigger_openrouter_sync))
+        .route(
+            "/openrouter/sync",
+            post(openrouter::trigger_openrouter_sync),
+        )
         .route(
             "/providers",
             get(providers::list_providers).post(providers::create_provider),

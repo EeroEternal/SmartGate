@@ -147,9 +147,14 @@ fn attempt_order(fixture: &Fixture) -> Vec<String> {
 #[test]
 fn high_difficulty_prefers_pro_when_capability_scores_differ() {
     let fixture = fixture(0.92);
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
 
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(PRO)
+    );
 }
 
 #[test]
@@ -157,15 +162,22 @@ fn high_difficulty_prefers_pro_when_capability_scores_tie() {
     // Misconfiguration (or a stale capability backfill) can leave Pro and Flash
     // within the top-of-pool tolerance; capability must still outrank price.
     let fixture = fixture(0.66);
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
 
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(PRO)
+    );
 }
 
 #[test]
 fn budget_downshift_keeps_the_only_capable_endpoint() {
     let fixture = fixture(0.92);
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, true));
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, true));
 
     let feedback = fixture.provider.feedback(POOL);
     let pro = feedback.endpoint_signals.get(PRO).expect("pro signal");
@@ -173,7 +185,10 @@ fn budget_downshift_keeps_the_only_capable_endpoint() {
         !pro.excluded,
         "budget soft gate must not drop the only capability-qualified endpoint"
     );
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(PRO)
+    );
 }
 
 #[test]
@@ -182,16 +197,26 @@ fn undeclared_tool_support_does_not_exclude_pro() {
     fixture
         .profiles
         .insert(PRO.to_string(), profile(0.92, 2.50, 10.00));
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
 
     let feedback = fixture.provider.feedback(POOL);
-    assert!(!feedback.endpoint_signals.get(PRO).expect("pro signal").excluded);
+    assert!(
+        !feedback
+            .endpoint_signals
+            .get(PRO)
+            .expect("pro signal")
+            .excluded
+    );
 }
 
 #[test]
 fn cooled_down_pro_falls_back_to_flash_and_is_reported() {
     let fixture = fixture(0.92);
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+    fixture
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
     let mut metric = EndpointMetric::new(PRO.to_string());
     metric.health_status = "unavailable".to_string();
     metric.cooldown_until = Some(Utc::now() + chrono::Duration::seconds(30));
@@ -209,30 +234,42 @@ fn identical_configured_scores_are_broken_by_model_family() {
     // Real misconfiguration seen in production: Flash and Pro both carry 0.80, so
     // ranking on the configured score alone leaves price to decide.
     let fixture = fixture(0.92);
+    fixture.profiles.insert(
+        FLASH.to_string(),
+        profile_with_family(0.80, 0.65, 0.14, 0.28),
+    );
+    fixture.profiles.insert(
+        QWEN.to_string(),
+        profile_with_family(0.50, 0.65, 0.30, 0.60),
+    );
+    fixture.profiles.insert(
+        PRO.to_string(),
+        profile_with_family(0.80, 0.92, 2.50, 10.00),
+    );
     fixture
-        .profiles
-        .insert(FLASH.to_string(), profile_with_family(0.80, 0.65, 0.14, 0.28));
-    fixture
-        .profiles
-        .insert(QWEN.to_string(), profile_with_family(0.50, 0.65, 0.30, 0.60));
-    fixture
-        .profiles
-        .insert(PRO.to_string(), profile_with_family(0.80, 0.92, 2.50, 10.00));
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
 
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(PRO)
+    );
 }
 
 #[test]
 fn a_deliberately_higher_configured_score_still_wins() {
     let fixture = fixture(0.92);
+    fixture.profiles.insert(
+        FLASH.to_string(),
+        profile_with_family(0.95, 0.65, 0.14, 0.28),
+    );
+    fixture.profiles.insert(
+        PRO.to_string(),
+        profile_with_family(0.80, 0.92, 2.50, 10.00),
+    );
     fixture
-        .profiles
-        .insert(FLASH.to_string(), profile_with_family(0.95, 0.65, 0.14, 0.28));
-    fixture
-        .profiles
-        .insert(PRO.to_string(), profile_with_family(0.80, 0.92, 2.50, 10.00));
-    fixture.hints.insert(POOL.to_string(), hint(1.0, true, false));
+        .hints
+        .insert(POOL.to_string(), hint(1.0, true, false));
 
     assert_eq!(
         attempt_order(&fixture).first().map(String::as_str),
@@ -303,7 +340,10 @@ fn sticky_endpoint_loses_affinity_boost_when_cache_collapses() {
     fixture.metrics.insert(FLASH.to_string(), flash_metric);
 
     // Without the boost, cheap Flash must outrank Pro on an easy task.
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(FLASH));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(FLASH)
+    );
 }
 
 #[test]
@@ -321,5 +361,8 @@ fn sticky_endpoint_keeps_boost_while_cache_is_healthy() {
     fixture.metrics.insert(PRO.to_string(), pro_metric);
 
     // Healthy sticky endpoint keeps its affinity boost even though Flash is cheaper.
-    assert_eq!(attempt_order(&fixture).first().map(String::as_str), Some(PRO));
+    assert_eq!(
+        attempt_order(&fixture).first().map(String::as_str),
+        Some(PRO)
+    );
 }

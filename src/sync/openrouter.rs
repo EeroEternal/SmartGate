@@ -70,14 +70,32 @@ pub async fn sync_openrouter_market(db: &PgPool) -> anyhow::Result<usize> {
     for model in api_data.data {
         let name = model.name.unwrap_or_else(|| model.id.clone());
         let context_length = model.context_length.unwrap_or(0).clamp(0, i32::MAX as i64) as i32;
-        
-        let prompt_price_per_1m = parse_price_per_1m(model.pricing.as_ref().and_then(|p| p.prompt.as_ref()));
-        let completion_price_per_1m = parse_price_per_1m(model.pricing.as_ref().and_then(|p| p.completion.as_ref()));
-        let request_price = model.pricing.as_ref().and_then(|p| p.request.as_ref()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-        let image_price = model.pricing.as_ref().and_then(|p| p.image.as_ref()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-        let discount_ratio = model.pricing.as_ref().and_then(|p| p.discount).unwrap_or(0.0);
 
-        let is_free = if model.id.ends_with(":free") || (prompt_price_per_1m <= 0.0 && completion_price_per_1m <= 0.0) {
+        let prompt_price_per_1m =
+            parse_price_per_1m(model.pricing.as_ref().and_then(|p| p.prompt.as_ref()));
+        let completion_price_per_1m =
+            parse_price_per_1m(model.pricing.as_ref().and_then(|p| p.completion.as_ref()));
+        let request_price = model
+            .pricing
+            .as_ref()
+            .and_then(|p| p.request.as_ref())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+        let image_price = model
+            .pricing
+            .as_ref()
+            .and_then(|p| p.image.as_ref())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+        let discount_ratio = model
+            .pricing
+            .as_ref()
+            .and_then(|p| p.discount)
+            .unwrap_or(0.0);
+
+        let is_free = if model.id.ends_with(":free")
+            || (prompt_price_per_1m <= 0.0 && completion_price_per_1m <= 0.0)
+        {
             1
         } else {
             0
@@ -85,15 +103,23 @@ pub async fn sync_openrouter_market(db: &PgPool) -> anyhow::Result<usize> {
 
         let (top_ctx, top_max_tokens, top_mod) = match &model.top_provider {
             Some(tp) => (
-                tp.context_length.map(|v| v.clamp(0, i32::MAX as i64) as i32),
-                tp.max_completion_tokens.map(|v| v.clamp(0, i32::MAX as i64) as i32),
+                tp.context_length
+                    .map(|v| v.clamp(0, i32::MAX as i64) as i32),
+                tp.max_completion_tokens
+                    .map(|v| v.clamp(0, i32::MAX as i64) as i32),
                 tp.is_moderated.map(|b| if b { 1 } else { 0 }).unwrap_or(0),
             ),
             None => (None, None, 0),
         };
 
-        let raw_pricing_json = model.pricing.as_ref().and_then(|p| serde_json::to_string(p).ok());
-        let architecture_json = model.architecture.as_ref().and_then(|a| serde_json::to_string(a).ok());
+        let raw_pricing_json = model
+            .pricing
+            .as_ref()
+            .and_then(|p| serde_json::to_string(p).ok());
+        let architecture_json = model
+            .architecture
+            .as_ref()
+            .and_then(|a| serde_json::to_string(a).ok());
 
         sqlx::query(
             "INSERT INTO openrouter_market_models (

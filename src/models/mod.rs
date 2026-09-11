@@ -174,7 +174,8 @@ impl EndpointMetric {
         if prompt_tokens <= 0 {
             return;
         }
-        let ratio = (hit_tokens.clamp(0, prompt_tokens) as f64 / prompt_tokens as f64).clamp(0.0, 1.0);
+        let ratio =
+            (hit_tokens.clamp(0, prompt_tokens) as f64 / prompt_tokens as f64).clamp(0.0, 1.0);
         self.cache_hit_ratio_ema = if self.cache_samples == 0 {
             ratio
         } else {
@@ -212,4 +213,3 @@ pub struct OpenRouterMarketModel {
     pub architecture_json: Option<String>,
     pub synced_at: DateTime<Utc>,
 }
-

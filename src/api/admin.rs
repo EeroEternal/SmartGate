@@ -1,21 +1,22 @@
+use crate::api::models::{
+    ApiKeyResponse, ApiResponse, BindEndpointToPoolReq, CreateApiKeyReq, CreateEndpointReq,
+    CreateOrgReq, CreatePoolReq, CreateProjectReq, CreateProviderReq, CreateVirtualModelReq,
+    EndpointView, GrantModelToProjectReq, PoolEndpointView, ProjectGrantView,
+    RevokeModelFromProjectReq, UpdateApiKeyQuotaReq, UpdatePoolReq, UpdateProjectQuotaReq,
+    VirtualModelView,
+};
+pub use crate::api::stats_handler::get_stats;
+pub use crate::api::warming_stats::get_warming_stats;
+use crate::config::AppState;
+use crate::models::{ApiKey, Endpoint, ModelPool, Org, Project, ProviderAccount, VirtualModel};
 use axum::{
-    extract::{Path, State, Json},
+    extract::{Json, Path, State},
     http::StatusCode,
     routing::{get, patch, post},
     Router,
 };
 use sqlx::FromRow;
 use std::sync::Arc;
-use crate::config::AppState;
-use crate::models::{ProviderAccount, ModelPool, Endpoint, VirtualModel, Org, Project, ApiKey};
-use crate::api::models::{
-    ApiResponse, CreateProviderReq, CreatePoolReq, CreateEndpointReq, CreateVirtualModelReq,
-    CreateOrgReq, CreateProjectReq, CreateApiKeyReq, ApiKeyResponse,
-    BindEndpointToPoolReq, GrantModelToProjectReq, UpdateProjectQuotaReq, UpdateApiKeyQuotaReq,
-    UpdatePoolReq, PoolEndpointView, EndpointView, VirtualModelView, ProjectGrantView, RevokeModelFromProjectReq,
-};
-pub use crate::api::stats_handler::get_stats;
-pub use crate::api::warming_stats::get_warming_stats;
 
 pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
@@ -27,7 +28,10 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/pools/:id", patch(update_pool))
         .route("/pools/bind", post(bind_endpoint_to_pool))
         .route("/pools/:id/endpoints", get(list_pool_endpoints))
-        .route("/virtual-models", get(list_virtual_models).post(create_virtual_model))
+        .route(
+            "/virtual-models",
+            get(list_virtual_models).post(create_virtual_model),
+        )
         // Access
         .route("/orgs", get(list_orgs).post(create_org))
         .route("/projects", get(list_projects).post(create_project))
@@ -40,7 +44,10 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Statistics
         .route("/stats", get(get_stats))
         .route("/stats/warming", get(get_warming_stats))
-        .route_layer(axum::middleware::from_fn_with_state(state, crate::auth::admin::admin_auth_middleware))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state,
+            crate::auth::admin::admin_auth_middleware,
+        ))
 }
 
 // Providers
@@ -52,7 +59,10 @@ async fn list_providers(
         .await
         .map_err(|e| {
             tracing::error!("DB error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
         })?;
 
     Ok(Json(ApiResponse::success(providers)))
@@ -63,10 +73,10 @@ async fn create_provider(
     Json(payload): Json<CreateProviderReq>,
 ) -> Result<Json<ApiResponse<ProviderAccount>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         "INSERT INTO provider_accounts (id, name, provider_type, base_url, api_key) 
-         VALUES ($1, $2, $3, $4, $5)"
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(&id)
     .bind(&payload.name)
@@ -77,14 +87,23 @@ async fn create_provider(
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
-    let provider = sqlx::query_as::<_, ProviderAccount>("SELECT * FROM provider_accounts WHERE id = $1")
-        .bind(&id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+    let provider =
+        sqlx::query_as::<_, ProviderAccount>("SELECT * FROM provider_accounts WHERE id = $1")
+            .bind(&id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("Database error")),
+                )
+            })?;
 
     let _ = crate::sync::sync_all_pools(
         &state.engine,
@@ -108,7 +127,10 @@ async fn list_pools(
         .await
         .map_err(|e| {
             tracing::error!("DB error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
         })?;
 
     Ok(Json(ApiResponse::success(pools)))
@@ -119,7 +141,7 @@ async fn create_pool(
     Json(payload): Json<CreatePoolReq>,
 ) -> Result<Json<ApiResponse<ModelPool>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars,
          session_affinity_enabled, session_affinity_ttl_secs)
@@ -144,7 +166,12 @@ async fn create_pool(
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let _ = crate::sync::sync_all_pools(
         &state.engine,
@@ -168,10 +195,18 @@ async fn update_pool(
         .bind(&id)
         .fetch_optional(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let Some(pool) = existing else {
-        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("Pool not found"))));
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Pool not found")),
+        ));
     };
 
     let session_affinity_enabled = payload
@@ -204,13 +239,23 @@ async fn update_pool(
     .bind(&id)
     .execute(&state.db)
     .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
+    })?;
 
     let updated = sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let _ = crate::sync::sync_all_pools(
         &state.engine,
@@ -255,24 +300,26 @@ async fn list_endpoints(
                 e.capability_score, e.supports_tools, e.context_length
          FROM endpoints e
          JOIN provider_accounts pa ON pa.id = e.account_id
-         ORDER BY pa.name ASC, e.name ASC"
+         ORDER BY pa.name ASC, e.name ASC",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
     let views = rows
         .into_iter()
         .map(|row| {
-            let (health_status, cooldown_until) =
-                if let Some(metric) = state.metrics.get(&row.id) {
-                    (metric.health_status.clone(), metric.cooldown_until)
-                } else {
-                    (row.health_status, row.cooldown_until)
-                };
+            let (health_status, cooldown_until) = if let Some(metric) = state.metrics.get(&row.id) {
+                (metric.health_status.clone(), metric.cooldown_until)
+            } else {
+                (row.health_status, row.cooldown_until)
+            };
             EndpointView {
                 id: row.id,
                 account_id: row.account_id,
@@ -301,14 +348,14 @@ async fn create_endpoint(
     Json(payload): Json<CreateEndpointReq>,
 ) -> Result<Json<ApiResponse<Endpoint>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     let supports_tools = payload.supports_tools.map(|b| if b { 1 } else { 0 });
     sqlx::query(
         "INSERT INTO endpoints (
             id, account_id, name, upstream_model_id, priority, weight,
             input_price_per_1m, output_price_per_1m,
             capability_score, supports_tools, context_length
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
     )
     .bind(&id)
     .bind(&payload.account_id)
@@ -325,14 +372,22 @@ async fn create_endpoint(
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
     let endpoint = sqlx::query_as::<_, Endpoint>("SELECT * FROM endpoints WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let _ = crate::sync::sync_all_pools(
         &state.engine,
@@ -365,13 +420,16 @@ async fn list_virtual_models(
         "SELECT vm.id, vm.pool_id, mp.name AS pool_name, vm.name, vm.enabled, vm.created_at
          FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
-         ORDER BY vm.name ASC"
+         ORDER BY vm.name ASC",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
     let views = rows
@@ -394,25 +452,31 @@ async fn create_virtual_model(
     Json(payload): Json<CreateVirtualModelReq>,
 ) -> Result<Json<ApiResponse<VirtualModel>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
-    sqlx::query(
-        "INSERT INTO virtual_models (id, pool_id, name) VALUES ($1, $2, $3)"
-    )
-    .bind(&id)
-    .bind(&payload.pool_id)
-    .bind(&payload.name)
-    .execute(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
-    })?;
+
+    sqlx::query("INSERT INTO virtual_models (id, pool_id, name) VALUES ($1, $2, $3)")
+        .bind(&id)
+        .bind(&payload.pool_id)
+        .bind(&payload.name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let model = sqlx::query_as::<_, VirtualModel>("SELECT * FROM virtual_models WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let _ = crate::sync::sync_all_pools(
         &state.engine,
@@ -460,14 +524,18 @@ async fn bind_endpoint_to_pool(
     Ok(Json(ApiResponse::success(())))
 }
 
-
 async fn list_orgs(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<Vec<Org>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let orgs = sqlx::query_as::<_, Org>("SELECT * FROM orgs")
         .fetch_all(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(orgs)))
 }
@@ -477,20 +545,30 @@ async fn create_org(
     Json(payload): Json<CreateOrgReq>,
 ) -> Result<Json<ApiResponse<Org>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     sqlx::query("INSERT INTO orgs (id, name, description) VALUES ($1, $2, $3)")
         .bind(&id)
         .bind(&payload.name)
         .bind(&payload.description)
         .execute(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let org = sqlx::query_as::<_, Org>("SELECT * FROM orgs WHERE id = $1")
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(org)))
 }
@@ -501,7 +579,12 @@ async fn list_projects(
     let projects = sqlx::query_as::<_, Project>("SELECT * FROM projects")
         .fetch_all(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(projects)))
 }
@@ -511,7 +594,7 @@ async fn create_project(
     Json(payload): Json<CreateProjectReq>,
 ) -> Result<Json<ApiResponse<Project>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         "INSERT INTO projects (id, org_id, name, description, rpm_limit, concurrency_limit, daily_spend_limit)
          VALUES ($1, $2, $3, $4, $5, $6, $7)",
@@ -531,7 +614,12 @@ async fn create_project(
         .bind(&id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(project)))
 }
@@ -554,14 +642,17 @@ async fn revoke_model_from_project(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<RevokeModelFromProjectReq>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
-    sqlx::query(
-        "DELETE FROM project_model_grants WHERE project_id = $1 AND virtual_model_id = $2"
-    )
-    .bind(&payload.project_id)
-    .bind(&payload.virtual_model_id)
-    .execute(&state.db)
-    .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+    sqlx::query("DELETE FROM project_model_grants WHERE project_id = $1 AND virtual_model_id = $2")
+        .bind(&payload.project_id)
+        .bind(&payload.virtual_model_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(())))
 }
@@ -583,13 +674,16 @@ async fn list_grants(
          FROM project_model_grants pmg
          JOIN projects p ON p.id = pmg.project_id
          JOIN virtual_models vm ON vm.id = pmg.virtual_model_id
-         ORDER BY p.name ASC, vm.name ASC"
+         ORDER BY p.name ASC, vm.name ASC",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
     let views = rows
@@ -611,7 +705,12 @@ async fn list_api_keys(
     let keys = sqlx::query_as::<_, ApiKey>("SELECT * FROM api_keys")
         .fetch_all(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(keys)))
 }
@@ -623,12 +722,16 @@ async fn create_api_key(
     Json(payload): Json<CreateApiKeyReq>,
 ) -> Result<Json<ApiResponse<ApiKeyResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     // Generate a secure random key
     let raw_key = format!("pk_{}", uuid::Uuid::new_v4().simple());
     let key_hash = hash_token(&raw_key);
-    let key_prefix = format!("{}...{}", &raw_key[..7], &raw_key[raw_key.len().saturating_sub(4)..]);
-    
+    let key_prefix = format!(
+        "{}...{}",
+        &raw_key[..7],
+        &raw_key[raw_key.len().saturating_sub(4)..]
+    );
+
     sqlx::query(
         "INSERT INTO api_keys (id, project_id, name, key_hash, key_prefix, rpm_limit, concurrency_limit, daily_spend_limit)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
@@ -659,7 +762,6 @@ async fn create_api_key(
     Ok(Json(ApiResponse::success(response)))
 }
 
-
 #[derive(Debug, FromRow)]
 struct PoolEndpointRow {
     endpoint_id: String,
@@ -686,14 +788,17 @@ async fn list_pool_endpoints(
          JOIN endpoints e ON e.id = mpe.endpoint_id
          JOIN provider_accounts pa ON pa.id = e.account_id
          WHERE mpe.pool_id = $1
-         ORDER BY mpe.priority DESC, mpe.weight DESC, e.name ASC"
+         ORDER BY mpe.priority DESC, mpe.weight DESC, e.name ASC",
     )
     .bind(&pool_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
         tracing::error!("DB error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
     })?;
 
     let views = rows
@@ -740,10 +845,18 @@ async fn update_project_quota(
         .bind(&project_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     if !exists {
-        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("Project not found"))));
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Project not found")),
+        ));
     }
 
     sqlx::query(
@@ -761,7 +874,12 @@ async fn update_project_quota(
         .bind(&project_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(project)))
 }
@@ -775,10 +893,18 @@ async fn update_api_key_quota(
         .bind(&key_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     if !exists {
-        return Err((StatusCode::NOT_FOUND, Json(ApiResponse::error("API key not found"))));
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("API key not found")),
+        ));
     }
 
     sqlx::query(
@@ -796,7 +922,12 @@ async fn update_api_key_quota(
         .bind(&key_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error"))))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     Ok(Json(ApiResponse::success(key)))
 }

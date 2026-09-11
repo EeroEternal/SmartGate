@@ -231,7 +231,11 @@ pub async fn list_models(
     .fetch_all(&state.db)
     .await
     .map_err(|error| {
-        tracing::error!("Failed to list models for key {}: {}", auth.api_key.id, error);
+        tracing::error!(
+            "Failed to list models for key {}: {}",
+            auth.api_key.id,
+            error
+        );
         (StatusCode::INTERNAL_SERVER_ERROR, "Database error")
     })?;
 

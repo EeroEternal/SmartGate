@@ -86,7 +86,10 @@ pub fn extract_context_epoch(headers: &HeaderMap, payload: &serde_json::Value) -
         .unwrap_or(0)
 }
 
-pub fn extract_context_delivery(headers: &HeaderMap, payload: &serde_json::Value) -> Option<String> {
+pub fn extract_context_delivery(
+    headers: &HeaderMap,
+    payload: &serde_json::Value,
+) -> Option<String> {
     headers
         .get(DELIVERY_HEADER)
         .and_then(|h| h.to_str().ok())
@@ -114,7 +117,10 @@ fn parse_epoch_value(v: &serde_json::Value) -> Option<u32> {
 
 /// Client-provided prefix hash (hex), else computed from messages.
 pub fn resolve_prefix_hash(headers: &HeaderMap, payload: &serde_json::Value) -> Option<u64> {
-    if let Some(raw) = headers.get(PREFIX_HASH_HEADER).and_then(|h| h.to_str().ok()) {
+    if let Some(raw) = headers
+        .get(PREFIX_HASH_HEADER)
+        .and_then(|h| h.to_str().ok())
+    {
         if let Some(parsed) = parse_prefix_hash_hex(raw) {
             return Some(parsed);
         }

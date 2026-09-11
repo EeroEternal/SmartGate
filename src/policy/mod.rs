@@ -17,7 +17,9 @@ pub mod route_hint;
 pub mod session;
 pub mod tokens;
 
-pub use budget::{effective_daily_limit, evaluate as evaluate_budget, spent_today_for_key, BudgetOutcome};
+pub use budget::{
+    effective_daily_limit, evaluate as evaluate_budget, spent_today_for_key, BudgetOutcome,
+};
 pub use context::{slim_tool_messages, trim_tool_messages, SlimConfig, SlimResult};
 pub use route_hint::{
     clear_hint, get_hint, get_task_hint, set_hint, HintGuard, RouteHint, TASK_ROUTE_HINT,

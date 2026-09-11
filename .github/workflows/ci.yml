@@ -34,6 +34,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.92.0
+          components: clippy, rustfmt
 
       - name: Cache Rust build
         uses: actions/cache@v4
@@ -48,6 +49,12 @@ jobs:
 
       - name: Check Rust sources
         run: cargo check --locked
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --locked
 
       - name: Run Rust library tests
         run: cargo test --locked --lib

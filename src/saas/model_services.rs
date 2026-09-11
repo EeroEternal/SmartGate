@@ -42,7 +42,9 @@ pub(super) struct ModelEndpointRequest {
 #[serde(untagged)]
 pub(super) enum AddEndpointsPayload {
     Single(ModelEndpointRequest),
-    Batch { endpoints: Vec<ModelEndpointRequest> },
+    Batch {
+        endpoints: Vec<ModelEndpointRequest>,
+    },
     List(Vec<ModelEndpointRequest>),
 }
 
@@ -203,7 +205,10 @@ pub(super) async fn list_model_catalog(
                 offerings.push(or_item.clone());
                 or_list.push(or_item);
             }
-            grouped.insert("openrouter".to_string(), ("OpenRouter".to_string(), or_list));
+            grouped.insert(
+                "openrouter".to_string(),
+                ("OpenRouter".to_string(), or_list),
+            );
         }
     }
 
@@ -273,7 +278,9 @@ pub(super) async fn create_model_service(
         if endpoint.upstream_model_id.trim().is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Every upstream endpoint needs a model ID")),
+                Json(ApiResponse::error(
+                    "Every upstream endpoint needs a model ID",
+                )),
             ));
         }
         if endpoint.account_id.is_none() {
@@ -339,7 +346,7 @@ pub(super) async fn create_model_service(
     for (index, endpoint) in endpoints.iter().enumerate() {
         let (provider_id, provider_type) = if let Some(ref aid) = endpoint.account_id {
             let account: Option<(String, String)> = sqlx::query_as(
-                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
+                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2",
             )
             .bind(aid)
             .bind(&ctx.org_id)
@@ -356,7 +363,12 @@ pub(super) async fn create_model_service(
             (pid, ptype)
         } else {
             let pid = Uuid::new_v4().to_string();
-            let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
+            let ptype = endpoint
+                .provider_type
+                .as_deref()
+                .unwrap_or("custom")
+                .trim()
+                .to_string();
             let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
             let base_url = endpoint.base_url.as_deref().unwrap_or("");
             let api_key = endpoint.api_key.as_deref().unwrap_or("");
@@ -449,8 +461,18 @@ pub(super) async fn get_model_service(
         .fetch_optional(&state.db)
         .await
         .map_err(db_error)?;
-    let Some((id, _legacy_model, name, strategy, judge_enabled, judge_endpoint_id, pool_id, shadow_enabled, shadow_virtual_model_id, shadow_sample_rate)) =
-        service
+    let Some((
+        id,
+        _legacy_model,
+        name,
+        strategy,
+        judge_enabled,
+        judge_endpoint_id,
+        pool_id,
+        shadow_enabled,
+        shadow_virtual_model_id,
+        shadow_sample_rate,
+    )) = service
     else {
         return Err((
             StatusCode::NOT_FOUND,
@@ -657,7 +679,9 @@ pub(super) async fn update_model_service(
         if trimmed_name.len() > 120 {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::error("Model service name must be 120 characters or fewer")),
+                Json(ApiResponse::error(
+                    "Model service name must be 120 characters or fewer",
+                )),
             ));
         }
         sqlx::query("UPDATE virtual_models SET name = $1 WHERE id = $2")
@@ -725,7 +749,9 @@ pub(super) async fn add_model_service_endpoint(
     if endpoints_to_add.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("At least one model endpoint is required")),
+            Json(ApiResponse::error(
+                "At least one model endpoint is required",
+            )),
         ));
     }
 
@@ -797,7 +823,7 @@ pub(super) async fn add_model_service_endpoint(
     for endpoint in endpoints_to_add {
         let (provider_id, _ptype) = if let Some(ref aid) = endpoint.account_id {
             let account: Option<(String, String)> = sqlx::query_as(
-                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2"
+                "SELECT id, provider_type FROM provider_accounts WHERE id = $1 AND org_id = $2",
             )
             .bind(aid)
             .bind(&ctx.org_id)
@@ -813,7 +839,12 @@ pub(super) async fn add_model_service_endpoint(
             };
             (pid, ptype)
         } else {
-            let ptype = endpoint.provider_type.as_deref().unwrap_or("custom").trim().to_string();
+            let ptype = endpoint
+                .provider_type
+                .as_deref()
+                .unwrap_or("custom")
+                .trim()
+                .to_string();
             let protocol = endpoint.protocol.as_deref().unwrap_or("openai");
             let base_url = endpoint.base_url.as_deref().unwrap_or("");
             let api_key = endpoint.api_key.as_deref().unwrap_or("");
@@ -1022,15 +1053,17 @@ pub(super) async fn update_model_service_endpoint(
         ));
     };
     let cleaned_base_url = clean_base_url(base_url);
+    let mut tx = state.db.begin().await.map_err(db_error)?;
     sqlx::query("UPDATE provider_accounts SET name = $1, provider_type = $2, protocol = $3, base_url = $4, api_key = COALESCE($5, api_key), updated_at = CURRENT_TIMESTAMP WHERE id = $6")
         .bind(provider_name).bind(provider_type).bind(&protocol).bind(&cleaned_base_url)
         .bind(input.api_key.as_deref().filter(|key| !key.trim().is_empty())).bind(&account_id)
-        .execute(&state.db).await.map_err(db_error)?;
+        .execute(&mut *tx).await.map_err(db_error)?;
     sqlx::query("UPDATE endpoints SET upstream_model_id = $1, input_price_per_1m = $2, output_price_per_1m = $3, capability_score = $4, supports_tools = COALESCE($5, supports_tools), context_length = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7")
         .bind(model).bind(input.input_price_per_1m.unwrap_or(0.0)).bind(input.output_price_per_1m.unwrap_or(0.0))
         .bind(effective_capability_score(model, input.capability_score.unwrap_or(0.0)))
         .bind(input.supports_tools.map(|value| if value { 1 } else { 0 })).bind(input.context_length).bind(&endpoint_id)
-        .execute(&state.db).await.map_err(db_error)?;
+        .execute(&mut *tx).await.map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
     sync(&state).await;
     Ok(Json(ApiResponse::success(
         json!({"id": endpoint_id, "updated": true}),
@@ -1048,14 +1081,21 @@ pub(super) async fn test_connection(
     {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Base URL, API Key, and Model are required to test connection")),
+            Json(ApiResponse::error(
+                "Base URL, API Key, and Model are required to test connection",
+            )),
         ));
     }
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
         .build()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string()))))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error(e.to_string())),
+            )
+        })?;
 
     let is_anthropic = payload
         .protocol
@@ -1126,7 +1166,11 @@ pub(super) async fn test_connection(
                     .and_then(|v| {
                         v.get("error")
                             .and_then(|e| e.get("message").or(Some(e)))
-                            .map(|m| m.as_str().map(String::from).unwrap_or_else(|| m.to_string()))
+                            .map(|m| {
+                                m.as_str()
+                                    .map(String::from)
+                                    .unwrap_or_else(|| m.to_string())
+                            })
                     })
                     .unwrap_or_else(|| err_text.chars().take(200).collect());
                 Err((
@@ -1134,7 +1178,11 @@ pub(super) async fn test_connection(
                     Json(ApiResponse::error(format!(
                         "Upstream returned HTTP {}: {}",
                         status.as_u16(),
-                        if err_msg.is_empty() { "Request failed" } else { &err_msg }
+                        if err_msg.is_empty() {
+                            "Request failed"
+                        } else {
+                            &err_msg
+                        }
                     ))),
                 ))
             }
@@ -1179,7 +1227,12 @@ pub(super) async fn test_model_service_endpoint(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string()))))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error(e.to_string())),
+            )
+        })?;
 
     let is_anthropic = protocol.eq_ignore_ascii_case("anthropic");
     let (url, body) = if is_anthropic {
@@ -1254,7 +1307,11 @@ pub(super) async fn test_model_service_endpoint(
                     .and_then(|v| {
                         v.get("error")
                             .and_then(|e| e.get("message").or(Some(e)))
-                            .map(|m| m.as_str().map(String::from).unwrap_or_else(|| m.to_string()))
+                            .map(|m| {
+                                m.as_str()
+                                    .map(String::from)
+                                    .unwrap_or_else(|| m.to_string())
+                            })
                     })
                     .unwrap_or_else(|| err_text.chars().take(200).collect());
                 Err((
@@ -1262,7 +1319,11 @@ pub(super) async fn test_model_service_endpoint(
                     Json(ApiResponse::error(format!(
                         "Upstream returned HTTP {}: {}",
                         status.as_u16(),
-                        if err_msg.is_empty() { "Request failed" } else { &err_msg }
+                        if err_msg.is_empty() {
+                            "Request failed"
+                        } else {
+                            &err_msg
+                        }
                     ))),
                 ))
             }
@@ -1308,20 +1369,38 @@ pub(super) async fn probe_model_service_endpoint(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(25))
         .build()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string()))))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error(e.to_string())),
+            )
+        })?;
 
     let is_anthropic = protocol.eq_ignore_ascii_case("anthropic");
     let trimmed = base_url.trim_end_matches('/');
     let url = if is_anthropic {
-        if trimmed.ends_with("/messages") { trimmed.to_string() } else { format!("{}/messages", trimmed) }
+        if trimmed.ends_with("/messages") {
+            trimmed.to_string()
+        } else {
+            format!("{}/messages", trimmed)
+        }
     } else {
-        if trimmed.ends_with("/chat/completions") { trimmed.to_string() } else { format!("{}/chat/completions", trimmed) }
+        if trimmed.ends_with("/chat/completions") {
+            trimmed.to_string()
+        } else {
+            format!("{}/chat/completions", trimmed)
+        }
     };
 
     let send_probe = |body: Value| {
-        let mut req = client.post(&url).header("Content-Type", "application/json").json(&body);
+        let mut req = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&body);
         if is_anthropic {
-            req = req.header("x-api-key", &api_key).header("anthropic-version", "2023-06-01");
+            req = req
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01");
         } else {
             req = req.header("Authorization", format!("Bearer {}", api_key));
         }
@@ -1348,8 +1427,14 @@ pub(super) async fn probe_model_service_endpoint(
         let text = resp.text().await.unwrap_or_default();
         let passed = text.contains("def is_prime") || (text.contains("def ") && text.contains("%"));
         code_score = if passed {
-            if latency < 2000 { 97 } else { 92 }
-        } else { 70 };
+            if latency < 2000 {
+                97
+            } else {
+                92
+            }
+        } else {
+            70
+        };
         probe_results.push(json!({
             "dimension": "code_logic",
             "name": "Code & Logic Synthesis",
@@ -1372,8 +1457,14 @@ pub(super) async fn probe_model_service_endpoint(
         let text = resp.text().await.unwrap_or_default();
         let passed = text.contains(" 8") || text.contains("eight") || text.contains("8 sheep");
         reasoning_score = if passed {
-            if latency < 2500 { 96 } else { 90 }
-        } else { 68 };
+            if latency < 2500 {
+                96
+            } else {
+                90
+            }
+        } else {
+            68
+        };
         probe_results.push(json!({
             "dimension": "reasoning_math",
             "name": "Multi-Step Logic Deduction",
@@ -1423,7 +1514,9 @@ pub(super) async fn probe_model_service_endpoint(
     if let Ok(resp) = send_probe(tool_body).send().await {
         let latency = start.elapsed().as_millis() as u64;
         let text = resp.text().await.unwrap_or_default();
-        let passed = text.contains("get_stock_price") || text.contains("tool_calls") || text.contains("NVDA");
+        let passed = text.contains("get_stock_price")
+            || text.contains("tool_calls")
+            || text.contains("NVDA");
         tool_calling_supported = passed;
         tools_score = if passed { 95 } else { 60 };
         probe_results.push(json!({
@@ -1446,7 +1539,11 @@ pub(super) async fn probe_model_service_endpoint(
     if let Ok(resp) = send_probe(nlp_body).send().await {
         let latency = start.elapsed().as_millis() as u64;
         let text = resp.text().await.unwrap_or_default();
-        let passed = text.contains("成本") || text.contains("性能") || text.contains("效率") || text.contains("延迟") || text.contains("路由");
+        let passed = text.contains("成本")
+            || text.contains("性能")
+            || text.contains("效率")
+            || text.contains("延迟")
+            || text.contains("路由");
         nlp_score = if passed { 96 } else { 75 };
         probe_results.push(json!({
             "dimension": "multilingual_nlp",

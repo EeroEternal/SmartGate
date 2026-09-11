@@ -7,7 +7,10 @@ use crate::routing::canonicalize_strategy;
 use crate::warm::{parse_context_with_headers, strip_context, Delivery};
 use axum::http::HeaderMap;
 use std::sync::Arc;
-use unigateway_sdk::host::{HostContext, HostDispatchOutcome, HostDispatchTarget, HostProtocol, HostRequest, dispatch_request_with_middleware};
+use unigateway_sdk::host::{
+    dispatch_request_with_middleware, HostContext, HostDispatchOutcome, HostDispatchTarget,
+    HostProtocol, HostRequest,
+};
 
 use super::host::SmartGatePoolHost;
 
@@ -39,7 +42,10 @@ pub async fn execute_shadow(
     {
         Ok(Some(vm)) => vm,
         Ok(None) => {
-            tracing::warn!("Shadow model {} is not authorized for this key", shadow_model_name);
+            tracing::warn!(
+                "Shadow model {} is not authorized for this key",
+                shadow_model_name
+            );
             return None;
         }
         Err(error) => {
@@ -57,13 +63,22 @@ pub async fn execute_shadow(
 
     // Replace the model field with the shadow service name.
     if let Some(obj) = payload.as_object_mut() {
-        obj.insert("model".to_string(), serde_json::Value::String(shadow_model_name));
+        obj.insert(
+            "model".to_string(),
+            serde_json::Value::String(shadow_model_name),
+        );
     }
 
     let protocol = if is_openai {
-        unigateway_sdk::protocol::openai_payload_to_chat_request(&payload, &shadow_virtual_model.name)
+        unigateway_sdk::protocol::openai_payload_to_chat_request(
+            &payload,
+            &shadow_virtual_model.name,
+        )
     } else {
-        unigateway_sdk::protocol::anthropic_payload_to_chat_request(&payload, &shadow_virtual_model.name)
+        unigateway_sdk::protocol::anthropic_payload_to_chat_request(
+            &payload,
+            &shadow_virtual_model.name,
+        )
     };
 
     let mut proxy_request = match protocol {
@@ -83,9 +98,10 @@ pub async fn execute_shadow(
     proxy_request
         .metadata
         .insert("key_id".to_string(), auth.api_key.id.clone());
-    proxy_request
-        .metadata
-        .insert("virtual_model_id".to_string(), shadow_virtual_model.id.clone());
+    proxy_request.metadata.insert(
+        "virtual_model_id".to_string(),
+        shadow_virtual_model.id.clone(),
+    );
     proxy_request
         .metadata
         .insert("pool_id".to_string(), shadow_virtual_model.pool_id.clone());
@@ -121,8 +137,12 @@ pub async fn execute_shadow(
             let (status, body) = response.into_parts();
             let status = status.as_u16() as i32;
             let preview = match body {
-                unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => extract_json_preview(&json),
-                unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => String::from("[stream]"),
+                unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => {
+                    extract_json_preview(&json)
+                }
+                unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
+                    String::from("[stream]")
+                }
             };
             let provider_type = "unknown".to_string();
             let endpoint_id = String::new();

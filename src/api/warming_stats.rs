@@ -54,32 +54,33 @@ pub async fn get_warming_stats(
         )
     })?;
 
-    let turn1: (Option<f64>, Option<f64>, Option<f64>, i64) = if let Some(ref pool_id) = query.pool_id {
-        sqlx::query_as(
-            "SELECT AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens), COUNT(*)
+    let turn1: (Option<f64>, Option<f64>, Option<f64>, i64) =
+        if let Some(ref pool_id) = query.pool_id {
+            sqlx::query_as(
+                "SELECT AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens), COUNT(*)
              FROM usage_logs
              WHERE timestamp >= $1 AND session_id IS NOT NULL AND turn_index = 1 AND pool_id = $2",
-        )
-        .bind(since)
-        .bind(pool_id)
-        .fetch_one(&state.db)
-        .await
-    } else {
-        sqlx::query_as(
-            "SELECT AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens), COUNT(*)
+            )
+            .bind(since)
+            .bind(pool_id)
+            .fetch_one(&state.db)
+            .await
+        } else {
+            sqlx::query_as(
+                "SELECT AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens), COUNT(*)
              FROM usage_logs
              WHERE timestamp >= $1 AND session_id IS NOT NULL AND turn_index = 1",
-        )
-        .bind(since)
-        .fetch_one(&state.db)
-        .await
-    }
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error("Database error")),
-        )
-    })?;
+            )
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+        }
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
+        })?;
 
     let turn2: (Option<f64>, Option<f64>, Option<f64>, i64, Option<i64>, Option<i64>) =
         if let Some(ref pool_id) = query.pool_id {

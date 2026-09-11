@@ -7,10 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::{
-    api::models::ApiResponse,
-    config::AppState,
-    models::OpenRouterMarketModel,
-    saas::SaasContext,
+    api::models::ApiResponse, config::AppState, models::OpenRouterMarketModel, saas::SaasContext,
 };
 
 #[derive(Debug, Deserialize)]
@@ -47,74 +44,120 @@ pub async fn get_openrouter_market(
     State(state): State<Arc<AppState>>,
     Query(query): Query<OpenRouterMarketQuery>,
 ) -> Result<Json<ApiResponse<OpenRouterMarketResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // All user-supplied values are bound parameters; only fixed predicate
+    // fragments and static ORDER BY/LIMIT clauses are concatenated.
     let mut where_clause = String::from("WHERE 1=1");
+    let mut bind_idx = 0usize;
 
-    if let Some(true) = query.free_only {
-        where_clause.push_str(" AND is_free = 1");
+    let mut min_discount = None;
+    if let Some(value) = query.min_discount.filter(|d| *d > 0.0) {
+        bind_idx += 1;
+        where_clause.push_str(&format!(" AND discount_ratio >= ${bind_idx}"));
+        min_discount = Some(value);
     }
 
-    if let Some(min_disc) = query.min_discount {
-        if min_disc > 0.0 {
-            where_clause.push_str(&format!(" AND discount_ratio >= {}", min_disc));
-        }
+    let mut min_context = None;
+    if let Some(value) = query.min_context.filter(|c| *c > 0) {
+        bind_idx += 1;
+        where_clause.push_str(&format!(" AND context_length >= ${bind_idx}"));
+        min_context = Some(value);
     }
 
-    if let Some(min_ctx) = query.min_context {
-        if min_ctx > 0 {
-            where_clause.push_str(&format!(" AND context_length >= {}", min_ctx));
-        }
+    let mut search_pattern = None;
+    if let Some(term) = query
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        bind_idx += 1;
+        // Only match id and name; description matching is too noisy for short queries.
+        where_clause.push_str(&format!(
+            " AND (id ILIKE ${bind_idx} OR name ILIKE ${bind_idx})"
+        ));
+        search_pattern = Some(format!("%{term}%"));
     }
 
-    let mut search_term: Option<String> = None;
-    if let Some(ref search) = query.search {
-        let trimmed = search.trim();
-        if !trimmed.is_empty() {
-            let escaped = trimmed.replace('\'', "''");
-            search_term = Some(escaped.clone());
-            // Only match id and name; description matching is too noisy for short queries.
-            where_clause.push_str(&format!(
-                " AND (id ILIKE '%{}%' OR name ILIKE '%{}%')",
-                escaped, escaped
-            ));
-        }
+    let count_sql = format!("SELECT COUNT(*)::bigint FROM openrouter_market_models {where_clause}");
+    let mut count_query = sqlx::query_as::<_, (i64,)>(&count_sql);
+    if let Some(value) = min_discount {
+        count_query = count_query.bind(value);
     }
-
-    let count_sql = format!("SELECT COUNT(*)::bigint FROM openrouter_market_models {}", where_clause);
-    let total_count: (i64,) = sqlx::query_as(&count_sql)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or((0,));
+    if let Some(value) = min_context {
+        count_query = count_query.bind(value);
+    }
+    if let Some(ref pattern) = search_pattern {
+        count_query = count_query.bind(pattern);
+    }
+    let total_count = count_query.fetch_one(&state.db).await.map_err(|e| {
+        tracing::error!("DB error counting openrouter models: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("Database error")),
+        )
+    })?;
 
     let page_size = query.page_size.unwrap_or(12).clamp(1, 1000);
-    let total_pages = ((total_count.0 as f64) / (page_size as f64)).ceil().max(1.0) as i64;
+    let total_pages = ((total_count.0 as f64) / (page_size as f64))
+        .ceil()
+        .max(1.0) as i64;
     let page = query.page.unwrap_or(1).clamp(1, total_pages);
     let offset = (page - 1) * page_size;
 
-    let mut sql = format!("SELECT * FROM openrouter_market_models {}", where_clause);
+    let mut sql = format!("SELECT * FROM openrouter_market_models {where_clause}");
 
-    if let Some(ref term) = search_term {
+    let mut search_order_idx = None;
+    if let Some(ref pattern) = search_pattern {
+        bind_idx += 1;
+        search_order_idx = Some((bind_idx, pattern.clone()));
         sql.push_str(&format!(
-            " ORDER BY CASE WHEN id ILIKE '%{term}%' THEN 0 WHEN name ILIKE '%{term}%' THEN 1 ELSE 2 END, is_free DESC, discount_ratio DESC, id ASC"
+            " ORDER BY CASE WHEN id ILIKE ${bind_idx} THEN 0 WHEN name ILIKE ${bind_idx} THEN 1 ELSE 2 END, is_free DESC, discount_ratio DESC, id ASC"
         ));
     } else {
         match query.sort.as_deref() {
-            Some("price_asc") => sql.push_str(" ORDER BY is_free DESC, prompt_price_per_1m ASC, completion_price_per_1m ASC"),
-            Some("price_desc") => sql.push_str(" ORDER BY prompt_price_per_1m DESC, completion_price_per_1m DESC"),
-            Some("discount_desc") => sql.push_str(" ORDER BY discount_ratio DESC, is_free DESC, prompt_price_per_1m ASC"),
+            Some("price_asc") => sql.push_str(
+                " ORDER BY is_free DESC, prompt_price_per_1m ASC, completion_price_per_1m ASC",
+            ),
+            Some("price_desc") => {
+                sql.push_str(" ORDER BY prompt_price_per_1m DESC, completion_price_per_1m DESC")
+            }
+            Some("discount_desc") => {
+                sql.push_str(" ORDER BY discount_ratio DESC, is_free DESC, prompt_price_per_1m ASC")
+            }
             Some("context_desc") => sql.push_str(" ORDER BY context_length DESC"),
             Some("newest") => sql.push_str(" ORDER BY created_at DESC NULLS LAST"),
             _ => sql.push_str(" ORDER BY is_free DESC, discount_ratio DESC, id ASC"),
         }
     }
 
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", page_size, offset));
+    let limit_idx = bind_idx + 1;
+    let offset_idx = bind_idx + 2;
+    sql.push_str(&format!(" LIMIT ${limit_idx} OFFSET ${offset_idx}"));
 
-    let models = sqlx::query_as::<_, OpenRouterMarketModel>(&sql)
+    let mut models_query = sqlx::query_as::<_, OpenRouterMarketModel>(&sql);
+    if let Some(value) = min_discount {
+        models_query = models_query.bind(value);
+    }
+    if let Some(value) = min_context {
+        models_query = models_query.bind(value);
+    }
+    if let Some(ref pattern) = search_pattern {
+        models_query = models_query.bind(pattern);
+    }
+    if let Some((_, ref pattern)) = search_order_idx {
+        models_query = models_query.bind(pattern);
+    }
+    let models = models_query
+        .bind(page_size)
+        .bind(offset)
         .fetch_all(&state.db)
         .await
         .map_err(|e| {
             tracing::error!("DB error fetching openrouter models: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Database error")),
+            )
         })?;
 
     let stats_row: (i64, i64, i64, Option<chrono::DateTime<chrono::Utc>>) = sqlx::query_as(
@@ -123,7 +166,7 @@ pub async fn get_openrouter_market(
             COUNT(CASE WHEN is_free = 1 THEN 1 END)::bigint, 
             COUNT(CASE WHEN discount_ratio > 0 THEN 1 END)::bigint, 
             MAX(synced_at) 
-         FROM openrouter_market_models"
+         FROM openrouter_market_models",
     )
     .fetch_one(&state.db)
     .await
@@ -154,7 +197,10 @@ pub async fn trigger_openrouter_sync(
         .await
         .map_err(|e| {
             tracing::error!("Failed to manually sync OpenRouter market models: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(e.to_string())))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error(e.to_string())),
+            )
         })?;
 
     Ok(Json(ApiResponse::success(count)))

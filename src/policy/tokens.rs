@@ -189,8 +189,15 @@ pub fn heuristic_difficulty(body: &serde_json::Value) -> f64 {
         if msgs.len() >= 8 {
             d += 0.10;
         }
-        if let Some(last_user) = msgs.iter().rev().find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user")) {
-            let last_text = last_user.get("content").map(content_to_text).unwrap_or_default();
+        if let Some(last_user) = msgs
+            .iter()
+            .rev()
+            .find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user"))
+        {
+            let last_text = last_user
+                .get("content")
+                .map(content_to_text)
+                .unwrap_or_default();
             let last_lower = last_text.to_ascii_lowercase();
             if last_lower.contains("wrong")
                 || last_lower.contains("error")
@@ -305,8 +312,15 @@ pub fn extract_complexity_signals(body: &serde_json::Value) -> Vec<String> {
         if msgs.len() >= 6 {
             signals.push("Deep multi-turn".to_string());
         }
-        if let Some(last_user) = msgs.iter().rev().find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user")) {
-            let last_text = last_user.get("content").map(content_to_text).unwrap_or_default();
+        if let Some(last_user) = msgs
+            .iter()
+            .rev()
+            .find(|m| m.get("role").and_then(|r| r.as_str()) == Some("user"))
+        {
+            let last_text = last_user
+                .get("content")
+                .map(content_to_text)
+                .unwrap_or_default();
             let last_lower = last_text.to_ascii_lowercase();
             if last_lower.contains("wrong")
                 || last_lower.contains("error")

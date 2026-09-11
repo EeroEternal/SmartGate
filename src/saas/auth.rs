@@ -7,9 +7,11 @@ use axum::{
     Json,
 };
 use chrono::{Duration, Utc};
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -21,6 +23,38 @@ const SESSION_DAYS: i64 = 30;
 const VERIFICATION_CODE_TTL_MINUTES: i64 = 10;
 const VERIFICATION_RESEND_SECONDS: i64 = 60;
 const VERIFICATION_MAX_ATTEMPTS: i32 = 5;
+const LOGIN_MAX_ATTEMPTS: usize = 5;
+const LOGIN_WINDOW_SECONDS: i64 = 300;
+const VERIFICATION_SEND_MAX_ATTEMPTS: usize = 3;
+const VERIFICATION_SEND_WINDOW_SECONDS: i64 = 600;
+
+/// In-process sliding-window rate limiter for brute-force protection.
+/// Note: state is per-process only; requests are not limited across multiple replicas.
+static LOGIN_LIMITER: Lazy<dashmap::DashMap<String, VecDeque<chrono::DateTime<Utc>>>> =
+    Lazy::new(dashmap::DashMap::new);
+static VERIFICATION_SEND_LIMITER: Lazy<dashmap::DashMap<String, VecDeque<chrono::DateTime<Utc>>>> =
+    Lazy::new(dashmap::DashMap::new);
+
+fn rate_limit_exceeded(
+    limiter: &dashmap::DashMap<String, VecDeque<chrono::DateTime<Utc>>>,
+    key: &str,
+    max_attempts: usize,
+    window: Duration,
+) -> bool {
+    let mut attempts = limiter.entry(key.to_string()).or_default();
+    let cutoff = Utc::now() - window;
+    while attempts
+        .front()
+        .is_some_and(|timestamp| *timestamp < cutoff)
+    {
+        attempts.pop_front();
+    }
+    if attempts.len() >= max_attempts {
+        return true;
+    }
+    attempts.push_back(Utc::now());
+    false
+}
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RegisterRequest {
@@ -60,20 +94,26 @@ pub(super) async fn register(
     let project_id = Uuid::new_v4().to_string();
 
     let mut tx = state.db.begin().await.map_err(db_error)?;
-    let verification: Option<(String, i32, chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>)> =
-        sqlx::query_as(
-            "SELECT code_hash, attempts, expires_at, used_at
+    let verification: Option<(
+        String,
+        i32,
+        chrono::DateTime<Utc>,
+        Option<chrono::DateTime<Utc>>,
+    )> = sqlx::query_as(
+        "SELECT code_hash, attempts, expires_at, used_at
              FROM saas_email_verifications WHERE email = $1 FOR UPDATE",
-        )
-        .bind(&email)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_error)?;
+    )
+    .bind(&email)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_error)?;
     let Some((code_hash, attempts, expires_at, used_at)) = verification else {
         return Err(verification_error("Request a verification code first"));
     };
     if used_at.is_some() || expires_at <= Utc::now() || attempts >= VERIFICATION_MAX_ATTEMPTS {
-        return Err(verification_error("The verification code is invalid or expired"));
+        return Err(verification_error(
+            "The verification code is invalid or expired",
+        ));
     }
     if code_hash != verification_code_hash(&email, &input.verification_code) {
         sqlx::query("UPDATE saas_email_verifications SET attempts = attempts + 1 WHERE email = $1")
@@ -81,7 +121,9 @@ pub(super) async fn register(
             .execute(&mut *tx)
             .await
             .map_err(db_error)?;
-        return Err(verification_error("The verification code is invalid or expired"));
+        return Err(verification_error(
+            "The verification code is invalid or expired",
+        ));
     }
     sqlx::query("UPDATE saas_email_verifications SET used_at = CURRENT_TIMESTAMP WHERE email = $1")
         .bind(&email)
@@ -142,20 +184,35 @@ pub(super) async fn send_verification_code(
     let email = normalize_email(&input.email);
     validate_email(&email)?;
 
-    let already_registered: Option<(String,)> = sqlx::query_as(
-        "SELECT id FROM saas_users WHERE email = $1",
-    )
-    .bind(&email)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(db_error)?;
+    if rate_limit_exceeded(
+        &VERIFICATION_SEND_LIMITER,
+        &email,
+        VERIFICATION_SEND_MAX_ATTEMPTS,
+        Duration::seconds(VERIFICATION_SEND_WINDOW_SECONDS),
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ApiResponse::error(
+                "Too many verification codes requested. Please try again later.",
+            )),
+        ));
+    }
+
+    let already_registered: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM saas_users WHERE email = $1")
+            .bind(&email)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(db_error)?;
     if already_registered.is_some() {
         return Ok(Json(ApiResponse::success(json!({"sent": true}))));
     }
 
     let recent: Option<(chrono::DateTime<Utc>,)> = sqlx::query_as(
+        // Throttle based on the most recent code regardless of used state, so a consumed
+        // code cannot be bypassed by immediately requesting a new one.
         "SELECT sent_at FROM saas_email_verifications
-         WHERE email = $1 AND used_at IS NULL",
+         WHERE email = $1 ORDER BY sent_at DESC LIMIT 1",
     )
     .bind(&email)
     .fetch_optional(&state.db)
@@ -166,7 +223,9 @@ pub(super) async fn send_verification_code(
         if elapsed < VERIFICATION_RESEND_SECONDS {
             return Err((
                 StatusCode::TOO_MANY_REQUESTS,
-                Json(ApiResponse::error("Please wait before requesting another code")),
+                Json(ApiResponse::error(
+                    "Please wait before requesting another code",
+                )),
             ));
         }
     }
@@ -224,6 +283,19 @@ pub(super) async fn login(
     Json(input): Json<LoginRequest>,
 ) -> Result<Response, (StatusCode, Json<ApiResponse<()>>)> {
     let email = normalize_email(&input.email);
+    if rate_limit_exceeded(
+        &LOGIN_LIMITER,
+        &email,
+        LOGIN_MAX_ATTEMPTS,
+        Duration::seconds(LOGIN_WINDOW_SECONDS),
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ApiResponse::error(
+                "Too many login attempts. Please try again in a few minutes.",
+            )),
+        ));
+    }
     let user = sqlx::query_as::<_, SaasUser>(
         "SELECT id, email, password_hash, status FROM saas_users WHERE email = $1",
     )
@@ -240,6 +312,15 @@ pub(super) async fn login(
             Json(ApiResponse::error("Invalid email or password")),
         ));
     };
+    // Opportunistically upgrade legacy sha256 password hashes to argon2id on successful login.
+    if user.password_hash.starts_with("sha256$") {
+        sqlx::query("UPDATE saas_users SET password_hash = $1 WHERE id = $2")
+            .bind(hash_password(&input.password))
+            .bind(&user.id)
+            .execute(&state.db)
+            .await
+            .map_err(db_error)?;
+    }
     sqlx::query("UPDATE saas_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1")
         .bind(&user.id)
         .execute(&state.db)
@@ -293,7 +374,9 @@ pub(super) async fn update_profile(
     if input.email.is_none() && input.new_password.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Provide an email or a new password to update")),
+            Json(ApiResponse::error(
+                "Provide an email or a new password to update",
+            )),
         ));
     }
     if !verify_password(&input.current_password, &ctx.user.password_hash) {
@@ -371,7 +454,10 @@ fn normalize_email(email: &str) -> String {
 fn validate_email(email: &str) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
     let valid = email.len() <= 254
         && email.split_once('@').is_some_and(|(local, domain)| {
-            !local.is_empty() && !domain.is_empty() && !domain.starts_with('.') && !domain.ends_with('.')
+            !local.is_empty()
+                && !domain.is_empty()
+                && !domain.starts_with('.')
+                && !domain.ends_with('.')
         });
     if !valid {
         return Err((
@@ -398,9 +484,7 @@ fn validate_credentials(
     Ok(())
 }
 
-fn validate_verification_code(
-    code: &str,
-) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
+fn validate_verification_code(code: &str) -> Result<(), (StatusCode, Json<ApiResponse<()>>)> {
     if code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(verification_error("Enter the 6-digit verification code"));
     }
@@ -423,13 +507,31 @@ fn email_service_error() -> (StatusCode, Json<ApiResponse<()>>) {
 }
 
 fn hash_password(password: &str) -> String {
-    let salt = Uuid::new_v4().simple().to_string();
-    format!("sha256${}${}", salt, password_digest(password, &salt))
+    use argon2::password_hash::PasswordHasher;
+    let salt =
+        argon2::password_hash::SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
+    argon2::Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .expect("argon2id password hashing must not fail")
 }
 
 fn verify_password(password: &str, stored: &str) -> bool {
-    let mut parts = stored.split('$');
-    matches!((parts.next(), parts.next(), parts.next()), (Some("sha256"), Some(salt), Some(digest)) if password_digest(password, salt) == digest)
+    if let Some(legacy) = stored.strip_prefix("sha256$") {
+        // Legacy scheme kept for backward compatibility with hashes stored before argon2id adoption.
+        let mut parts = legacy.split('$');
+        return matches!((parts.next(), parts.next()), (Some(salt), Some(digest))
+            if password_digest(password, salt) == digest);
+    }
+    let Ok(parsed) = argon2::PasswordHash::new(stored) else {
+        return false;
+    };
+    argon2::PasswordVerifier::verify_password(
+        &argon2::Argon2::default(),
+        password.as_bytes(),
+        &parsed,
+    )
+    .is_ok()
 }
 
 fn password_digest(password: &str, salt: &str) -> String {

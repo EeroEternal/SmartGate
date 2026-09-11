@@ -106,9 +106,7 @@ impl SmartGateFeedbackProvider {
         let has_tools = hint.as_ref().map(|h| h.has_tools).unwrap_or(false);
         let downshift = hint.as_ref().map(|h| h.downshift).unwrap_or(false);
         let affinity_enabled = hint.as_ref().map(|h| h.affinity_enabled).unwrap_or(false);
-        let sticky_endpoint_id = hint
-            .as_ref()
-            .and_then(|h| h.sticky_endpoint_id.clone());
+        let sticky_endpoint_id = hint.as_ref().and_then(|h| h.sticky_endpoint_id.clone());
 
         let max_pool_capability = if strategy == "capability_aware" {
             members
@@ -169,32 +167,35 @@ impl SmartGateFeedbackProvider {
 
         for member in members.iter() {
             let metric = self.metrics.get(&member.endpoint_id);
-            let (excluded_health, cooldown_until, recent_error_rate, active, success_latency, all_latency) =
-                if let Some(m) = metric.as_ref() {
-                    let excluded = m
-                        .cooldown_until
-                        .map(|until| until > now)
-                        .unwrap_or(false);
-                    let cooldown_until = m.cooldown_until.filter(|until| *until > now).map(|until| {
-                        SystemTime::UNIX_EPOCH
-                            + std::time::Duration::from_secs(until.timestamp().max(0) as u64)
-                    });
-                    let recent_error_rate = if m.total_requests > 0 {
-                        Some(m.total_errors as f64 / m.total_requests as f64)
-                    } else {
-                        None
-                    };
-                    (
-                        excluded,
-                        cooldown_until,
-                        recent_error_rate,
-                        m.active_requests,
-                        m.ema_success_latency_ms,
-                        m.ema_latency_ms,
-                    )
+            let (
+                excluded_health,
+                cooldown_until,
+                recent_error_rate,
+                active,
+                success_latency,
+                all_latency,
+            ) = if let Some(m) = metric.as_ref() {
+                let excluded = m.cooldown_until.map(|until| until > now).unwrap_or(false);
+                let cooldown_until = m.cooldown_until.filter(|until| *until > now).map(|until| {
+                    SystemTime::UNIX_EPOCH
+                        + std::time::Duration::from_secs(until.timestamp().max(0) as u64)
+                });
+                let recent_error_rate = if m.total_requests > 0 {
+                    Some(m.total_errors as f64 / m.total_requests as f64)
                 } else {
-                    (false, None, None, 0, 0.0, 0.0)
+                    None
                 };
+                (
+                    excluded,
+                    cooldown_until,
+                    recent_error_rate,
+                    m.active_requests,
+                    m.ema_success_latency_ms,
+                    m.ema_latency_ms,
+                )
+            } else {
+                (false, None, None, 0, 0.0, 0.0)
+            };
 
             let profile = self
                 .profiles
@@ -297,9 +298,7 @@ impl SmartGateFeedbackProvider {
                 if sticky_is_capable && !sticky_cache_collapsed {
                     if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
                         if !signal.excluded {
-                            signal.score = Some(
-                                signal.score.unwrap_or(0.0) + AFFINITY_BOOST,
-                            );
+                            signal.score = Some(signal.score.unwrap_or(0.0) + AFFINITY_BOOST);
                         }
                     }
                 }
@@ -321,8 +320,16 @@ impl SmartGateFeedbackProvider {
                     }
                 })
                 .then_with(|| {
-                    let l_active = self.metrics.get(&left.endpoint_id).map(|m| m.active_requests).unwrap_or(0);
-                    let r_active = self.metrics.get(&right.endpoint_id).map(|m| m.active_requests).unwrap_or(0);
+                    let l_active = self
+                        .metrics
+                        .get(&left.endpoint_id)
+                        .map(|m| m.active_requests)
+                        .unwrap_or(0);
+                    let r_active = self
+                        .metrics
+                        .get(&right.endpoint_id)
+                        .map(|m| m.active_requests)
+                        .unwrap_or(0);
                     l_active.cmp(&r_active)
                 })
                 .then_with(|| {

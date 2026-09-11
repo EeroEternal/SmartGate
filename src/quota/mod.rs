@@ -5,6 +5,23 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const RPM_WINDOW: Duration = Duration::from_secs(60);
+/// Entries whose window is empty and that have been idle longer than this are evicted.
+const RPM_IDLE_TTL: Duration = Duration::from_secs(600);
+
+#[derive(Debug)]
+struct RpmState {
+    events: VecDeque<Instant>,
+    last_active: Instant,
+}
+
+impl RpmState {
+    fn new(now: Instant) -> Self {
+        Self {
+            events: VecDeque::new(),
+            last_active: now,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct QuotaLimits {
@@ -53,8 +70,8 @@ impl QuotaRejectReason {
 
 /// In-memory hard limits for Project / API Key RPM and concurrency.
 pub struct QuotaLimiter {
-    key_rpm: DashMap<String, Mutex<VecDeque<Instant>>>,
-    project_rpm: DashMap<String, Mutex<VecDeque<Instant>>>,
+    key_rpm: DashMap<String, Mutex<RpmState>>,
+    project_rpm: DashMap<String, Mutex<RpmState>>,
     key_concurrency: DashMap<String, AtomicU32>,
     project_concurrency: DashMap<String, AtomicU32>,
 }
@@ -146,48 +163,68 @@ impl QuotaLimiter {
 
     fn would_exceed_rpm(
         &self,
-        map: &DashMap<String, Mutex<VecDeque<Instant>>>,
+        map: &DashMap<String, Mutex<RpmState>>,
         id: &str,
         limit: u32,
         now: Instant,
     ) -> Option<u64> {
-        let entry = map.entry(id.to_string()).or_insert_with(|| Mutex::new(VecDeque::new()));
-        let mut q = entry.lock().unwrap_or_else(|e| e.into_inner());
-        prune_window(&mut q, now);
-        if q.len() as u32 >= limit {
-            let retry = q
-                .front()
-                .map(|oldest| {
-                    RPM_WINDOW
-                        .saturating_sub(now.saturating_duration_since(*oldest))
-                        .as_secs()
-                        .max(1)
-                })
-                .unwrap_or(1);
-            Some(retry)
-        } else {
-            None
+        let mut evict = false;
+        let retry = {
+            let entry = map
+                .entry(id.to_string())
+                .or_insert_with(|| Mutex::new(RpmState::new(now)));
+            let mut state = entry.lock().unwrap_or_else(|e| e.into_inner());
+            prune_window(&mut state.events, now);
+            if state.events.is_empty()
+                && now.saturating_duration_since(state.last_active) >= RPM_IDLE_TTL
+            {
+                evict = true;
+            }
+            state.last_active = now;
+            if state.events.len() as u32 >= limit {
+                let retry = state
+                    .events
+                    .front()
+                    .map(|oldest| {
+                        RPM_WINDOW
+                            .saturating_sub(now.saturating_duration_since(*oldest))
+                            .as_secs()
+                            .max(1)
+                    })
+                    .unwrap_or(1);
+                Some(retry)
+            } else {
+                None
+            }
+        };
+        if evict {
+            Self::evict_if_empty(map, id, now);
         }
+        retry
     }
 
-    fn record_rpm(
-        &self,
-        map: &DashMap<String, Mutex<VecDeque<Instant>>>,
-        id: &str,
-        now: Instant,
-    ) {
-        let entry = map.entry(id.to_string()).or_insert_with(|| Mutex::new(VecDeque::new()));
-        let mut q = entry.lock().unwrap_or_else(|e| e.into_inner());
-        prune_window(&mut q, now);
-        q.push_back(now);
+    /// Remove the entry only if its window is still empty. `remove_if` holds
+    /// the shard lock and re-checks the condition, so an entry updated
+    /// concurrently between the read above and the removal is never dropped.
+    fn evict_if_empty(map: &DashMap<String, Mutex<RpmState>>, id: &str, now: Instant) {
+        map.remove_if(id, |_, state| {
+            let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+            prune_window(&mut state.events, now);
+            state.events.is_empty()
+        });
     }
 
-    fn try_inc_concurrency(
-        &self,
-        map: &DashMap<String, AtomicU32>,
-        id: &str,
-        limit: u32,
-    ) -> bool {
+    fn record_rpm(&self, map: &DashMap<String, Mutex<RpmState>>, id: &str, now: Instant) {
+        let entry = map
+            .entry(id.to_string())
+            .or_insert_with(|| Mutex::new(RpmState::new(now)));
+        let mut state = entry.lock().unwrap_or_else(|e| e.into_inner());
+        prune_window(&mut state.events, now);
+        state.last_active = now;
+        state.events.push_back(now);
+    }
+
+    fn try_inc_concurrency(&self, map: &DashMap<String, AtomicU32>, id: &str, limit: u32) -> bool {
         let counter = map
             .entry(id.to_string())
             .or_insert_with(|| AtomicU32::new(0));

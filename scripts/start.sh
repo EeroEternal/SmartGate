@@ -14,9 +14,11 @@ if [ ! -f .env ]; then
     cat > .env <<'EOF'
 ADMIN_TOKEN=admin123
 ADDR=127.0.0.1:18765
-DATABASE_URL=sqlite://smartgate.db?mode=rwc
+# SmartGate is Postgres-only; point this at a local PostgreSQL instance.
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/smartgate
 EOF
-    echo -e "${GREEN}Created .env (ADMIN_TOKEN=admin123, port 18765).${NC}"
+    echo -e "${GREEN}Created .env (port 18765).${NC}"
+    echo -e "${YELLOW}WARNING: ADMIN_TOKEN defaults to 'admin123'. Change it before exposing SmartGate beyond localhost.${NC}"
 fi
 
 # shellcheck disable=SC1091

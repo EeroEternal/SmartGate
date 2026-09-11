@@ -14,11 +14,14 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/smartgate /usr/local/bin/smartgate
 COPY --from=web-builder /web/dist /app/web/dist
 ENV RUST_LOG=smartgate=info,tower_http=info
 EXPOSE 8080
+USER 1000:1000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+    CMD curl -fsS http://localhost:8080/health || exit 1
 CMD ["smartgate"]

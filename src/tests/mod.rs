@@ -63,6 +63,6 @@ fn offline_judge_eval_reports_heuristic_routing_metrics() {
         judge_triggers,
     );
 
-    assert!(correct > 0);
+    assert!(accuracy >= 0.8);
     assert!(false_escalations + false_downshifts < cases.len());
 }

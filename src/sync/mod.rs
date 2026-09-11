@@ -78,7 +78,9 @@ pub async fn sync_all_pools(
             }
             let mut metric = EndpointMetric::new(row.id.clone());
             metric.health_status = row.health_status.clone();
-            metric.cooldown_until = row.cooldown_until.filter(|until| *until > chrono::Utc::now());
+            metric.cooldown_until = row
+                .cooldown_until
+                .filter(|until| *until > chrono::Utc::now());
             metrics.insert(row.id.clone(), metric);
         }
 
@@ -142,13 +144,12 @@ pub async fn sync_all_pools(
             })
             .collect();
 
-        let vm_records: Vec<(String, String)> = sqlx::query_as(
-            "SELECT id, name FROM virtual_models WHERE pool_id = $1",
-        )
-        .bind(&pool.id)
-        .fetch_all(db)
-        .await
-        .unwrap_or_default();
+        let vm_records: Vec<(String, String)> =
+            sqlx::query_as("SELECT id, name FROM virtual_models WHERE pool_id = $1")
+                .bind(&pool.id)
+                .fetch_all(db)
+                .await
+                .unwrap_or_default();
 
         let unigateway_endpoints: Vec<Endpoint> = rows
             .iter()
