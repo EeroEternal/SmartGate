@@ -184,6 +184,7 @@ mod tests {
                 resend_api_key: None,
                 resend_from_email: None,
                 warm: Default::default(),
+                shadow: Default::default(),
             },
             db,
             metrics: Default::default(),
@@ -201,6 +202,7 @@ mod tests {
             }),
             engine: Arc::new(engine),
             warm_store: Arc::new(crate::warm::WarmStore::new()),
+            shadow_semaphore: Arc::new(tokio::sync::Semaphore::new(3)),
         })
     }
 

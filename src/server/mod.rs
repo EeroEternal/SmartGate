@@ -172,6 +172,34 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         });
     }
 
+    // Periodic retention cleanup for shadow flighting evaluations (hourly).
+    {
+        let db = db.clone();
+        let retention_days = config.shadow.retention_days;
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(3600));
+            loop {
+                ticker.tick().await;
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days);
+                match sqlx::query("DELETE FROM shadow_evaluations WHERE timestamp < $1")
+                    .bind(cutoff)
+                    .execute(&db)
+                    .await
+                {
+                    Ok(result) => {
+                        let removed = result.rows_affected();
+                        if removed > 0 {
+                            tracing::info!(removed, "deleted expired shadow evaluations");
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(error = %error, "failed to delete expired shadow evaluations");
+                    }
+                }
+            }
+        });
+    }
+
     let app_state = Arc::new(AppState {
         config: config.clone(),
         db,
@@ -184,6 +212,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         feedback: feedback_provider,
         engine,
         warm_store,
+        shadow_semaphore: Arc::new(tokio::sync::Semaphore::new(config.shadow.max_concurrent)),
     });
 
     let allowed_origins = config.cors_allowed_origins.clone();

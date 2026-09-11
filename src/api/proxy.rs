@@ -575,25 +575,35 @@ async fn chat_proxy(
 
             if should_shadow {
                 if let Some((shadow_model_name, _)) = shadow_config {
-                    let state_clone = Arc::clone(&state);
-                    let auth_clone = auth.clone();
-                    let headers_clone = headers.clone();
-                    let payload_clone = payload.clone();
-                    let request_preview = prompt_preview.clone();
-                    let is_openai = protocol == ChatProtocol::OpenAi;
-                    tokio::spawn(async move {
-                        run_shadow(ShadowJob {
-                            state: state_clone,
-                            auth: auth_clone,
-                            headers: headers_clone,
-                            payload: payload_clone,
-                            shadow_model_name,
-                            request_preview,
-                            main_preview,
-                            is_openai,
-                        })
-                        .await;
-                    });
+                    // Shadow flighting is best-effort: if no permit is available the
+                    // shadow is dropped and the main response is unaffected.
+                    match state.shadow_semaphore.clone().try_acquire_owned() {
+                        Ok(permit) => {
+                            let state_clone = Arc::clone(&state);
+                            let auth_clone = auth.clone();
+                            let headers_clone = headers.clone();
+                            let payload_clone = payload.clone();
+                            let request_preview = prompt_preview.clone();
+                            let is_openai = protocol == ChatProtocol::OpenAi;
+                            tokio::spawn(async move {
+                                let _permit = permit;
+                                run_shadow(ShadowJob {
+                                    state: state_clone,
+                                    auth: auth_clone,
+                                    headers: headers_clone,
+                                    payload: payload_clone,
+                                    shadow_model_name,
+                                    request_preview,
+                                    main_preview,
+                                    is_openai,
+                                })
+                                .await;
+                            });
+                        }
+                        Err(_) => {
+                            metrics::counter!("shadow_dropped_total").increment(1);
+                        }
+                    }
                 }
             }
 

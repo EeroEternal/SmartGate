@@ -18,6 +18,44 @@ pub struct Config {
     pub resend_api_key: Option<String>,
     pub resend_from_email: Option<String>,
     pub warm: WarmConfig,
+    pub shadow: ShadowConfig,
+}
+
+/// Best-effort shadow flighting limits. Shadow requests are dropped when no
+/// permit is available, so these settings never affect the main request path.
+#[derive(Debug, Deserialize, Clone)]
+pub struct ShadowConfig {
+    /// Maximum number of concurrent shadow requests per process.
+    pub max_concurrent: usize,
+    /// Rows in `shadow_evaluations` older than this are deleted periodically.
+    pub retention_days: i64,
+}
+
+impl Default for ShadowConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent: 3,
+            retention_days: 7,
+        }
+    }
+}
+
+impl ShadowConfig {
+    pub fn from_env() -> Self {
+        let default = Self::default();
+        let max_concurrent = std::env::var("SHADOW_MAX_CONCURRENT")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(default.max_concurrent);
+        let retention_days = std::env::var("SHADOW_RETENTION_DAYS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(default.retention_days);
+        Self {
+            max_concurrent,
+            retention_days,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -33,6 +71,7 @@ pub struct AppState {
     pub feedback: Arc<crate::routing::SmartGateFeedbackProvider>,
     pub engine: Arc<UniGatewayEngine>,
     pub warm_store: Arc<WarmStore>,
+    pub shadow_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 impl Config {
@@ -70,6 +109,7 @@ impl Config {
             resend_api_key: std::env::var("RESEND_API_KEY").ok(),
             resend_from_email: std::env::var("RESEND_FROM_EMAIL").ok(),
             warm: WarmConfig::from_env()?,
+            shadow: ShadowConfig::from_env(),
         })
     }
 }
