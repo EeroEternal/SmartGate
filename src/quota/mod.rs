@@ -105,7 +105,8 @@ impl QuotaLimiter {
         // Check RPM first (no side effects on concurrency yet).
         if let Some(limit) = project_limits.rpm_limit {
             if let Some(retry) = self.would_exceed_rpm(&self.project_rpm, project_id, limit, now) {
-                metrics::counter!("quota_rejected_total", "reason" => "rpm", "scope" => "project").increment(1);
+                metrics::counter!("quota_rejected_total", "reason" => "rpm", "scope" => "project")
+                    .increment(1);
                 return Err(QuotaRejectReason::Rpm {
                     scope: "project",
                     limit,
@@ -115,7 +116,8 @@ impl QuotaLimiter {
         }
         if let Some(limit) = key_limits.rpm_limit {
             if let Some(retry) = self.would_exceed_rpm(&self.key_rpm, key_id, limit, now) {
-                metrics::counter!("quota_rejected_total", "reason" => "rpm", "scope" => "api_key").increment(1);
+                metrics::counter!("quota_rejected_total", "reason" => "rpm", "scope" => "api_key")
+                    .increment(1);
                 return Err(QuotaRejectReason::Rpm {
                     scope: "api_key",
                     limit,
