@@ -4,7 +4,7 @@ import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
-import { formatMaskedKey } from '../saas/SaasPages'
+import { formatMaskedKey } from '../saas/components'
 
 interface Project {
   id: string

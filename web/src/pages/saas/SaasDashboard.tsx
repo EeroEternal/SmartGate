@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpRight, CheckCircle2, HelpCircle, KeyRound, Route, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
-import { SaasLayout } from './SaasPages'
+import { SaasLayout } from './SaasLayout'
 import { useI18n } from '../../lib/i18n'
 
 interface Service { id: string; name: string; endpoint_count?: number; strategy: string; health_status: string }
