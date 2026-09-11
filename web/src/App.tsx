@@ -50,12 +50,12 @@ function Dashboard() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-zinc-900">{t('nav.dashboard')}</h2>
-        <p className="text-sm text-zinc-500 mt-1">Endpoint health and recent gateway traffic.</p>
+        <p className="text-sm text-zinc-500 mt-1">{t('admin.dashboard_subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-zinc-200 rounded-lg p-5">
-          <div className="text-sm text-zinc-500">Healthy Endpoints</div>
+          <div className="text-sm text-zinc-500">{t('admin.healthy_endpoints')}</div>
           <div className="mt-2 text-3xl font-mono font-bold text-zinc-900">
             {health?.healthy ?? '—'}
           </div>
@@ -64,7 +64,7 @@ function Dashboard() {
           </div>
         </div>
         <div className="bg-white border border-zinc-200 rounded-lg p-5">
-          <div className="text-sm text-zinc-500">Degraded</div>
+          <div className="text-sm text-zinc-500">{t('admin.degraded')}</div>
           <div className="mt-2 text-3xl font-mono font-bold text-zinc-900">
             {health?.degraded ?? '—'}
           </div>
@@ -73,7 +73,7 @@ function Dashboard() {
           </div>
         </div>
         <div className="bg-white border border-zinc-200 rounded-lg p-5">
-          <div className="text-sm text-zinc-500">Unavailable</div>
+          <div className="text-sm text-zinc-500">{t('admin.unavailable')}</div>
           <div className="mt-2 text-3xl font-mono font-bold text-zinc-900">
             {health?.unavailable ?? '—'}
           </div>
@@ -84,10 +84,10 @@ function Dashboard() {
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg p-6 space-y-4">
-        <h3 className="text-lg font-bold">Quick Snapshot</h3>
+        <h3 className="text-lg font-bold">{t('admin.quick_snapshot')}</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-zinc-500">Tracked Endpoints</div>
+            <div className="text-zinc-500">{t('admin.tracked_endpoints')}</div>
             <div className="font-mono text-xl mt-1">{total || '—'}</div>
           </div>
           <div>
@@ -103,9 +103,7 @@ function Dashboard() {
             </div>
           </div>
         </div>
-        <p className="text-xs text-zinc-500">
-          Open a Model Pool to inspect per-endpoint health, active connections, and latency.
-        </p>
+        <p className="text-xs text-zinc-500">{t('admin.snapshot_hint')}</p>
       </div>
     </div>
   )
@@ -168,7 +166,8 @@ function Sidebar() {
 }
 
 function HeaderHealth() {
-  const [label, setLabel] = useState('CHECKING')
+  const { t } = useI18n()
+  const [label, setLabel] = useState(t('admin.health_checking'))
   const [dot, setDot] = useState('bg-zinc-300')
 
   useEffect(() => {
@@ -177,18 +176,18 @@ function HeaderHealth() {
         if (!data.success) return
         const h = data.data.endpoint_health
         if ((h?.unavailable || 0) > 0) {
-          setLabel('DEGRADED')
+          setLabel(t('admin.health_degraded'))
           setDot('bg-rose-500')
         } else if ((h?.degraded || 0) > 0) {
-          setLabel('DEGRADED')
+          setLabel(t('admin.health_degraded'))
           setDot('bg-amber-500')
         } else {
-          setLabel('SYSTEM HEALTHY')
+          setLabel(t('admin.health_healthy'))
           setDot('bg-emerald-500')
         }
       })
       .catch(() => {
-        setLabel('OFFLINE')
+        setLabel(t('admin.health_offline'))
         setDot('bg-rose-500')
       })
   }, [])
@@ -224,7 +223,7 @@ function AdminConsole() {
             <Route path="/virtual-models" element={<VirtualModels />} />
             <Route path="/access" element={<AccessControl />} />
             <Route path="/stats" element={<Statistics />} />
-            <Route path="*" element={<div className="text-zinc-500">Under Construction</div>} />
+            <Route path="*" element={<div className="text-zinc-500">{t('admin.under_construction')}</div>} />
           </Routes>
         </main>
       </div>

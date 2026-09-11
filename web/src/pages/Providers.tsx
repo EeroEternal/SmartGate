@@ -4,6 +4,7 @@ import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
 import { useDialog } from '../components/Dialog'
+import { useI18n } from '../lib/i18n'
 
 interface Provider {
   id: string
@@ -40,6 +41,7 @@ const PROVIDER_TYPES = [
 ]
 
 export default function Providers() {
+  const { t } = useI18n()
   const [providers, setProviders] = useState<Provider[]>([])
   const [endpoints, setEndpoints] = useState<Endpoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,7 +106,7 @@ export default function Providers() {
         await refresh()
       }
     } catch (error) {
-      await showAlert(error instanceof Error ? error.message : 'Network error')
+      await showAlert(error instanceof Error ? error.message : t('errors.network_error'))
     } finally {
       setSubmitting(false)
     }
@@ -154,7 +156,7 @@ export default function Providers() {
         await refresh()
       }
     } catch (error) {
-      await showAlert(error instanceof Error ? error.message : 'Network error')
+      await showAlert(error instanceof Error ? error.message : t('errors.network_error'))
     } finally {
       setSubmitting(false)
     }
@@ -165,9 +167,9 @@ export default function Providers() {
       {dialog}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900">Providers</h2>
+          <h2 className="text-2xl font-bold text-zinc-900">{t('nav.providers')}</h2>
           <p className="text-sm text-zinc-500 mt-1">
-            Manage provider accounts and the concrete endpoints behind them.
+            {t('admin.providers_subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -177,38 +179,38 @@ export default function Providers() {
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-zinc-300 rounded-md hover:bg-zinc-50 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            Add Endpoint
+            {t('admin.add_endpoint')}
           </button>
           <button
             onClick={() => setIsProviderModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800"
           >
             <Plus className="w-4 h-4" />
-            Add Provider
+            {t('admin.add_provider')}
           </button>
         </div>
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Provider Accounts</div>
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">{t('admin.provider_accounts')}</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
             <tr>
-              <th className="px-6 py-3 font-medium">Name</th>
-              <th className="px-6 py-3 font-medium">Type</th>
-              <th className="px-6 py-3 font-medium">Base URL</th>
-              <th className="px-6 py-3 font-medium">Status</th>
+              <th className="px-6 py-3 font-medium">{t('common.name')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.type')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.base_url')}</th>
+              <th className="px-6 py-3 font-medium">{t('common.status')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">Loading...</td>
+                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">{t('common.loading')}</td>
               </tr>
             ) : providers.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
-                  No providers yet. Add one before creating endpoints.
+                  {t('admin.no_providers')}
                 </td>
               </tr>
             ) : (
@@ -232,25 +234,25 @@ export default function Providers() {
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Endpoints</div>
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">{t('admin.endpoints')}</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
             <tr>
-              <th className="px-6 py-3 font-medium">Name</th>
-              <th className="px-6 py-3 font-medium">Provider</th>
-              <th className="px-6 py-3 font-medium">Upstream Model</th>
-              <th className="px-6 py-3 font-medium">Health</th>
-              <th className="px-6 py-3 font-medium">$/1M input/output</th>
-              <th className="px-6 py-3 font-medium">Capability</th>
-              <th className="px-6 py-3 font-medium">Priority</th>
-              <th className="px-6 py-3 font-medium">Weight</th>
+              <th className="px-6 py-3 font-medium">{t('common.name')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.provider')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.upstream_model')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.health')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.price_1m')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.capability')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.priority')}</th>
+              <th className="px-6 py-3 font-medium">{t('admin.weight')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {endpoints.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
-                  No endpoints yet. Create one, then bind it into a Model Pool.
+                  {t('admin.no_endpoints')}
                 </td>
               </tr>
             ) : (
@@ -281,14 +283,14 @@ export default function Providers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
-              <h3 className="text-lg font-bold">Add Provider</h3>
+              <h3 className="text-lg font-bold">{t('admin.add_provider')}</h3>
               <button onClick={() => setIsProviderModalOpen(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleCreateProvider} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('common.name')}</label>
                 <input
                   required
                   className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
@@ -297,13 +299,13 @@ export default function Providers() {
                 />
               </div>
               <Select
-                label="Provider Type"
+                label={t('admin.provider_type')}
                 options={PROVIDER_TYPES}
                 selected={providerType}
                 onChange={(opt) => setProviderType({ id: String(opt.id), name: opt.name })}
               />
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Base URL</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.base_url')}</label>
                 <input
                   type="url"
                   required
@@ -313,7 +315,7 @@ export default function Providers() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">API Key</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.api_key')}</label>
                 <input
                   type="password"
                   required
@@ -327,7 +329,7 @@ export default function Providers() {
                 disabled={submitting}
                 className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
               >
-                {submitting ? 'Saving...' : 'Save Provider'}
+                {submitting ? t('common.saving') : t('admin.save_provider')}
               </button>
             </form>
           </div>
@@ -338,34 +340,34 @@ export default function Providers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
-              <h3 className="text-lg font-bold">Add Endpoint</h3>
+              <h3 className="text-lg font-bold">{t('admin.add_endpoint')}</h3>
               <button onClick={() => setIsEndpointModalOpen(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleCreateEndpoint} className="p-6 space-y-4">
               <Select
-                label="Provider Account"
+                label={t('admin.provider_account')}
                 options={providers.map((p) => ({ id: p.id, name: p.name }))}
-                selected={selectedAccount || { id: '', name: 'Select provider...' }}
+                selected={selectedAccount || { id: '', name: t('admin.select_provider') }}
                 onChange={(opt) => setSelectedAccount({ id: String(opt.id), name: opt.name })}
               />
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Endpoint Name</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.endpoint_name')}</label>
                 <input
                   required
                   className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  placeholder="e.g. gpt-4o-eastus"
+                  placeholder={t('admin.endpoint_name_placeholder')}
                   value={endpointForm.name}
                   onChange={(e) => setEndpointForm({ ...endpointForm, name: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Upstream Model ID</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.upstream_model_id')}</label>
                 <input
                   required
                   className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  placeholder="e.g. gpt-4o"
+                  placeholder={t('admin.model_id_placeholder')}
                   value={endpointForm.upstream_model_id}
                   onChange={(e) =>
                     setEndpointForm({ ...endpointForm, upstream_model_id: e.target.value })
@@ -374,7 +376,7 @@ export default function Providers() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.priority')}</label>
                   <input
                     type="number"
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
@@ -383,7 +385,7 @@ export default function Providers() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Weight</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.weight')}</label>
                   <input
                     type="number"
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
@@ -394,7 +396,7 @@ export default function Providers() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Input $/1M</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('services.input_price')}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -407,7 +409,7 @@ export default function Providers() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Output $/1M</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('services.output_price')}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -422,7 +424,7 @@ export default function Providers() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Capability (0–1)</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('services.capability_range')}</label>
                   <input
                     type="number"
                     step="0.05"
@@ -436,20 +438,20 @@ export default function Providers() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Supports tools</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.supports_tools')}</label>
                   <Select
                     label=""
                     options={[
-                      { id: 'unknown', name: 'Undeclared' },
-                      { id: 'true', name: 'Yes' },
-                      { id: 'false', name: 'No' },
+                      { id: 'unknown', name: t('admin.undeclared') },
+                      { id: 'true', name: t('admin.yes') },
+                      { id: 'false', name: t('admin.no') },
                     ]}
                     selected={
                       endpointForm.supports_tools === 'true'
-                        ? { id: 'true', name: 'Yes' }
+                        ? { id: 'true', name: t('admin.yes') }
                         : endpointForm.supports_tools === 'false'
-                          ? { id: 'false', name: 'No' }
-                          : { id: 'unknown', name: 'Undeclared' }
+                          ? { id: 'false', name: t('admin.no') }
+                          : { id: 'unknown', name: t('admin.undeclared') }
                     }
                     onChange={(opt) =>
                       setEndpointForm({ ...endpointForm, supports_tools: String(opt.id) })
@@ -458,14 +460,14 @@ export default function Providers() {
                 </div>
               </div>
               <p className="text-xs text-zinc-500">
-                Prices power CostAware routing. Capability scores power smart routing.
+                {t('admin.prices_hint')}
               </p>
               <button
                 type="submit"
                 disabled={submitting || !selectedAccount?.id}
                 className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
               >
-                {submitting ? 'Saving...' : 'Save Endpoint'}
+                {submitting ? t('common.saving') : t('admin.save_endpoint')}
               </button>
             </form>
           </div>

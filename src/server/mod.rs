@@ -6,6 +6,7 @@ use crate::usage::SmartGateHooks;
 use axum::{
     extract::State,
     http::StatusCode,
+    middleware::{self, Next},
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
     Router,
@@ -18,6 +19,68 @@ use tower_http::{
     trace::TraceLayer,
 };
 use unigateway_sdk::core::UniGatewayEngine;
+
+/// Global handle to the Prometheus recorder, installed when METRICS_ENABLED is on (default).
+static METRICS_HANDLE: once_cell::sync::OnceCell<metrics_exporter_prometheus::PrometheusHandle> =
+    once_cell::sync::OnceCell::new();
+
+fn metrics_enabled() -> bool {
+    std::env::var("METRICS_ENABLED")
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(true)
+}
+
+fn init_metrics() -> Option<metrics_exporter_prometheus::PrometheusHandle> {
+    if !metrics_enabled() {
+        tracing::info!("Prometheus metrics disabled (METRICS_ENABLED)");
+        return None;
+    }
+    let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+    let handle = recorder.handle();
+    metrics::set_global_recorder(recorder).expect("failed to install Prometheus metrics recorder");
+    tracing::info!("Prometheus metrics enabled at /metrics");
+    Some(handle)
+}
+
+async fn metrics_handler() -> Response {
+    match METRICS_HANDLE.get() {
+        Some(handle) => (
+            StatusCode::OK,
+            [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+            handle.render(),
+        )
+            .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "metrics disabled"})),
+        )
+            .into_response(),
+    }
+}
+
+/// Records request count and latency histogram per method and matched path pattern.
+async fn track_http_metrics(req: axum::extract::Request, next: Next) -> Response {
+    let method = req.method().clone();
+    let path = req
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map(|p| p.as_str().to_string())
+        .unwrap_or_else(|| req.uri().path().to_string());
+    if path == "/metrics" {
+        return next.run(req).await;
+    }
+    let start = std::time::Instant::now();
+    let response = next.run(req).await;
+    let labels = [
+        ("method", method.to_string()),
+        ("path", path),
+        ("status", response.status().as_u16().to_string()),
+    ];
+    metrics::counter!("http_requests_total", &labels).increment(1);
+    metrics::histogram!("http_request_duration_seconds", &labels)
+        .record(start.elapsed().as_secs_f64());
+    response
+}
 
 async fn health_check(State(state): State<Arc<AppState>>) -> Response {
     // Cheap liveness probe that also verifies DB connectivity.
@@ -42,6 +105,10 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Response {
 
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let db = init_db(&config.database_url).await?;
+
+    if let Some(handle) = init_metrics() {
+        METRICS_HANDLE.set(handle).ok();
+    }
 
     let metrics = Arc::new(DashMap::new());
     let pools = Arc::new(DashMap::new());
@@ -92,7 +159,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             let mut ticker = tokio::time::interval(interval);
             loop {
                 ticker.tick().await;
-                match cleanup_store.purge_expired() {
+                match cleanup_store.purge_expired().await {
                     Ok(removed) if removed > 0 => {
                         tracing::debug!(removed, "purged expired Warm sessions");
                     }
@@ -123,6 +190,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/metrics", get(metrics_handler))
         .nest(
             "/api/admin",
             crate::api::admin::admin_routes(app_state.clone()),
@@ -179,6 +247,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     "X-Zene-Request-Id".parse().unwrap(),
                 ]),
         )
+        .layer(middleware::from_fn(track_http_metrics))
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
 

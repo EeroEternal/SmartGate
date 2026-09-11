@@ -84,7 +84,7 @@ pub async fn publish(
         virtual_model_id,
     };
 
-    match state.warm_store.publish(key, input) {
+    match state.warm_store.publish(key, input).await {
         Ok(snapshot) => (
             StatusCode::OK,
             Json(json!({
@@ -117,7 +117,7 @@ pub async fn delete_session(
         api_key_id: auth.api_key.id,
         session_id,
     };
-    state.warm_store.delete(&key);
+    state.warm_store.delete(&key).await;
     StatusCode::NO_CONTENT.into_response()
 }
 

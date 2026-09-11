@@ -102,7 +102,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
             <ChevronDown className={`h-4 w-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
           </button>
           {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
-            <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">Signed in as</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || 'Account'}</div></div>
+            <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">{t('common.signed_in_as')}</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || t('common.default_account')}</div></div>
             <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> Edit profile</button>
             <button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> {t('nav.sign_out')}</button>
           </div>}
@@ -183,22 +183,22 @@ experimental_bearer_token = "<project-api-key>"`
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
             <FileCode2 className="h-5 w-5 text-primary" />
-            {t('codex.title') || 'Use Codex with SmartGate'}
+            {t('codex.title')}
           </h1>
-          <span title={t('codex.subtitle') || 'Connect Codex GUI to a SmartGate model service through the OpenAI Responses API. Keep Codex as your coding workspace while SmartGate provides routing, provider fallback, budgets, and usage tracking.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+          <span title={t('codex.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
             <HelpCircle className="h-4 w-4" />
           </span>
         </div>
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-          {t('codex.supported_badge') || 'Codex supported'}
+          {t('codex.supported_badge')}
         </div>
       </div>
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         {[
-          ['1', t('codex.step1_title') || 'Create a model service', t('codex.step1_desc') || 'Connect providers and choose the routing strategy for Codex requests.', '/app/services', t('codex.step1_action') || 'Open model services'],
-          ['2', t('codex.step2_title') || 'Create an API key', t('codex.step2_desc') || 'Authorize the model service so Codex can call it using its service name.', '/app/keys', t('codex.step2_action') || 'Open API keys'],
-          ['3', t('codex.step3_title') || 'Configure Codex', t('codex.step3_desc') || 'Add the Profile and model catalog below, then restart Codex with the Profile.', null, null],
+          ['1', t('codex.step1_title'), t('codex.step1_desc'), '/app/services', t('codex.step1_action')],
+          ['2', t('codex.step2_title'), t('codex.step2_desc'), '/app/keys', t('codex.step2_action')],
+          ['3', t('codex.step3_title'), t('codex.step3_desc'), null, null],
         ].map(([number, title, text, href, action]) => (
           <div key={number} className="rounded-xl border border-zinc-200 bg-white p-5">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{number}</div>
@@ -216,26 +216,26 @@ experimental_bearer_token = "<project-api-key>"`
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-semibold">{t('codex.profile_title') || 'Codex Profile'}</h2>
+            <h2 className="font-semibold">{t('codex.profile_title')}</h2>
             <p className="mt-1 text-sm text-zinc-500">
-              {t('codex.profile_desc', { path: '~/.codex/fusion.config.toml' }) || 'Save this as ~/.codex/fusion.config.toml. Replace the path, endpoint, model name, and API key with values from this workspace.'}
+              {t('codex.profile_desc', { path: '~/.codex/fusion.config.toml' })}
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">
-            {t('codex.profile_badge') || 'Profile'}
+            {t('codex.profile_badge')}
           </span>
         </div>
         <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-          <strong>{t('codex.why_chat_title') || 'Why Chat Completions?'}</strong> {t('codex.why_chat_desc', { code: 'wire_api = "chat_completions"', param: 'thinking_budget' }) || 'Codex uses the OpenAI Responses API, while SmartGate translates the request for the configured upstream. For the Fusion Profile, use wire_api = "chat_completions" when the upstream does not accept the Responses API thinking_budget parameter.'}
+          <strong>{t('codex.why_chat_title')}</strong> {t('codex.why_chat_desc', { code: 'wire_api = "chat_completions"', param: 'thinking_budget' })}
         </div>
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
         <div>
-          <h2 className="font-semibold">{t('codex.catalog_title') || 'Model catalog'}</h2>
+          <h2 className="font-semibold">{t('codex.catalog_title')}</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            {t('codex.catalog_desc', { path: '~/.codex/models.json', code: 'slug' }) || 'Save this as ~/.codex/models.json. The slug must match the model service name authorized for the API key.'}
+            {t('codex.catalog_desc', { path: '~/.codex/models.json', code: 'slug' })}
           </p>
         </div>
         <pre className="mt-5 max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
@@ -243,36 +243,36 @@ experimental_bearer_token = "<project-api-key>"`
 
       <section className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <h2 className="font-semibold">{t('codex.start_title') || 'Start Codex'}</h2>
+          <h2 className="font-semibold">{t('codex.start_title')}</h2>
           <p className="mt-2 text-sm leading-6 text-zinc-500">
-            {t('codex.start_desc') || 'Use the standalone Profile so Codex does not try to load the model catalog from the base configuration.'}
+            {t('codex.start_desc')}
           </p>
           <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre>
           <p className="mt-3 text-xs leading-5 text-zinc-500">
-            {t('codex.restart_hint') || 'Restart Codex after changing the Profile or model catalog.'}
+            {t('codex.restart_hint')}
           </p>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <h2 className="font-semibold">{t('codex.troubleshooting_title') || 'Troubleshooting'}</h2>
+          <h2 className="font-semibold">{t('codex.troubleshooting_title')}</h2>
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex gap-3">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <p><strong>{t('codex.err_401_title') || '401 Unauthorized:'}</strong> {t('codex.err_401_desc') || 'check the project API key and service grant.'}</p>
+              <p><strong>{t('codex.err_401_title')}</strong> {t('codex.err_401_desc')}</p>
             </div>
             <div className="flex gap-3">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <p><strong>{t('codex.err_reasoning_title') || 'Reasoning preset error:'}</strong> {t('codex.err_reasoning_desc', { effort: 'effort', description: 'description' }) || 'use objects with effort and description, not strings.'}</p>
+              <p><strong>{t('codex.err_reasoning_title')}</strong> {t('codex.err_reasoning_desc', { effort: 'effort', description: 'description' })}</p>
             </div>
             <div className="flex gap-3">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <p><strong>{t('codex.err_path_title') || 'AbsolutePathBuf error:'}</strong> {t('codex.err_path_desc', { config: 'model_catalog_json' }) || 'keep model_catalog_json in the standalone Profile.'}</p>
+              <p><strong>{t('codex.err_path_title')}</strong> {t('codex.err_path_desc', { config: 'model_catalog_json' })}</p>
             </div>
           </div>
         </div>
       </section>
 
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 p-4 text-xs leading-5 text-zinc-600">
-        {t('codex.security_warning', { token: 'experimental_bearer_token' }) || 'Keep experimental_bearer_token private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed.'}
+        {t('codex.security_warning', { token: 'experimental_bearer_token' })}
       </div>
     </Page>
   )
@@ -290,16 +290,16 @@ export function ServicesPage() {
   }
   useEffect(() => { load() }, [])
   async function remove(id: string) {
-    if (!await showConfirm(t('services.remove_confirm') || 'Remove this model service?', t('services.remove_title') || 'Remove model service?')) return
+    if (!await showConfirm(t('services.remove_confirm'), t('services.remove_title'))) return
     await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' })
     load()
   }
   return (
-    <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /> {t('services.create_button') || 'Add service'}</Link>}>
+    <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /> {t('services.create_button')}</Link>}>
       {dialog}
       {error && <ErrorMessage text={error} />}
       {!services.length ? (
-        <Empty text={t('services.no_services') || 'No model services yet.'} href="/app/services/new" />
+        <Empty text={t('services.no_services')} href="/app/services/new" />
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {services.map((service) => {
@@ -323,7 +323,7 @@ export function ServicesPage() {
                         isDraft ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}
                     >
-                      {isDraft ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+                      {isDraft ? (t('services.setup_needed')) : (t('services.ready'))}
                     </span>
                   </div>
 
@@ -334,7 +334,7 @@ export function ServicesPage() {
                     <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
                       <span className={`h-1.5 w-1.5 rounded-full ${count > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                       {count === 1
-                        ? (t('services.providers_connected_single') || '1 provider connected')
+                        ? (t('services.providers_connected_single'))
                         : t('services.providers_connected', { count }) || `${count} providers connected`}
                     </span>
                   </div>
@@ -345,13 +345,13 @@ export function ServicesPage() {
                     to={`/app/services/${service.id}`}
                     className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
                   >
-                    {isDraft ? (t('services.setup') || 'Set up') : (t('services.manage') || 'Manage')} →
+                    {isDraft ? (t('services.setup')) : (t('services.manage'))} →
                   </Link>
                   <button
                     type="button"
                     onClick={() => remove(service.id)}
                     className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                    title={t('services.remove') || 'Remove'}
+                    title={t('services.remove')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -410,30 +410,30 @@ function inferDefaultCapability(model?: CatalogOffering, modelId?: string): stri
 
 function getStrategyOptions(t: (key: string, params?: Record<string, string | number>) => string) {
   return [
-    { id: 'cost_aware', name: t('services.routing_cost') || 'Cost-first routing' },
-    { id: 'capability_aware', name: t('services.routing_capability') || 'Capability-first routing' },
-    { id: 'load_aware', name: t('services.routing_load') || 'Load-balanced routing' },
-    { id: 'round_robin', name: t('services.routing_round_robin') || 'Even distribution' },
+    { id: 'cost_aware', name: t('services.routing_cost') },
+    { id: 'capability_aware', name: t('services.routing_capability') },
+    { id: 'load_aware', name: t('services.routing_load') },
+    { id: 'round_robin', name: t('services.routing_round_robin') },
   ]
 }
 
 function routingInfo(strategy: string, t: (key: string, params?: Record<string, string | number>) => string) {
   const map: Record<string, { label: string; description: string }> = {
     cost_aware: {
-      label: t('services.routing_cost') || 'Cost-first routing',
-      description: t('services.strategy_cost_desc') || 'Prefers the lower-cost provider when it can handle the request.',
+      label: t('services.routing_cost'),
+      description: t('services.strategy_cost_desc'),
     },
     capability_aware: {
-      label: t('services.routing_capability') || 'Capability-first routing',
-      description: t('services.strategy_dna_desc') || 'Prefers the provider with the strongest fit for the request.',
+      label: t('services.routing_capability'),
+      description: t('services.strategy_dna_desc'),
     },
     load_aware: {
-      label: t('services.routing_load') || 'Load-balanced routing',
-      description: t('services.strategy_load_desc') || 'Sends traffic toward providers with more available capacity.',
+      label: t('services.routing_load'),
+      description: t('services.strategy_load_desc'),
     },
     round_robin: {
-      label: t('services.routing_round_robin') || 'Even distribution',
-      description: t('services.strategy_round_robin_desc') || 'Distributes requests evenly across connected providers.',
+      label: t('services.routing_round_robin'),
+      description: t('services.strategy_round_robin_desc'),
     },
   }
   return map[strategy] || { label: strategy.replaceAll('_', ' '), description: 'Routes requests across your connected providers.' }
@@ -467,9 +467,9 @@ function endpointComplete(endpoint: DraftEndpoint) {
   )
 }
 
-function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[]) {
+function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[], t: (key: string) => string) {
   const provider = catalog.find((item) => item.provider_id === endpoint.provider_type)?.provider_name
-  return [provider || (endpoint.custom_provider_id || 'Provider not selected'), endpoint.upstream_model_id || 'Model not selected']
+  return [provider || (endpoint.custom_provider_id || t('services.provider_not_selected')), endpoint.upstream_model_id || t('services.model_not_selected')]
 }
 
 interface StrategyMatrixCardSelectorProps {
@@ -483,22 +483,22 @@ function StrategyMatrixCardSelector({ selectedStrategy, onSelect }: StrategyMatr
   const strategyCards = [
     {
       id: 'cost_aware',
-      title: t('services.strategy_cost_title') || 'Cost-Efficient Pareto',
+      title: t('services.strategy_cost_title'),
       icon: TrendingDown,
     },
     {
       id: 'capability_aware',
-      title: t('services.strategy_dna_title') || '5D Capability-Weighted',
+      title: t('services.strategy_dna_title'),
       icon: Sparkles,
     },
     {
       id: 'load_aware',
-      title: t('services.strategy_load_title') || 'Load-Balanced & Low-Latency',
+      title: t('services.strategy_load_title'),
       icon: Activity,
     },
     {
       id: 'round_robin',
-      title: t('services.strategy_round_robin_title') || 'Even Distribution',
+      title: t('services.strategy_round_robin_title'),
       icon: CheckCheck,
     },
   ]
@@ -547,25 +547,25 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
   const presets = [
     {
       id: 'coding',
-      name: t('services.preset_coding') || 'Coding & Software Dev',
+      name: t('services.preset_coding'),
       icon: '💻',
       weights: { code: 90, math: 10, tools: 10, lang: 0, ctx: 0 },
     },
     {
       id: 'reasoning',
-      name: t('services.preset_reasoning') || 'Deep Reasoning & Math',
+      name: t('services.preset_reasoning'),
       icon: '🧠',
       weights: { code: 15, math: 85, tools: 0, lang: 0, ctx: 10 },
     },
     {
       id: 'tools',
-      name: t('services.preset_tools') || 'Agent & Tool Execution',
+      name: t('services.preset_tools'),
       icon: '🛠️',
       weights: { code: 10, math: 30, tools: 60, lang: 0, ctx: 10 },
     },
     {
       id: 'general',
-      name: t('services.preset_general') || 'General Chat & QA',
+      name: t('services.preset_general'),
       icon: '🌐',
       weights: { code: 0, math: 10, tools: 10, lang: 70, ctx: 30 },
     },
@@ -578,7 +578,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-          {t('services.workload_presets') || 'Workload Scenario'}
+          {t('services.workload_presets')}
         </label>
         <button
           type="button"
@@ -586,7 +586,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
           className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 hover:text-purple-900 transition-colors"
         >
           <HelpCircle className="h-3.5 w-3.5" />
-          <span>{t('services.workload_details_btn') || 'Learn More / Weights'}</span>
+          <span>{t('services.workload_details_btn')}</span>
         </button>
       </div>
 
@@ -620,10 +620,10 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               <div>
                 <h3 className="text-base font-semibold text-zinc-950 flex items-center gap-2">
                   <span>{currentPreset.icon}</span>
-                  <span>{t('services.workload_details_title') || 'Workload Scenario Weights'}</span>
+                  <span>{t('services.workload_details_title')}</span>
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {t('services.workload_details_desc') || 'The SmartGate 5D engine weighs candidate endpoints across five core capability dimensions based on your selected workload intent.'}
+                  {t('services.workload_details_desc')}
                 </p>
               </div>
               <button
@@ -641,7 +641,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1 text-zinc-600">
-                  <span>{t('radar.code') || 'Coding & Syntax Logic'}</span>
+                  <span>{t('radar.code')}</span>
                   <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.code}%</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
@@ -650,7 +650,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1 text-zinc-600">
-                  <span>{t('radar.math') || 'Reasoning & Math Proofs'}</span>
+                  <span>{t('radar.math')}</span>
                   <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.math}%</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
@@ -659,7 +659,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1 text-zinc-600">
-                  <span>{t('radar.tools') || 'Agent & Tool Calling'}</span>
+                  <span>{t('radar.tools')}</span>
                   <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.tools}%</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
@@ -668,7 +668,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1 text-zinc-600">
-                  <span>{t('radar.lang') || 'Multilingual NLP'}</span>
+                  <span>{t('radar.lang')}</span>
                   <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.lang}%</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
@@ -677,7 +677,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1 text-zinc-600">
-                  <span>{t('radar.context') || 'Context Retention'}</span>
+                  <span>{t('radar.context')}</span>
                   <span className="font-mono font-bold text-zinc-900">{currentPreset.weights.ctx}%</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
@@ -692,7 +692,7 @@ function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPres
                 onClick={() => setShowWeightsModal(false)}
                 className="rounded-lg bg-zinc-950 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 transition-colors"
               >
-                {t('common.close') || 'Close'}
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -726,10 +726,10 @@ export function NewServicePage() {
     <form onSubmit={submit} className="max-w-3xl space-y-5">
       <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title') || 'Create a model service'}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('services.create_title')}</h1>
         </div>
 
-        <Field label={t('services.name_label') || 'Model service name'} value={name} onChange={setName} placeholder="fusion" />
+        <Field label={t('services.name_label')} value={name} onChange={setName} placeholder="fusion" />
 
         <StrategyMatrixCardSelector selectedStrategy={strategy} onSelect={setStrategy} />
 
@@ -739,16 +739,16 @@ export function NewServicePage() {
 
         <div className="flex gap-3 rounded-lg bg-surface-200 px-4 py-3 text-sm text-zinc-600">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <span>{t('services.create_tip') || 'Add provider connections after creating the service. They will all use this model name.'}</span>
+          <span>{t('services.create_tip')}</span>
         </div>
       </div>
       {error && <ErrorMessage text={error} />}
       <div className="flex justify-end gap-3">
         <Link to="/app/services" className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
-          {t('common.cancel') || 'Cancel'}
+          {t('common.cancel')}
         </Link>
         <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
-          {busy ? (t('common.creating') || 'Creating…') : (t('services.create_button') || 'Create model service')}
+          {busy ? (t('common.creating')) : (t('services.create_button'))}
         </button>
       </div>
     </form>
@@ -813,7 +813,7 @@ export function ServiceDetailsPage() {
     }).catch(() => {})
   }, [id])
   async function removeEndpoint(endpointId: string) {
-    if (!id || !await showConfirm(t('services.remove_provider_confirm') || 'Remove this model from the service?', t('services.remove_model') || 'Remove model?')) return
+    if (!id || !await showConfirm(t('services.remove_provider_confirm'), t('services.remove_model'))) return
     try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function copyServiceName() {
@@ -866,7 +866,7 @@ export function ServiceDetailsPage() {
             type="button"
             onClick={() => navigator.clipboard.writeText(testToast.message)}
             className="rounded-md p-1 text-zinc-500 hover:bg-black/5 hover:text-zinc-900 transition-colors"
-            title="Copy message"
+            title={t('common.copy_message')}
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
@@ -874,28 +874,28 @@ export function ServiceDetailsPage() {
             type="button"
             onClick={() => setTestToast(null)}
             className="rounded-md p-1 text-zinc-500 hover:bg-black/5 hover:text-zinc-900 transition-colors"
-            title="Close"
+            title={t('common.close')}
           >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
     )}
-    {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">{t('common.loading') || 'Loading model service…'}</div> : <div className="max-w-4xl space-y-5">
+    {!service ? <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500">{t('common.loading')}</div> : <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← {t('nav.model_services') || 'Model services'}</Link>
+          <Link to="/app/services" className="text-sm text-zinc-500 hover:text-zinc-950">← {t('nav.model_services')}</Link>
           <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate text-xl font-semibold tracking-tight">{service.name}</h1>
-            <button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('services.edit_name') || 'Edit name'}>
+            <button type="button" onClick={() => setRoutingOpen(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('services.edit_name')}>
               <Pencil className="h-4 w-4" />
             </button>
-            <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy') || 'Copy model service name'}>
+            <button type="button" onClick={copyServiceName} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" title={t('common.copy')}>
               <Copy className="h-4 w-4" />
             </button>
-            {copied && <span className="text-xs font-medium text-emerald-600">{t('common.copied') || 'Copied'}</span>}
+            {copied && <span className="text-xs font-medium text-emerald-600">{t('common.copied')}</span>}
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${service.status === 'draft' ? 'border border-amber-200 bg-amber-50 text-amber-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-              {service.status === 'draft' ? (t('services.setup_needed') || 'Setup needed') : (t('services.ready') || 'Ready')}
+              {service.status === 'draft' ? (t('services.setup_needed')) : (t('services.ready'))}
             </span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -903,14 +903,14 @@ export function ServiceDetailsPage() {
               type="button"
               onClick={() => setRoutingOpen(true)}
               className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-600 hover:border-zinc-300 hover:text-zinc-950"
-              title={t('services.edit_routing_title') || 'Edit routing strategy'}
+              title={t('services.edit_routing_title')}
             >
               <span>{routing?.label}</span>
               <Pencil className="h-3 w-3 text-zinc-400" />
             </button>
             {service.strategy === 'capability_aware' && service.judge_enabled && (
               <span className="text-emerald-600">
-                {t('services.judge_status', { model: service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || 'Enabled' })}
+                {t('services.judge_status', { model: service.endpoints.find((ep) => ep.id === service.judge_endpoint_id)?.model || t('services.judge_model_fallback') })}
               </span>
             )}
             <button
@@ -919,8 +919,8 @@ export function ServiceDetailsPage() {
               className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${callOpen ? 'border-zinc-300 bg-zinc-50 text-zinc-950' : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-950'}`}
               aria-expanded={callOpen}
             >
-              <span>{t('services.how_to_call') || 'How to call'}</span>
-              <span title={t('services.how_to_call_hint') || 'Use this service name as the model in client requests.'}>
+              <span>{t('services.how_to_call')}</span>
+              <span title={t('services.how_to_call_hint')}>
                 <HelpCircle className="h-3 w-3 text-zinc-400" />
               </span>
               {callOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -928,7 +928,7 @@ export function ServiceDetailsPage() {
           </div>
         </div>
         <button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors">
-          <Plus className="h-4 w-4" /> {t('services.add_model') || 'Add model'}
+          <Plus className="h-4 w-4" /> {t('services.add_model')}
         </button>
       </div>
 
@@ -936,10 +936,10 @@ export function ServiceDetailsPage() {
 
       <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold">{t('services.connected_models') || 'Connected models'}</h2>
+          <h2 className="font-semibold">{t('services.connected_models')}</h2>
           <span className="text-xs text-zinc-400">
             {service.endpoints.length === 1
-              ? (t('services.providers_connected_single') || '1 model connected')
+              ? (t('services.providers_connected_single'))
               : t('services.providers_connected', { count: service.endpoints.length }) || `${service.endpoints.length} models connected`}
           </span>
         </div>
@@ -953,7 +953,7 @@ export function ServiceDetailsPage() {
                     <div className="mt-1 text-sm text-zinc-500">{endpoint.provider_name}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-zinc-400">
-                        {t('services.capability') || 'Capability'} {(endpoint.capability_score ?? 0.5).toFixed(2)}
+                        {t('services.capability')} {(endpoint.capability_score ?? 0.5).toFixed(2)}
                       </span>
                       {endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && (
                         <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500">
@@ -962,32 +962,32 @@ export function ServiceDetailsPage() {
                       )}
                       {endpoint.preferred_for_hard_requests && (
                         <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700">
-                          {t('services.routes_hard') || 'Routes hard requests'}
+                          {t('services.routes_hard')}
                         </span>
                       )}
                       {endpoint.enabled === false && (
                         <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">
-                          {t('common.disabled') || 'Disabled'}
+                          {t('common.disabled')}
                         </span>
                       )}
                       {endpoint.health_status && endpoint.health_status !== 'healthy' && (
                         <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700">
-                          {endpoint.cooling_down ? (t('services.cooling_down') || 'Cooling down') : endpoint.health_status}
+                          {endpoint.cooling_down ? (t('services.cooling_down')) : endpoint.health_status}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('services.probe_button') || 'Probe DNA & Capabilities'}>
+                    <button type="button" onClick={() => setProbingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-purple-50 hover:text-purple-600 transition-colors" title={t('services.probe_button')}>
                       <Sparkles className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors" title={t('services.edit_model') || 'Edit model'}>
+                    <button type="button" onClick={() => setEditingEndpoint(endpoint)} className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 transition-colors" title={t('services.edit_model')}>
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 transition-colors disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title={t('services.test_connection') || 'Test connection'}>
+                    <button type="button" onClick={() => testEndpoint(endpoint.id)} disabled={testingEndpoint === endpoint.id} className={`rounded-md p-2 transition-colors disabled:opacity-50 ${testingEndpoint === endpoint.id ? 'animate-pulse text-zinc-400' : testResults[endpoint.id] === 'passed' ? 'text-emerald-500 hover:bg-emerald-50' : testResults[endpoint.id] === 'failed' ? 'text-rose-500 hover:bg-rose-50' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950'}`} title={t('services.test_connection')}>
                       <Zap className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title={t('services.remove_model') || 'Remove model'}>
+                    <button type="button" onClick={() => removeEndpoint(endpoint.id)} className="rounded-md p-2 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title={t('services.remove_model')}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -997,9 +997,9 @@ export function ServiceDetailsPage() {
           </div>
         ) : (
           <div className="mt-4 rounded-lg border border-dashed border-zinc-300 px-5 py-8 text-center">
-            <p className="text-sm text-zinc-500">{t('services.no_models_connected') || 'No models connected yet.'}</p>
+            <p className="text-sm text-zinc-500">{t('services.no_models_connected')}</p>
             <button type="button" onClick={() => setModalOpen(true)} className="mt-3 text-sm font-medium text-primary hover:text-primary-hover">
-              {t('services.add_model') || 'Add model'}
+              {t('services.add_model')}
             </button>
           </div>
         )}
@@ -1149,9 +1149,9 @@ export function EvaluationPage() {
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
-            {t('evaluation.title') || 'Model Evaluation'}
+            {t('evaluation.title')}
           </h1>
-          <span title={t('evaluation.subtitle') || '5D multi-dimensional capability evaluation across Coding, Reasoning, Agent Tool Calling, Multilingual NLP, and Long Context.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+          <span title={t('evaluation.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
             <HelpCircle className="h-4 w-4" />
           </span>
         </div>
@@ -1161,25 +1161,25 @@ export function EvaluationPage() {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.models_evaluated') || 'Models Evaluated'}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.models_evaluated')}</div>
           <div className="mt-2 text-3xl font-bold text-zinc-950">{endpoints.length}</div>
-          <div className="mt-2 text-xs text-zinc-400">{t('radar.badge') || '5D Capability Radar'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{t('radar.badge')}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_coding') || 'Top Coding Model'}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_coding')}</div>
           <div className="mt-2 text-xl font-bold text-purple-700 truncate" title={topCoding?.model}>{topCoding ? formatShortModel(topCoding.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topCoding?.provider_name ? `${topCoding.provider_name} • ${topCoding.model_dna?.code_logic || 96} pts` : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_reasoning') || 'Top Reasoning Model'}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_reasoning')}</div>
           <div className="mt-2 text-xl font-bold text-amber-600 truncate" title={topReasoning?.model}>{topReasoning ? formatShortModel(topReasoning.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topReasoning?.provider_name ? `${topReasoning.provider_name} • ${topReasoning.model_dna?.reasoning_math || 98} pts` : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash') || 'Top Speed & Cost Model'}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash')}</div>
           <div className="mt-2 text-xl font-bold text-emerald-600 truncate" title={topFlash?.model}>{topFlash ? formatShortModel(topFlash.model) : '—'}</div>
           <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${(topFlash.input_price_per_1m ?? 0.14).toFixed(2)}/1M tokens` : '—'}</div>
         </div>
@@ -1206,7 +1206,7 @@ export function EvaluationPage() {
               onClick={selectTop4}
               className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
             >
-              {t('evaluation.select_all') || 'Top 4'}
+              {t('evaluation.select_all')}
             </button>
             <span className="text-zinc-300">|</span>
             <button
@@ -1214,7 +1214,7 @@ export function EvaluationPage() {
               onClick={clearAll}
               className="text-xs font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
             >
-              {t('evaluation.clear_all') || 'Clear'}
+              {t('evaluation.clear_all')}
             </button>
           </div>
         </div>
@@ -1224,7 +1224,7 @@ export function EvaluationPage() {
           <div className="sticky top-4 flex flex-col items-center justify-center p-4 rounded-2xl bg-zinc-50/70 border border-zinc-200/80">
             <div className="w-full flex items-center justify-between mb-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                {t('evaluation.radar_title') || '5D Radar Compare'}
+                {t('evaluation.radar_title')}
               </span>
               <span className="text-[11px] text-zinc-400 font-mono">
                 {selectedIds.length}/4
@@ -1391,7 +1391,7 @@ export function EvaluationPage() {
                 <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder={t('evaluation.search_models') || 'Search models or providers…'}
+                  placeholder={t('evaluation.search_models')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-9 rounded-md border border-zinc-200 bg-zinc-50/50 pl-8 pr-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:bg-white focus:border-zinc-900 focus:outline-none transition-colors"
@@ -1410,10 +1410,10 @@ export function EvaluationPage() {
                     }`}
                   >
                     {tier === 'all'
-                      ? (t('evaluation.filter_all') || 'All')
+                      ? (t('evaluation.filter_all'))
                       : tier === 'pro'
-                      ? (t('evaluation.filter_pro') || 'Pro')
-                      : (t('evaluation.filter_flash') || 'Flash')}
+                      ? (t('evaluation.filter_pro'))
+                      : (t('evaluation.filter_flash'))}
                   </button>
                 ))}
               </div>
@@ -1423,7 +1423,7 @@ export function EvaluationPage() {
             <div className="max-h-[520px] overflow-y-auto pr-1 space-y-2.5">
               {filteredEndpoints.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center text-xs text-zinc-400">
-                  {t('evaluation.no_matching_models') || 'No matching models found.'}
+                  {t('evaluation.no_matching_models')}
                 </div>
               ) : (
                 filteredEndpoints.map((ep) => {
@@ -1543,7 +1543,7 @@ export function EvaluationPage() {
                           }}
                           className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors"
                         >
-                          <Sparkles className="h-3 w-3" /> {t('evaluation.run_probe') || 'Run Probe'}
+                          <Sparkles className="h-3 w-3" /> {t('evaluation.run_probe')}
                         </button>
                       </div>
                     </div>
@@ -1558,8 +1558,8 @@ export function EvaluationPage() {
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-4">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-zinc-950">{t('evaluation.matrix_title') || 'Multi-Dimensional Model Matrix'}</h2>
-            <span title={t('evaluation.matrix_subtitle') || 'Full benchmark breakdown and cost-efficiency comparison.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <h2 className="font-semibold text-zinc-950">{t('evaluation.matrix_title')}</h2>
+            <span title={t('evaluation.matrix_subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
             </span>
           </div>
@@ -1569,23 +1569,23 @@ export function EvaluationPage() {
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="border-b border-zinc-200 bg-zinc-50/75 text-[11px] font-semibold text-zinc-500">
               <tr>
-                <th className="py-2.5 px-3">{t('evaluation.col_model') || 'Model / Provider'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_tier') || 'Tier'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_overall') || 'Overall'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_code') || 'Code'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_math') || 'Reasoning'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_tools') || 'Tools'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_lang') || 'Language'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_context') || 'Context'}</th>
-                <th className="py-2.5 px-3">{t('evaluation.col_price') || 'Price (In/Out)'}</th>
-                <th className="py-2.5 px-3 text-right">{t('common.actions') || 'Actions'}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_model')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_tier')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_overall')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_code')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_math')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_tools')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_lang')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_context')}</th>
+                <th className="py-2.5 px-3">{t('evaluation.col_price')}</th>
+                <th className="py-2.5 px-3 text-right">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {endpoints.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-xs text-zinc-400">
-                    {t('evaluation.no_models') || 'No models evaluated yet.'}
+                    {t('evaluation.no_models')}
                   </td>
                 </tr>
               ) : (
@@ -1643,7 +1643,7 @@ export function EvaluationPage() {
                           type="button"
                           onClick={() => setProbingEndpoint({ endpoint: ep, serviceId: ep.serviceId })}
                           className="inline-flex items-center justify-center rounded-lg p-1.5 text-purple-700 hover:bg-purple-50 transition-colors"
-                          title={t('evaluation.run_probe') || 'Run Probe'}
+                          title={t('evaluation.run_probe')}
                         >
                           <Sparkles className="h-4 w-4" />
                         </button>
@@ -1710,10 +1710,10 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
           type="button"
           onClick={copyExample}
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
-          title={t('common.copy') || 'Copy example'}
+          title={t('common.copy')}
         >
           {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? (t('common.copied') || 'Copied') : (t('common.copy') || 'Copy')}
+          {copied ? (t('common.copied')) : (t('common.copy'))}
         </button>
       </div>
       <pre role="tabpanel" className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-[var(--color-primary-soft)] p-3 text-xs leading-6 text-zinc-950">{command}</pre>
@@ -1777,7 +1777,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
       <form onSubmit={submit} className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-950">{t('services.edit_routing_title') || 'Edit routing strategy'}</h2>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('services.edit_routing_title')}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -1785,7 +1785,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.service_name') || 'Model Service Name'}</label>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.service_name')}</label>
           <input
             required
             type="text"
@@ -1810,14 +1810,14 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
                   onChange={(e) => setJudgeEnabled(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
                 />
-                <span>{t('services.judge_label') || 'Use auxiliary judge model for complexity'}</span>
+                <span>{t('services.judge_label')}</span>
               </label>
               {judgeEnabled && (
                 <div className="space-y-2 pt-1">
                   {judgeOptions.length > 0 ? (
-                    <Select label={t('services.judge_select') || 'Auxiliary judge model'} options={judgeOptions} selected={selectedJudge} onChange={(option) => setJudgeEndpointId(String(option.id))} />
+                    <Select label={t('services.judge_select')} options={judgeOptions} selected={selectedJudge} onChange={(option) => setJudgeEndpointId(String(option.id))} />
                   ) : (
-                    <p className="text-xs text-amber-600">{t('services.judge_no_endpoints') || 'Please connect at least one provider endpoint first.'}</p>
+                    <p className="text-xs text-amber-600">{t('services.judge_no_endpoints')}</p>
                   )}
                 </div>
               )}
@@ -1836,7 +1836,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
               />
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-zinc-700" />
-                {t('services.shadow_flighting_title') || 'Shadow Quality Flighting'}
+                {t('services.shadow_flighting_title')}
               </span>
             </label>
             {shadowEnabled && (
@@ -1849,17 +1849,17 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
             <div className="space-y-2 pt-1">
               {serviceOptions.length > 0 ? (
                 <Select
-                  label={t('services.shadow_target_model') || 'Shadow comparison model service'}
+                  label={t('services.shadow_target_model')}
                   options={serviceOptions}
                   selected={selectedShadowTarget}
                   onChange={(option) => setShadowVirtualModelId(String(option.id))}
                 />
               ) : (
-                <p className="text-xs text-amber-600">{t('services.shadow_no_targets') || 'Create another Model service to use as the shadow comparison target.'}</p>
+                <p className="text-xs text-amber-600">{t('services.shadow_no_targets')}</p>
               )}
-              <p className="text-xs text-zinc-500">{t('services.shadow_target_desc') || 'Must be a Model service authorized for the same API key.'}</p>
+              <p className="text-xs text-zinc-500">{t('services.shadow_target_desc')}</p>
               <div className="flex items-center gap-4">
-                <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate') || 'Sample Rate'}:</span>
+                <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">{t('services.shadow_sample_rate')}:</span>
                 <input
                   type="range"
                   min="1"
@@ -1878,10 +1878,10 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
         <div className="mt-4 flex justify-end gap-3 border-t border-zinc-100 pt-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
-            {t('common.cancel') || 'Cancel'}
+            {t('common.cancel')}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
-            {busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}
+            {busy ? (t('common.saving')) : (t('common.save'))}
           </button>
         </div>
       </form>
@@ -1922,10 +1922,10 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
         })
         if (res.success && (res.data?.passed !== false)) {
           setTestStatus('passed')
-          setTestMsg(res.data?.message || (t('services.test_passed') || 'Connection verified successfully'))
+          setTestMsg(res.data?.message || (t('services.test_passed')))
         } else {
           setTestStatus('failed')
-          setTestMsg(res.message || (t('services.test_failed') || 'Connection test failed'))
+          setTestMsg(res.message || (t('services.test_failed')))
         }
       } else {
         const res = await saasFetch<{ passed?: boolean; message?: string }>(`/api/saas/model-services/${serviceId}/endpoints/${endpoint.id}`, {
@@ -1933,15 +1933,15 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
         })
         if (res.success && (res.data?.passed !== false)) {
           setTestStatus('passed')
-          setTestMsg(res.data?.message || (t('services.test_passed') || 'Connection verified successfully'))
+          setTestMsg(res.data?.message || (t('services.test_passed')))
         } else {
           setTestStatus('failed')
-          setTestMsg(res.message || (t('services.test_failed') || 'Connection test failed'))
+          setTestMsg(res.message || (t('services.test_failed')))
         }
       }
     } catch (e: any) {
       setTestStatus('failed')
-      setTestMsg(e.message || (t('services.test_failed') || 'Connection test failed'))
+      setTestMsg(e.message || (t('services.test_failed')))
     }
   }
 
@@ -1971,7 +1971,7 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">{t('services.edit_model') || 'Edit model'}</h2>
+            <h2 className="text-lg font-semibold">{t('services.edit_model')}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -1980,41 +1980,41 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
 
         <div className="mt-6 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t('services.provider_name') || 'Provider name'} value={providerName} onChange={setProviderName} placeholder="DeepSeek" />
+            <Field label={t('services.provider_name')} value={providerName} onChange={setProviderName} placeholder="DeepSeek" />
             <label className="block text-xs font-medium text-zinc-700">
-              {t('services.provider_id') || 'Provider ID'}
+              {t('services.provider_id')}
               <input readOnly value={endpoint.provider_id} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500 outline-none" />
             </label>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t('services.model_label') || 'Model'} value={model} onChange={(val) => { setModel(val); setTestStatus('idle') }} placeholder="deepseek-chat" />
-            <Select label={t('services.protocol_label') || 'Protocol'} options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => { setProtocol(String(option.id)); setTestStatus('idle') }} />
+            <Field label={t('services.model_label')} value={model} onChange={(val) => { setModel(val); setTestStatus('idle') }} placeholder="deepseek-chat" />
+            <Select label={t('services.protocol_label')} options={[{ id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' }]} selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }} onChange={(option) => { setProtocol(String(option.id)); setTestStatus('idle') }} />
           </div>
 
-          <Field label={t('services.base_url') || 'Provider API base URL'} value={baseUrl} onChange={(val) => { setBaseUrl(val); setTestStatus('idle') }} placeholder="https://api.example.com/v1" />
+          <Field label={t('services.base_url')} value={baseUrl} onChange={(val) => { setBaseUrl(val); setTestStatus('idle') }} placeholder="https://api.example.com/v1" />
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-zinc-700">{t('services.api_key_new') || 'New Provider API key (optional)'}</label>
-              <button type="button" onClick={runTest} disabled={testStatus === 'testing' || !baseUrl.trim() || !model.trim()} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed" title="Verify if API key and upstream endpoint are reachable">
+              <label className="block text-xs font-medium text-zinc-700">{t('services.api_key_new')}</label>
+              <button type="button" onClick={runTest} disabled={testStatus === 'testing' || !baseUrl.trim() || !model.trim()} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed" title={t('services.test_connection_hint')}>
                 <Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} />
-                <span>{testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test connection')}</span>
+                <span>{testStatus === 'testing' ? (t('services.testing')) : (t('services.test_connection'))}</span>
               </button>
             </div>
             <div className="relative mt-1">
-              <Field required={false} label="" value={apiKey} onChange={(val) => { setApiKey(val); setTestStatus('idle') }} placeholder={t('services.api_key_placeholder') || 'Leave blank to keep the current key'} type="password" />
+              <Field required={false} label="" value={apiKey} onChange={(val) => { setApiKey(val); setTestStatus('idle') }} placeholder={t('services.api_key_placeholder')} type="password" />
             </div>
             {testStatus === 'passed' && (
               <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                <span>{testMsg || (t('services.test_passed') || 'Connection verified successfully')}</span>
+                <span>{testMsg || (t('services.test_passed'))}</span>
               </div>
             )}
             {testStatus === 'failed' && (
               <div className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span className="break-all">{testMsg || (t('services.test_failed') || 'Connection failed')}</span>
+                <span className="break-all">{testMsg || (t('services.test_failed'))}</span>
               </div>
             )}
           </div>
@@ -2022,13 +2022,13 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
           {/* Compact pricing and capability parameters directly expanded */}
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
-              {t('services.advanced_settings') || 'Price & Capability Settings'}
+              {t('services.advanced_settings')}
             </div>
             <div className="grid gap-3 sm:grid-cols-4 text-zinc-900">
-              <Field size="sm" required={false} label={t('services.input_price') || 'Input $/1M'} value={inputPrice} onChange={setInputPrice} placeholder="0.14" />
-              <Field size="sm" required={false} label={t('services.output_price') || 'Output $/1M'} value={outputPrice} onChange={setOutputPrice} placeholder="0.28" />
-              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability (0-1)'} value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" />
-              <Field size="sm" required={false} label={t('services.context_length') || 'Context length'} value={contextLength} onChange={setContextLength} placeholder="128000" />
+              <Field size="sm" required={false} label={t('services.input_price')} value={inputPrice} onChange={setInputPrice} placeholder="0.14" />
+              <Field size="sm" required={false} label={t('services.output_price')} value={outputPrice} onChange={setOutputPrice} placeholder="0.28" />
+              <Field size="sm" required={false} label={t('services.capability_range')} value={capabilityScore} onChange={setCapabilityScore} placeholder="0.70" />
+              <Field size="sm" required={false} label={t('services.context_length')} value={contextLength} onChange={setContextLength} placeholder="128000" />
             </div>
           </div>
         </div>
@@ -2037,10 +2037,10 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
 
         <div className="mt-6 flex justify-end gap-3 border-t border-zinc-100 pt-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
-            {t('common.cancel') || 'Cancel'}
+            {t('common.cancel')}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800 transition-colors disabled:opacity-50">
-            {busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}
+            {busy ? (t('common.saving')) : (t('common.save'))}
           </button>
         </div>
       </form>
@@ -2102,10 +2102,10 @@ function ModelProbeModal({
       if (res.success && res.data) {
         setProbeResult(res.data)
       } else {
-        setError(res.message || 'Capability probe failed')
+        setError(res.message || t('services.probe_failed'))
       }
     } catch (e: any) {
-      setError(e.message || 'Probe request failed')
+      setError(e.message || t('services.probe_request_failed'))
     } finally {
       setProbing(false)
     }
@@ -2120,7 +2120,7 @@ function ModelProbeModal({
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-zinc-950">{t('services.probe_modal_title') || '5D Model DNA & Capability Probe'}</h2>
+              <h2 className="text-lg font-semibold text-zinc-950">{t('services.probe_modal_title')}</h2>
               <p className="mt-0.5 text-xs text-zinc-500">
                 {endpoint.provider_name} • {endpoint.model}
               </p>
@@ -2137,8 +2137,7 @@ function ModelProbeModal({
         </div>
 
         <p className="mt-4 text-xs text-zinc-600 leading-relaxed bg-zinc-50 rounded-lg p-3 border border-zinc-200/70">
-          {t('services.probe_modal_subtitle') ||
-            'Sends live targeted benchmark tests to evaluate code synthesis, multi-step math logic, tool calling JSON adherence, and constraint obedience to compute an empirical capability rating.'}
+          {t('services.probe_modal_subtitle')}
         </p>
 
         {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
@@ -2149,12 +2148,12 @@ function ModelProbeModal({
               <Sparkles className={`h-6 w-6 ${probing ? 'animate-spin' : ''}`} />
             </div>
             <h3 className="text-sm font-medium text-zinc-900">
-              {probing ? (t('services.probe_running') || 'Probing 5D Capabilities…') : (t('services.probe_ready_title') || 'Ready to Probe Capabilities')}
+              {probing ? (t('services.probe_running')) : (t('services.probe_ready_title'))}
             </h3>
             <p className="mt-1 text-xs text-zinc-500 max-w-sm mx-auto">
               {probing
-                ? (t('services.probe_running_desc') || 'Dispatching 5 live benchmark probes to upstream endpoint. This typically takes 5–15 seconds…')
-                : (t('services.probe_ready_desc') || 'Click below to benchmark and automatically calibrate this model for capability-aware intelligent routing.')}
+                ? (t('services.probe_running_desc'))
+                : (t('services.probe_ready_desc'))}
             </p>
             <button
               type="button"
@@ -2163,7 +2162,7 @@ function ModelProbeModal({
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
             >
               <Sparkles className="h-4 w-4" />
-              {probing ? (t('services.probe_running') || 'Probing…') : (t('services.probe_run') || 'Run 5D Benchmark Probe')}
+              {probing ? (t('services.probe_running')) : (t('services.probe_run'))}
             </button>
           </div>
         ) : (
@@ -2173,7 +2172,7 @@ function ModelProbeModal({
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                 <div>
                   <div className="text-sm font-semibold text-emerald-950">
-                    {t('services.probe_completed') || 'Capability Probing Completed & Calibrated'}
+                    {t('services.probe_completed')}
                   </div>
                   <div className="text-xs text-emerald-700 mt-0.5">
                     Probed Score: <span className="font-mono font-bold">{probeResult.probed_capability_score.toFixed(2)}</span> • Tool Schema:{' '}
@@ -2232,7 +2231,7 @@ function ModelProbeModal({
                 }}
                 className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
               >
-                {t('services.probe_apply') || 'Done & Calibrated'}
+                {t('services.probe_apply')}
               </button>
             </div>
           </div>
@@ -2399,7 +2398,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     { id: 'openai', name: 'OpenAI' },
     { id: 'anthropic', name: 'Anthropic' },
     { id: 'aliyun', name: 'Aliyun Bailian' },
-    { id: 'custom', name: t('services.custom_provider') || 'Custom provider' },
+    { id: 'custom', name: t('services.custom_provider') },
   ]
   const selectedPresetProvider = presetProviderOptions.find((p) => p.id === draft.provider_type) || presetProviderOptions[0]
 
@@ -2488,14 +2487,14 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
       })
       if (res.success && (res.data?.passed !== false)) {
         setTestStatus('passed')
-        setTestMsg(res.data?.message || (t('services.test_passed') || 'Connection verified successfully'))
+        setTestMsg(res.data?.message || (t('services.test_passed')))
       } else {
         setTestStatus('failed')
-        setTestMsg(res.message || (t('services.test_failed') || 'Connection test failed'))
+        setTestMsg(res.message || (t('services.test_failed')))
       }
     } catch (e: any) {
       setTestStatus('failed')
-      setTestMsg(e.message || (t('services.test_failed') || 'Connection test failed'))
+      setTestMsg(e.message || (t('services.test_failed')))
     }
   }
 
@@ -2584,7 +2583,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl min-w-[320px] sm:min-w-[640px] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">{t('services.add_model') || 'Add model'}</h2>
+            <h2 className="text-lg font-semibold">{t('services.add_model')}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
             <X className="h-5 w-5" />
@@ -2601,7 +2600,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                 useExisting ? 'bg-white text-zinc-900 shadow-xs' : 'text-zinc-500 hover:text-zinc-900'
               }`}
             >
-              {t('providers.use_connected_account') || 'Use Connected Provider Account'}
+              {t('providers.use_connected_account')}
             </button>
             <button
               type="button"
@@ -2610,7 +2609,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                 !useExisting ? 'bg-white text-zinc-900 shadow-xs' : 'text-zinc-500 hover:text-zinc-900'
               }`}
             >
-              {t('providers.connect_new_account') || 'Add New Credentials'}
+              {t('providers.connect_new_account')}
             </button>
           </div>
         )}
@@ -2619,7 +2618,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
           {useExisting && savedAccounts.length > 0 ? (
             <div className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
               <Select
-                label={t('providers.select_account') || 'Select Connected Account'}
+                label={t('providers.select_account')}
                 options={accountOptions}
                 selected={accountOptions.find((a) => a.id === selectedAccountId) || accountOptions[0]}
                 onChange={handleAccountChange}
@@ -2632,7 +2631,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-800">
-                        {t('services.smart_bundles') || 'Smart Bundles'}
+                        {t('services.smart_bundles')}
                       </span>
                       {selectedModelIds.length > 0 && (
                         <button
@@ -2643,7 +2642,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                           }}
                           className="text-[11px] text-zinc-400 hover:text-zinc-700 transition-colors"
                         >
-                          {t('services.clear_selection') || 'Clear selection'}
+                          {t('services.clear_selection')}
                         </button>
                       )}
                     </div>
@@ -2664,7 +2663,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                             : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
                         }`}
                       >
-                        {t('services.bundle_balanced') || 'Balanced Multi-Tier'}
+                        {t('services.bundle_balanced')}
                       </button>
                       <button
                         type="button"
@@ -2681,7 +2680,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                             : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
                         }`}
                       >
-                        {t('services.bundle_free') || '100% Free Tier'}
+                        {t('services.bundle_free')}
                       </button>
                       <button
                         type="button"
@@ -2698,7 +2697,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                             : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
                         }`}
                       >
-                        {t('services.bundle_reasoning') || 'Flagship Reasoning & Coding'}
+                        {t('services.bundle_reasoning')}
                       </button>
                     </div>
                   </div>
@@ -2708,13 +2707,13 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                   /* Template mode: simply display framed models cleanly without requiring manual checkboxes */
                   <div className="rounded-xl border border-zinc-200 bg-white p-3 space-y-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-zinc-900 border-b border-zinc-100 pb-2">
-                      <span>{t('services.models_to_connect') || 'Models to connect'} ({selectedModelIds.length})</span>
+                      <span>{t('services.models_to_connect')} ({selectedModelIds.length})</span>
                       <button
                         type="button"
                         onClick={() => setSelectedBundle('custom')}
                         className="text-[11px] font-normal text-primary hover:underline"
                       >
-                        {t('services.custom_or_additional_model') || 'Switch to manual selection'}
+                        {t('services.custom_or_additional_model')}
                       </button>
                     </div>
                     <div className="h-44 overflow-y-auto divide-y divide-zinc-100 pr-1">
@@ -2753,7 +2752,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         value={modelSearch}
                         onChange={(e) => setModelSearch(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                        placeholder={t('services.search_models_placeholder') || 'Search models (e.g. deepseek, claude, free, 70b)...'}
+                        placeholder={t('services.search_models_placeholder')}
                         className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-primary"
                       />
                     </div>
@@ -2801,8 +2800,8 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-zinc-400">
                           {models.length === 0
-                            ? (t('common.loading') || 'Loading models…')
-                            : (t('services.no_models_match') || 'No models match your search.')}
+                            ? (t('common.loading'))
+                            : (t('services.no_models_match'))}
                         </div>
                       )}
                     </div>
@@ -2814,7 +2813,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Select
-                  label={t('services.provider_label') || 'Provider'}
+                  label={t('services.provider_label')}
                   options={presetProviderOptions}
                   selected={selectedPresetProvider}
                   onChange={chooseNewProviderPreset}
@@ -2822,14 +2821,14 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                 {draft.provider_type === 'custom' ? (
                   <Field
                     alignWithSelect
-                    label={t('services.provider_id') || 'Provider Name / ID'}
+                    label={t('services.provider_id')}
                     value={draft.custom_provider_id}
                     onChange={(value) => patch({ custom_provider_id: value })}
                     placeholder="my-openai-proxy"
                   />
                 ) : (
                   <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.model_label') || 'Model'}</label>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.model_label')}</label>
                     <input
                       type="text"
                       value={draft.upstream_model_id}
@@ -2843,13 +2842,13 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
-                  label={t('services.model_label') || 'Upstream Model ID'}
+                  label={t('services.model_label')}
                   value={draft.upstream_model_id}
                   onChange={(val) => patch({ upstream_model_id: val })}
                   placeholder="deepseek-chat or gpt-4o"
                 />
                 <Select
-                  label={t('services.protocol_label') || 'Protocol'}
+                  label={t('services.protocol_label')}
                   options={protocolOptions}
                   selected={selectedProtocol}
                   onChange={(option) => patch({ protocol: String(option.id) })}
@@ -2857,7 +2856,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
               </div>
 
               <Field
-                label={t('services.base_url') || 'Provider API base URL'}
+                label={t('services.base_url')}
                 value={draft.base_url}
                 onChange={(value) => patch({ base_url: value })}
                 placeholder="https://api.example.com/v1"
@@ -2865,7 +2864,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-zinc-700">{t('services.api_key') || 'Provider API key'}</label>
+                  <label className="block text-xs font-medium text-zinc-700">{t('services.api_key')}</label>
                   <button
                     type="button"
                     onClick={runTestKey}
@@ -2873,7 +2872,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                     className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400 disabled:cursor-not-allowed"
                   >
                     <Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} />
-                    <span>{testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test connection')}</span>
+                    <span>{testStatus === 'testing' ? (t('services.testing')) : (t('services.test_connection'))}</span>
                   </button>
                 </div>
                 <div className="relative mt-1">
@@ -2882,7 +2881,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                     type={visible ? 'text' : 'password'}
                     value={draft.api_key}
                     onChange={(event) => patch({ api_key: event.target.value })}
-                    placeholder={t('services.api_key_paste_placeholder') || 'Paste your provider key'}
+                    placeholder={t('services.api_key_paste_placeholder')}
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2 pr-10 text-sm outline-none focus:border-primary"
                   />
                   <button
@@ -2897,13 +2896,13 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                 {testStatus === 'passed' && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600">
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                    <span>{testMsg || (t('services.key_verified_healthy') || 'Key verified & connection healthy')}</span>
+                    <span>{testMsg || (t('services.key_verified_healthy'))}</span>
                   </div>
                 )}
                 {testStatus === 'failed' && (
                   <div className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600">
                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span className="break-all">{testMsg || (t('services.test_failed') || 'Connection failed')}</span>
+                    <span className="break-all">{testMsg || (t('services.test_failed'))}</span>
                   </div>
                 )}
               </div>
@@ -2913,13 +2912,13 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
           {/* Compact pricing and capability parameters directly expanded */}
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
-              {t('services.advanced_settings') || 'Price & Capability Settings'}
+              {t('services.advanced_settings')}
             </div>
             <div className="grid gap-3 sm:grid-cols-4 text-zinc-900">
-              <Field size="sm" required={false} label={t('services.input_price') || 'Input $/1M'} value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" />
-              <Field size="sm" required={false} label={t('services.output_price') || 'Output $/1M'} value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" />
-              <Field size="sm" required={false} label={t('services.capability_range') || 'Capability (0-1)'} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.70" />
-              <Field size="sm" required={false} label={t('services.context_length') || 'Context length'} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
+              <Field size="sm" required={false} label={t('services.input_price')} value={draft.input_price_per_1m} onChange={(value) => patch({ input_price_per_1m: value })} placeholder="0.14" />
+              <Field size="sm" required={false} label={t('services.output_price')} value={draft.output_price_per_1m} onChange={(value) => patch({ output_price_per_1m: value })} placeholder="0.28" />
+              <Field size="sm" required={false} label={t('services.capability_range')} value={draft.capability_score} onChange={(value) => patch({ capability_score: value })} placeholder="0.70" />
+              <Field size="sm" required={false} label={t('services.context_length')} value={draft.context_length} onChange={(value) => patch({ context_length: value })} placeholder="128000" />
             </div>
           </div>
         </div>
@@ -2928,10 +2927,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
         <div className="mt-6 flex justify-end gap-3 border-t border-zinc-100 pt-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50">
-            {t('common.cancel') || 'Cancel'}
+            {t('common.cancel')}
           </button>
           <button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50">
-            {busy ? (t('common.creating') || 'Adding…') : (t('services.add_model') || 'Add model')}
+            {busy ? (t('common.creating')) : (t('services.add_model'))}
           </button>
         </div>
       </form>
@@ -3054,7 +3053,7 @@ function LegacyNewServicePage() {
           const models = catalog.filter((item) => item.provider_id === endpoint.provider_type)
           const selectedModel = models.find((item) => item.model === endpoint.upstream_model_id)
           const selectedProvider = providers.find((provider) => provider.id === endpoint.provider_type) || { id: 'custom', name: 'Custom provider' }
-          const [providerLabel, modelLabel] = endpointLabel(endpoint, catalog)
+          const [providerLabel, modelLabel] = endpointLabel(endpoint, catalog, t)
           const isExpanded = expanded.includes(index)
           const isAdvanced = advanced.includes(index)
           const isVisible = visibleKeys.includes(index)
@@ -3138,11 +3137,11 @@ export function KeysPage() {
     load()
   }
   async function revoke(id: string) {
-    if (!await showConfirm(t('keys.revoke_confirm_msg') || 'Existing requests will not be interrupted.', t('keys.revoke_confirm_title') || 'Revoke this API key?')) return
+    if (!await showConfirm(t('keys.revoke_confirm_msg'), t('keys.revoke_confirm_title'))) return
     try { await saasFetch(`/api/saas/api-keys/${id}/revoke`, { method: 'POST' }); load() } catch (e) { setError(errorText(e)) }
   }
   async function remove(id: string) {
-    if (!await showConfirm(t('keys.delete_confirm_msg') || 'This cannot be undone.', t('keys.delete_confirm_title') || 'Delete this API key permanently?')) return
+    if (!await showConfirm(t('keys.delete_confirm_msg'), t('keys.delete_confirm_title'))) return
     try { await saasFetch(`/api/saas/api-keys/${id}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
   }
 
@@ -3154,7 +3153,7 @@ export function KeysPage() {
           onClick={() => { setError(''); setModalOpen(true) }}
           className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"
         >
-          <Plus className="h-4 w-4" /> {t('keys.create_button') || 'Create key'}
+          <Plus className="h-4 w-4" /> {t('keys.create_button')}
         </button>
       }
     >
@@ -3170,10 +3169,10 @@ export function KeysPage() {
       {!keys.length ? (
         services.length ? (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-            {t('keys.no_keys') || 'No API keys yet.'}
+            {t('keys.no_keys')}
           </div>
         ) : (
-          <Empty text={t('keys.need_service') || 'Create a model service first, then issue an API key.'} href="/app/services/new" />
+          <Empty text={t('keys.need_service')} href="/app/services/new" />
         )
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -3199,13 +3198,13 @@ export function KeysPage() {
                           : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
                       }`}
                     >
-                      {key.enabled ? (t('keys.active') || 'Active') : (t('keys.revoked') || 'Revoked')}
+                      {key.enabled ? (t('keys.active')) : (t('keys.revoked'))}
                     </span>
                   </div>
 
                   {/* Key metadata badges matching service/provider card styles */}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-700 border border-zinc-200/60" title="API Key Prefix">
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-700 border border-zinc-200/60" title={t('keys.key_prefix')}>
                       <span className="text-[10px] font-sans text-zinc-400 uppercase font-semibold">Key:</span>
                       {masked}
                     </span>
@@ -3218,7 +3217,7 @@ export function KeysPage() {
                   {/* Authorized Model Services List */}
                   <div className="mt-3.5 pt-3 border-t border-zinc-100">
                     <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
-                      {t('keys.authorized_services') || 'Authorized Services'}
+                      {t('keys.authorized_services')}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {key.model_services?.length ? (
@@ -3236,7 +3235,7 @@ export function KeysPage() {
                         })
                       ) : (
                         <span className="text-xs text-zinc-400 italic">
-                          {t('keys.all_services_legacy') || 'All project services (legacy key)'}
+                          {t('keys.all_services_legacy')}
                         </span>
                       )}
                     </div>
@@ -3257,7 +3256,7 @@ export function KeysPage() {
                     className="inline-flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors"
                   >
                     <Activity className="h-3.5 w-3.5" />
-                    {t('keys.workload_profile') || 'Workload profile'}
+                    {t('keys.workload_profile')}
                   </button>
                   {key.enabled && (
                     <button
@@ -3266,7 +3265,7 @@ export function KeysPage() {
                       className="inline-flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                      {t('keys.edit') || 'Edit'}
+                      {t('keys.edit')}
                     </button>
                   )}
                   {key.enabled && (
@@ -3275,7 +3274,7 @@ export function KeysPage() {
                       onClick={() => revoke(key.id)}
                       className="font-medium text-amber-600 hover:text-amber-700 transition-colors"
                     >
-                      {t('keys.revoke') || 'Revoke'}
+                      {t('keys.revoke')}
                     </button>
                   )}
                   <button
@@ -3284,7 +3283,7 @@ export function KeysPage() {
                     className="inline-flex items-center gap-1 font-medium text-rose-500 hover:text-rose-700 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    {t('keys.delete') || 'Delete'}
+                    {t('keys.delete')}
                   </button>
                 </div>
               </div>
@@ -3353,32 +3352,32 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
     <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
-        <div><h2 className="text-lg font-semibold text-zinc-950">{t('keys.profile_title') || 'API key workload profile'}</h2><p className="mt-1 text-sm font-medium text-zinc-600">{keyData.name}</p><p className="mt-1 text-sm text-zinc-500">{t('keys.profile_subtitle') || 'Observed request statistics. This does not change routing.'}</p></div>
-        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close') || 'Close'}><X className="h-5 w-5" /></button>
+        <div><h2 className="text-lg font-semibold text-zinc-950">{t('keys.profile_title')}</h2><p className="mt-1 text-sm font-medium text-zinc-600">{keyData.name}</p><p className="mt-1 text-sm text-zinc-500">{t('keys.profile_subtitle')}</p></div>
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-        <div className="text-xs text-zinc-500">{t('keys.profile_window') || 'Time window'}</div>
-        <Select size="sm" options={[{ id: '24h', name: t('analytics.last_24h') || 'Last 24h' }, { id: '7d', name: t('analytics.last_7d') || 'Last 7 days' }, { id: '30d', name: t('analytics.last_30d') || 'Last 30 days' }, { id: 'all', name: t('analytics.all_time') || 'All time' }]} selected={{ id: range, name: range === '24h' ? (t('analytics.last_24h') || 'Last 24h') : range === '7d' ? (t('analytics.last_7d') || 'Last 7 days') : range === '30d' ? (t('analytics.last_30d') || 'Last 30 days') : (t('analytics.all_time') || 'All time') }} onChange={(option) => setRange(String(option.id) as typeof range)} className="w-40" />
+        <div className="text-xs text-zinc-500">{t('keys.profile_window')}</div>
+        <Select size="sm" options={[{ id: '24h', name: t('analytics.last_24h') }, { id: '7d', name: t('analytics.last_7d') }, { id: '30d', name: t('analytics.last_30d') }, { id: 'all', name: t('analytics.all_time') }]} selected={{ id: range, name: range === '24h' ? (t('analytics.last_24h')) : range === '7d' ? (t('analytics.last_7d')) : range === '30d' ? (t('analytics.last_30d')) : (t('analytics.all_time')) }} onChange={(option) => setRange(String(option.id) as typeof range)} className="w-40" />
       </div>
-      {loading && <div className="py-12 text-center text-sm text-zinc-500">{t('keys.profile_loading') || 'Loading workload profile…'}</div>}
+      {loading && <div className="py-12 text-center text-sm text-zinc-500">{t('keys.profile_loading')}</div>}
       {error && <div className="mt-5"><ErrorMessage text={error} /></div>}
       {!loading && !error && profile && <div className="mt-5 space-y-5">
         <div className="grid gap-3 sm:grid-cols-4">
-          <ProfileMetric label={t('keys.profile_samples') || 'Samples'} value={profile.sample_count.toLocaleString()} />
-          <ProfileMetric label={t('keys.profile_confidence') || 'Confidence'} value={profile.confidence.replace('_', ' ')} />
-          <ProfileMetric label={t('keys.profile_success_rate') || 'Success rate'} value={rate(profile.requests.success_rate)} />
-          <ProfileMetric label={t('keys.profile_last_observed') || 'Last observed'} value={profile.last_observed_at || 'N/A'} />
+          <ProfileMetric label={t('keys.profile_samples')} value={profile.sample_count.toLocaleString()} />
+          <ProfileMetric label={t('keys.profile_confidence')} value={profile.confidence.replace('_', ' ')} />
+          <ProfileMetric label={t('keys.profile_success_rate')} value={rate(profile.requests.success_rate)} />
+          <ProfileMetric label={t('keys.profile_last_observed')} value={profile.last_observed_at || 'N/A'} />
         </div>
         <div className="grid gap-5 md:grid-cols-2">
-          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_requests') || 'Requests'}</h3><div className="mt-3 grid grid-cols-3 gap-2"><ProfileMetric label={t('keys.profile_total') || 'Total'} value={profile.requests.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_successful') || 'Successful'} value={profile.requests.successful.toLocaleString()} /><ProfileMetric label={t('keys.profile_failed') || 'Failed'} value={profile.requests.failed.toLocaleString()} /></div></section>
-          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_latency') || 'Latency'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label="P50" value={latency(profile.latency_ms.p50)} /><ProfileMetric label="P95" value={latency(profile.latency_ms.p95)} /><ProfileMetric label="TTFT P95" value={latency(profile.latency_ms.ttft_p95)} /><ProfileMetric label={t('keys.profile_average') || 'Average'} value={latency(profile.latency_ms.average)} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_requests')}</h3><div className="mt-3 grid grid-cols-3 gap-2"><ProfileMetric label={t('keys.profile_total')} value={profile.requests.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_successful')} value={profile.requests.successful.toLocaleString()} /><ProfileMetric label={t('keys.profile_failed')} value={profile.requests.failed.toLocaleString()} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_latency')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label="P50" value={latency(profile.latency_ms.p50)} /><ProfileMetric label="P95" value={latency(profile.latency_ms.p95)} /><ProfileMetric label="TTFT P95" value={latency(profile.latency_ms.ttft_p95)} /><ProfileMetric label={t('keys.profile_average')} value={latency(profile.latency_ms.average)} /></div></section>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
-          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_tokens_cost') || 'Tokens and cost'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_total_tokens') || 'Total tokens'} value={profile.tokens.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_avg_tokens') || 'Average tokens'} value={profileNumber(profile.tokens.average_per_request)} /><ProfileMetric label={t('keys.profile_total_cost') || 'Total cost'} value={`$${profile.cost.total.toFixed(4)}`} /><ProfileMetric label={t('keys.profile_avg_cost') || 'Average cost'} value={profile.cost.average_per_request == null ? 'N/A' : `$${profile.cost.average_per_request.toFixed(4)}`} /></div></section>
-          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_behavior') || 'Workload behavior'}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_tools') || 'Tool requests'} value={rate(profile.workload.tool_request_rate)} /><ProfileMetric label={t('keys.profile_fallbacks') || 'Fallbacks'} value={rate(profile.workload.fallback_rate)} /><ProfileMetric label={t('keys.profile_sessions') || 'Sessions'} value={rate(profile.workload.session_rate)} /><ProfileMetric label={t('keys.profile_affinity') || 'Affinity hits'} value={rate(profile.workload.affinity_hit_rate)} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_tokens_cost')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_total_tokens')} value={profile.tokens.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_avg_tokens')} value={profileNumber(profile.tokens.average_per_request)} /><ProfileMetric label={t('keys.profile_total_cost')} value={`$${profile.cost.total.toFixed(4)}`} /><ProfileMetric label={t('keys.profile_avg_cost')} value={profile.cost.average_per_request == null ? 'N/A' : `$${profile.cost.average_per_request.toFixed(4)}`} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_behavior')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_tools')} value={rate(profile.workload.tool_request_rate)} /><ProfileMetric label={t('keys.profile_fallbacks')} value={rate(profile.workload.fallback_rate)} /><ProfileMetric label={t('keys.profile_sessions')} value={rate(profile.workload.session_rate)} /><ProfileMetric label={t('keys.profile_affinity')} value={rate(profile.workload.affinity_hit_rate)} /></div></section>
         </div>
-        <div className="grid gap-5 md:grid-cols-4"><ProfileBreakdown title={t('keys.profile_difficulty') || 'Difficulty tiers'} values={profile.workload.difficulty_tiers} /><ProfileBreakdown title={t('keys.profile_difficulty_sources') || 'Difficulty sources'} values={profile.workload.difficulty_sources} /><ProfileBreakdown title={t('keys.profile_providers') || 'Providers'} values={profile.providers} /><ProfileBreakdown title={t('keys.profile_usage_sources') || 'Usage sources'} values={profile.cost.usage_sources} /></div>
-        <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">{t('keys.profile_quality_unavailable') || 'Independent quality evidence is not available yet. These workload statistics do not represent a quality score.'}</div>
+        <div className="grid gap-5 md:grid-cols-4"><ProfileBreakdown title={t('keys.profile_difficulty')} values={profile.workload.difficulty_tiers} /><ProfileBreakdown title={t('keys.profile_difficulty_sources')} values={profile.workload.difficulty_sources} /><ProfileBreakdown title={t('keys.profile_providers')} values={profile.providers} /><ProfileBreakdown title={t('keys.profile_usage_sources')} values={profile.cost.usage_sources} /></div>
+        <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">{t('keys.profile_quality_unavailable')}</div>
       </div>}
     </div>
   </div>
@@ -3548,10 +3547,10 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-950">{t('keys.created_title') || 'API key created'}</h2>
-            <p className="mt-1 text-sm text-amber-700">{t('keys.created_notice') || 'Copy or download this key now. It will not be shown again.'}</p>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('keys.created_title')}</h2>
+            <p className="mt-1 text-sm text-amber-700">{t('keys.created_notice')}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close') || 'Close'}><X className="h-5 w-5" /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
         </div>
 
         <div className="mt-5 flex gap-2">
@@ -3571,21 +3570,21 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
             onClick={downloadKey}
             className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
           >
-            <Download className="h-4 w-4" /> {t('keys.download_key') || 'Download key'}
+            <Download className="h-4 w-4" /> {t('keys.download_key')}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white hover:bg-zinc-800"
           >
-            {t('keys.done') || 'Done'}
+            {t('keys.done')}
           </button>
         </div>
 
         <div className="mt-6 border-t border-zinc-100 pt-5">
-          <h3 className="text-sm font-semibold text-zinc-900">{t('keys.usage_title') || 'How to use it'}</h3>
+          <h3 className="text-sm font-semibold text-zinc-900">{t('keys.usage_title')}</h3>
           <p className="mt-1 text-xs text-zinc-500">
-            {t('keys.usage_desc') || 'Use this key with any OpenAI-compatible client. Set the base URL to this gateway and pass the model service name as the model.'}
+            {t('keys.usage_desc')}
           </p>
           <pre className="mt-3 whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-4 text-[11px] leading-relaxed text-zinc-100"><code>{curlExample}</code></pre>
         </div>
@@ -3685,7 +3684,7 @@ function MissingTokensModal({
       <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-950">{t('usage.missing_modal_title') || 'Requests without Provider-Reported Tokens'}</h2>
+            <h2 className="text-lg font-semibold text-zinc-950">{t('usage.missing_modal_title')}</h2>
             <p className="mt-1 text-xs text-zinc-500">
               {t('usage.requests_without_tokens_sub', { count: compactNumber(totalMissing) }) || `${compactNumber(totalMissing)} requests use local estimates or lack upstream token reporting.`}
             </p>
@@ -3718,7 +3717,7 @@ function MissingTokensModal({
                 </div>
               </div>
               <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 border border-amber-200">
-                {t('usage.needs_review') || 'Needs Review'}
+                {t('usage.needs_review')}
               </span>
             </div>
           ))}
@@ -3730,7 +3729,7 @@ function MissingTokensModal({
             onClick={onClose}
             className="rounded-lg bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
           >
-            {t('common.close') || 'Close'}
+            {t('common.close')}
           </button>
         </div>
       </div>
@@ -3774,7 +3773,7 @@ export function UsagePage() {
   const providers = data?.breakdowns?.providers || []
   const models = data?.breakdowns?.models || []
   const modelsByProvider = models.reduce<Map<string, UsageBreakdown[]>>((groups, item) => {
-    const provider = item.provider || 'Unknown provider'
+    const provider = item.provider || t('usage.unknown_provider')
     const providerModels = groups.get(provider) || []
     providerModels.push(item)
     groups.set(provider, providerModels)
@@ -3789,49 +3788,49 @@ export function UsagePage() {
       {error && <ErrorMessage text={error} />}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">{t('usage.title') || 'Usage'}</h1>
-          <span title={t('usage.subtitle') || 'Automatic statistics from your last 30 days of model calls.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+          <h1 className="text-xl font-semibold tracking-tight">{t('usage.title')}</h1>
+          <span title={t('usage.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
             <HelpCircle className="h-4 w-4" />
           </span>
         </div>
-        <span className="text-xs text-zinc-400">{t('usage.provider_reported_note') || 'Provider-reported usage when available'}</span>
+        <span className="text-xs text-zinc-400">{t('usage.provider_reported_note')}</span>
       </div>
       <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label={t('usage.requests') || 'Requests'} value={compactNumber(data?.requests)} />
-        <Stat label={t('usage.total_tokens') || 'Total tokens'} value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
-        <Stat label={t('usage.estimated_spend') || 'Estimated spend'} value={money(data?.estimated_spend)} />
-        <Stat label={t('usage.success_rate') || 'Success rate'} value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
+        <Stat label={t('usage.requests')} value={compactNumber(data?.requests)} />
+        <Stat label={t('usage.total_tokens')} value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
+        <Stat label={t('usage.estimated_spend')} value={money(data?.estimated_spend)} />
+        <Stat label={t('usage.success_rate')} value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
       </div>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-zinc-900">{t('usage.prompt_cache') || 'Prompt cache'}</h2>
-          <span title={t('usage.prompt_cache_subtitle') || 'Provider-reported input tokens served from cache. This is separate from context trimming.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+          <h2 className="font-semibold text-zinc-900">{t('usage.prompt_cache')}</h2>
+          <span title={t('usage.prompt_cache_subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
             <HelpCircle className="h-3.5 w-3.5" />
           </span>
         </div>
         <div className="mt-5 grid grid-cols-2 items-stretch gap-4 md:grid-cols-3 xl:grid-cols-5">
-          <Stat label={t('usage.cache_hit_tokens') || 'Cache hit tokens'} value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} />
-          <Stat label={t('usage.requests_with_hits') || 'Requests with hits'} value={compactNumber(data?.cache?.hit_requests)} />
-          <Stat label={t('usage.hit_rate') || 'Input token hit rate'} value={coveragePercent(data?.cache?.hit_rate)} />
-          <Stat label={t('usage.cache_write_tokens') || 'Cache write tokens'} value={compactTokens(data?.cache?.write_tokens)} fullValue={compactNumber(data?.cache?.write_tokens)} />
-          <Stat label={t('usage.write_rate') || 'Input token write rate'} value={coveragePercent(data?.cache?.write_rate)} />
+          <Stat label={t('usage.cache_hit_tokens')} value={compactTokens(data?.cache?.hit_tokens)} fullValue={compactNumber(data?.cache?.hit_tokens)} />
+          <Stat label={t('usage.requests_with_hits')} value={compactNumber(data?.cache?.hit_requests)} />
+          <Stat label={t('usage.hit_rate')} value={coveragePercent(data?.cache?.hit_rate)} />
+          <Stat label={t('usage.cache_write_tokens')} value={compactTokens(data?.cache?.write_tokens)} fullValue={compactNumber(data?.cache?.write_tokens)} />
+          <Stat label={t('usage.write_rate')} value={coveragePercent(data?.cache?.write_rate)} />
         </div>
         {data?.cache?.reported_requests === 0 && (
-          <p className="mt-4 text-xs text-zinc-500">{t('usage.no_cache_data') || 'No provider-reported cache metrics are available for this period.'}</p>
+          <p className="mt-4 text-xs text-zinc-500">{t('usage.no_cache_data')}</p>
         )}
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-zinc-900">{t('usage.usage_by_provider') || 'Usage by provider and model'}</h2>
-            <span title={t('usage.usage_by_provider_sub') || 'Each provider includes the models used through it.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <h2 className="font-semibold text-zinc-900">{t('usage.usage_by_provider')}</h2>
+            <span title={t('usage.usage_by_provider_sub')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
             </span>
           </div>
           <span className="text-xs text-zinc-400">
-            {providers.length} {t('usage.providers_count') || 'Providers'} • {models.length} {t('usage.models_count') || 'Models'}
+            {providers.length} {t('usage.providers_count')} • {models.length} {t('usage.models_count')}
           </span>
         </div>
         {providers.length ? (
@@ -3846,7 +3845,7 @@ export function UsagePage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold text-zinc-900 truncate">{cleanDisplayName(item.provider)}</span>
                         <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-mono text-zinc-600 border border-zinc-200 shrink-0">
-                          {spendShare.toFixed(1)}% {t('usage.share') || 'share'}
+                          {spendShare.toFixed(1)}% {t('usage.share')}
                         </span>
                       </div>
                       <span className="font-mono font-bold text-zinc-900 shrink-0">{money(item.estimated_spend)}</span>
@@ -3857,8 +3856,8 @@ export function UsagePage() {
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 border-b border-zinc-200/60 pb-3">
-                      <div><strong className="text-zinc-800 font-medium">{compactNumber(item.requests)}</strong> {t('usage.requests') || 'requests'}</div>
-                      <div><strong className="text-zinc-800 font-medium">{compactTokens(item.total_tokens)}</strong> {t('usage.total_tokens') || 'tokens'}</div>
+                      <div><strong className="text-zinc-800 font-medium">{compactNumber(item.requests)}</strong> {t('usage.requests')}</div>
+                      <div><strong className="text-zinc-800 font-medium">{compactTokens(item.total_tokens)}</strong> {t('usage.total_tokens')}</div>
                       {item.cache_hit_tokens ? (
                         <div className="text-emerald-700 font-medium">⚡ {compactTokens(item.cache_hit_tokens)} cached</div>
                       ) : null}
@@ -3899,15 +3898,15 @@ export function UsagePage() {
             })}
           </div>
         ) : (
-          <p className="mt-5 text-sm text-zinc-500">{t('usage.no_usage_yet') || 'No usage recorded yet.'}</p>
+          <p className="mt-5 text-sm text-zinc-500">{t('usage.no_usage_yet')}</p>
         )}
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-zinc-900">{t('usage.context_savings') || 'Context savings'}</h2>
-            <span title={t('usage.context_savings_sub') || 'Signals produced by context reduction. This is separate from provider billing.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <h2 className="font-semibold text-zinc-900">{t('usage.context_savings')}</h2>
+            <span title={t('usage.context_savings_sub')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
             </span>
           </div>
@@ -3917,12 +3916,12 @@ export function UsagePage() {
             className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950 transition-colors"
           >
             <Settings2 className="h-4 w-4" />
-            {baseline ? (t('usage.change_baseline') || 'Change baseline') : (t('usage.config_baseline') || 'Configure baseline')}
+            {baseline ? (t('usage.change_baseline')) : (t('usage.config_baseline'))}
           </button>
         </div>
         <div className="mt-5 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
-          <Stat label={t('usage.trimmed_chars') || 'Context characters trimmed'} value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} />
-          <Stat label={t('usage.dollar_savings') || 'Estimated dollar savings'} value={savings?.estimated_savings == null ? (t('usage.not_available') || 'Not available') : money(Number(savings.estimated_savings))} />
+          <Stat label={t('usage.trimmed_chars')} value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} />
+          <Stat label={t('usage.dollar_savings')} value={savings?.estimated_savings == null ? (t('usage.not_available')) : money(Number(savings.estimated_savings))} />
         </div>
         {baseline && (
           <p className="mt-4 text-xs text-zinc-600">
@@ -3933,7 +3932,7 @@ export function UsagePage() {
             }) || `Compared with ${cleanDisplayName(baseline.model_service_name)} / ${baseline.model} (${cleanDisplayName(baseline.provider_name)}).`}
           </p>
         )}
-        <p className="mt-2 text-xs text-zinc-400">{baseline ? (t('usage.savings_basis_desc') || savings?.basis) : (t('usage.config_baseline') || 'Configure a model service baseline to estimate dollar savings.')}</p>
+        <p className="mt-2 text-xs text-zinc-400">{baseline ? (t('usage.savings_basis_desc') || savings?.basis) : (t('usage.config_baseline'))}</p>
       </section>
 
       {baselineOpen && (
@@ -3960,8 +3959,8 @@ export function UsagePage() {
       {data?.budget && (
         <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex justify-between text-sm">
-            <span>{t('usage.todays_budget') || 'Today’s budget'}</span>
-            <span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : (t('usage.no_limit') || 'No limit set')}</span>
+            <span>{t('usage.todays_budget')}</span>
+            <span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : (t('usage.no_limit'))}</span>
           </div>
           <div className="mt-3 h-2 rounded-full bg-zinc-100">
             <div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} />
@@ -3974,8 +3973,8 @@ export function UsagePage() {
         <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-zinc-900">{t('usage.data_coverage') || 'Usage data coverage'}</h2>
-              <span title={t('usage.data_coverage_sub') || 'Shows which requests use provider-reported tokens and which rely on estimates.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+              <h2 className="font-semibold text-zinc-900">{t('usage.data_coverage')}</h2>
+              <span title={t('usage.data_coverage_sub')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
                 <HelpCircle className="h-3.5 w-3.5" />
               </span>
             </div>
@@ -3989,7 +3988,7 @@ export function UsagePage() {
                   onClick={() => setMissingTokensModalOpen(true)}
                   className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
                 >
-                  <span>{compactNumber(data.coverage.missing_usage_requests)} {t('usage.unreported') || 'Unreported'}</span>
+                  <span>{compactNumber(data.coverage.missing_usage_requests)} {t('usage.unreported')}</span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -3997,12 +3996,12 @@ export function UsagePage() {
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Coverage
-              label={t('usage.provider_reported_tokens') || 'Provider-reported tokens'}
+              label={t('usage.provider_reported_tokens')}
               value={data.coverage.usage}
               detail={t('usage.provider_reported_detail', { reported: compactNumber(data.coverage.provider_reported_requests), total: compactNumber(data.requests) }) || `${compactNumber(data.coverage.provider_reported_requests)} of ${compactNumber(data.requests)} requests include token data`}
             />
             <Coverage
-              label={t('usage.configured_pricing') || 'Configured pricing'}
+              label={t('usage.configured_pricing')}
               value={data.coverage.pricing}
               detail={t('usage.configured_pricing_detail', { priced: compactNumber(data.coverage.priced_requests), total: compactNumber(data.requests) }) || `${compactNumber(data.coverage.priced_requests)} of ${compactNumber(data.requests)} requests have a pricing rule`}
             />
@@ -4039,7 +4038,7 @@ function SavingsBaselineModal({ services, baseline, onClose, onSaved }: { servic
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{t('usage.baseline_modal_title') || 'Savings comparison baseline'}</h2><p className="mt-1 text-sm text-zinc-500">{t('usage.baseline_modal_desc') || 'Choose one model from a Model Service as the comparison price.'}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>{services.length ? <div className="mt-6 space-y-5"><Select label={t('services.service_label') || 'Model service'} options={services.map((item) => ({ id: item.id, name: item.name }))} selected={service ? { id: service.id, name: service.name } : { id: '', name: t('usage.select_service') || 'Select a model service' }} onChange={(option) => setServiceId(String(option.id))} /><Select label={t('usage.model_endpoint_label') || 'Model / provider endpoint'} options={(service?.endpoints || []).map((item) => ({ id: item.id, name: `${item.model} — ${item.provider_name}` }))} selected={endpoint ? { id: endpoint.id, name: `${endpoint.model} — ${endpoint.provider_name}` } : { id: '', name: t('services.select_model') || 'Select a model' }} onChange={(option) => setEndpointId(String(option.id))} />{endpoint && <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Input ${endpoint.input_price_per_1m}/1M · Output ${endpoint.output_price_per_1m}/1M</div>}<p className="text-xs text-zinc-500">{t('usage.baseline_price_note') || 'The estimate uses this endpoint’s configured prices. A single model is supported in the first version.'}</p></div> : <div className="mt-6 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800">{t('usage.create_service_first') || 'Create a Model Service with at least one endpoint before configuring a baseline.'}</div>}{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel') || 'Cancel'}</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving') || 'Saving…') : (t('usage.save_baseline') || 'Save baseline')}</button></div></form></div>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{t('usage.baseline_modal_title')}</h2><p className="mt-1 text-sm text-zinc-500">{t('usage.baseline_modal_desc')}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>{services.length ? <div className="mt-6 space-y-5"><Select label={t('services.service_label')} options={services.map((item) => ({ id: item.id, name: item.name }))} selected={service ? { id: service.id, name: service.name } : { id: '', name: t('usage.select_service') }} onChange={(option) => setServiceId(String(option.id))} /><Select label={t('usage.model_endpoint_label')} options={(service?.endpoints || []).map((item) => ({ id: item.id, name: `${item.model} — ${item.provider_name}` }))} selected={endpoint ? { id: endpoint.id, name: `${endpoint.model} — ${endpoint.provider_name}` } : { id: '', name: t('services.select_model') }} onChange={(option) => setEndpointId(String(option.id))} />{endpoint && <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Input ${endpoint.input_price_per_1m}/1M · Output ${endpoint.output_price_per_1m}/1M</div>}<p className="text-xs text-zinc-500">{t('usage.baseline_price_note')}</p></div> : <div className="mt-6 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800">{t('usage.create_service_first')}</div>}{error && <div className="mt-4"><ErrorMessage text={error} /></div>}<div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel')}</button><button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving')) : (t('usage.save_baseline'))}</button></div></form></div>
 }
 
 type QueryAnalyticsItem = {
@@ -4136,8 +4135,8 @@ export function AnalyticsPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{t('analytics.title') || 'Routing Analytics'}</h1>
-            <span title={t('analytics.subtitle') || 'Inspect how incoming queries match complexity signals and route across Pro and Flash models.'} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
+            <h1 className="text-xl font-semibold tracking-tight">{t('analytics.title')}</h1>
+            <span title={t('analytics.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-4 w-4" />
             </span>
           </div>
@@ -4151,12 +4150,12 @@ export function AnalyticsPage() {
                 }`}
               >
                 {r === '24h'
-                  ? (t('analytics.last_24h') || 'Last 24h')
+                  ? (t('analytics.last_24h'))
                   : r === '7d'
-                  ? (t('analytics.last_7d') || 'Last 7 days')
+                  ? (t('analytics.last_7d'))
                   : r === '30d'
-                  ? (t('analytics.last_30d') || 'Last 30 days')
-                  : (t('analytics.all_time') || 'All time')}
+                  ? (t('analytics.last_30d'))
+                  : (t('analytics.all_time'))}
               </button>
             ))}
           </div>
@@ -4166,50 +4165,50 @@ export function AnalyticsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.analyzed_queries') || 'Analyzed queries'}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.analyzed_queries')}</div>
             <div className="mt-2 text-2xl font-bold text-zinc-950 whitespace-nowrap">{total.toLocaleString()}</div>
-            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.analyzed_queries_sub') || 'Intelligent complexity scored'}</div>
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.analyzed_queries_sub')}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.complexity_breakdown') || 'Complexity breakdown'}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.complexity_breakdown')}</div>
             <div className="mt-2 flex items-baseline gap-2.5 sm:gap-3 flex-nowrap">
               <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.high_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_high_short') || t('analytics.tier_high') || 'High'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_high_short') || t('analytics.tier_high')}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200 shrink-0" />
               <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-amber-600">{(data?.summary.medium_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_medium_short') || t('analytics.tier_medium') || 'Med'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_medium_short') || t('analytics.tier_medium')}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200 shrink-0" />
               <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.low_tier_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_low_short') || t('analytics.tier_low') || 'Low'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.tier_low_short') || t('analytics.tier_low')}</span>
               </div>
             </div>
             <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.high_reasoning_sub', { pct: highPct }) || `${highPct}% complex reasoning & code`}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.model_tier_routing') || 'Model tier routing'}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.model_tier_routing')}</div>
             <div className="mt-2 flex items-baseline gap-3 sm:gap-4 flex-nowrap">
               <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-purple-700">{(data?.summary.pro_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.pro_model_short') || t('analytics.pro_model') || 'Pro'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.pro_model_short') || t('analytics.pro_model')}</span>
               </div>
               <div className="h-4 w-px bg-zinc-200 shrink-0" />
               <div className="flex items-baseline whitespace-nowrap">
                 <span className="text-2xl font-bold text-emerald-600">{(data?.summary.flash_count || 0).toLocaleString()}</span>
-                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.flash_model_short') || t('analytics.flash_model') || 'Flash'}</span>
+                <span className="ml-1 text-xs text-zinc-400 whitespace-nowrap">{t('analytics.flash_model_short') || t('analytics.flash_model')}</span>
               </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.dynamic_dispatch') || 'Dynamic capability dispatch'}</div>
+            <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">{t('analytics.dynamic_dispatch')}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.estimated_savings') || 'Estimated savings'}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.estimated_savings')}</div>
             <div className="mt-2 text-2xl font-bold text-emerald-600 whitespace-nowrap">
               ${(data?.summary.estimated_savings || 0).toFixed(4)}
             </div>
@@ -4221,8 +4220,8 @@ export function AnalyticsPage() {
 
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.spectrum_title') || 'Complexity Spectrum & Signal Distribution'}</h2>
-            <span className="text-xs text-zinc-400">{t('analytics.spectrum_hint') || 'Higher score routes to Pro models'}</span>
+            <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.spectrum_title')}</h2>
+            <span className="text-xs text-zinc-400">{t('analytics.spectrum_hint')}</span>
           </div>
 
           <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100">
@@ -4234,15 +4233,15 @@ export function AnalyticsPage() {
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-purple-600" />
-              <span>{t('analytics.high_complexity') || 'High Complexity (≥ 0.55)'}: <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
+              <span>{t('analytics.high_complexity')}: <strong>{(data?.summary.high_tier_count || 0).toLocaleString()}</strong> ({highPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-              <span>{t('analytics.med_complexity') || 'Medium Complexity (0.35–0.55)'}: <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
+              <span>{t('analytics.med_complexity')}: <strong>{(data?.summary.medium_tier_count || 0).toLocaleString()}</strong> ({medPct}%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span>{t('analytics.low_complexity') || 'Low Complexity (< 0.35)'}: <strong>{(data?.summary.low_tier_count || 0).toLocaleString()}</strong> ({lowPct}%)</span>
+              <span>{t('analytics.low_complexity')}: <strong>{(data?.summary.low_tier_count || 0).toLocaleString()}</strong> ({lowPct}%)</span>
             </div>
           </div>
         </div>
@@ -4250,8 +4249,8 @@ export function AnalyticsPage() {
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
           <div className="p-5 pb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.table_title') || 'Query Logs & Signal Hits'}</h2>
-              <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.table_subtitle') || 'Live inspection of prompt intents and routed models.'}</p>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('analytics.table_title')}</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.table_subtitle')}</p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
               {(['all', 'high', 'medium', 'low'] as const).map((tier) => (
@@ -4263,12 +4262,12 @@ export function AnalyticsPage() {
                   }`}
                 >
                   {tier === 'all'
-                    ? (t('analytics.all_tiers') || 'All tiers')
+                    ? (t('analytics.all_tiers'))
                     : tier === 'high'
-                    ? (t('analytics.tier_high') || 'High')
+                    ? (t('analytics.tier_high'))
                     : tier === 'medium'
-                    ? (t('analytics.tier_medium') || 'Med')
-                    : (t('analytics.tier_low') || 'Low')}
+                    ? (t('analytics.tier_medium'))
+                    : (t('analytics.tier_low'))}
                 </button>
               ))}
             </div>
@@ -4277,19 +4276,19 @@ export function AnalyticsPage() {
           <div className="border-t border-zinc-100 overflow-x-auto min-h-[420px]">
             {!paginatedQueries.length ? (
               <div className="py-16 text-center text-sm text-zinc-500">
-                {loading ? (t('common.loading') || 'Loading…') : (t('analytics.no_records') || 'No query records found for this period.')}
+                {loading ? (t('common.loading')) : (t('analytics.no_records'))}
               </div>
             ) : (
               <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('analytics.col_time_service') || 'Time / Service'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('analytics.col_prompt') || 'Prompt / User Intent'}</th>
-                    <th className="py-2.5 px-3 font-medium w-[130px]">{t('analytics.col_complexity') || 'Complexity'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[220px] max-w-[280px]">{t('analytics.col_signals') || 'Matched Signals'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('analytics.col_model') || 'Routed Model'}</th>
-                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('analytics.col_tokens_latency') || 'Tokens / Latency'}</th>
-                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('analytics.col_cost') || 'Cost'}</th>
+                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('analytics.col_time_service')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('analytics.col_prompt')}</th>
+                    <th className="py-2.5 px-3 font-medium w-[130px]">{t('analytics.col_complexity')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[220px] max-w-[280px]">{t('analytics.col_signals')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('analytics.col_model')}</th>
+                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('analytics.col_tokens_latency')}</th>
+                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('analytics.col_cost')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -4348,7 +4347,7 @@ export function AnalyticsPage() {
                                 </span>
                                 <div className="pointer-events-none absolute left-0 bottom-full z-50 mb-2 hidden w-56 rounded-xl border border-zinc-200 bg-white p-2.5 shadow-xl group-hover:block text-left whitespace-normal">
                                   <div className="text-[11px] font-semibold text-zinc-900 mb-1.5">
-                                    {t('analytics.col_signals') || 'Matched Signals'} ({q.signals.length})
+                                    {t('analytics.col_signals')} ({q.signals.length})
                                   </div>
                                   <div className="flex flex-wrap gap-1">
                                     {q.signals.map((s, idx) => (
@@ -4379,15 +4378,15 @@ export function AnalyticsPage() {
                                 <button
                                   type="button"
                                   className="text-zinc-400 hover:text-zinc-700 transition-colors p-0.5 rounded-full hover:bg-zinc-100 cursor-help"
-                                  aria-label={t('analytics.why_model') || 'Why this model?'}
-                                  title={t('analytics.why_model') || 'Why this model?'}
+                                  aria-label={t('analytics.why_model')}
+                                  title={t('analytics.why_model')}
                                 >
                                   <Info className="h-3.5 w-3.5" />
                                 </button>
                                 <div className="pointer-events-none absolute right-0 bottom-full z-50 mb-2 hidden w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl group-hover:block text-left whitespace-normal">
                                   <div className="text-[11px] font-semibold text-zinc-900 mb-1.5 flex items-center justify-between">
-                                    <span>{t('analytics.why_model') || 'Why this model?'}</span>
-                                    <span className="text-[10px] font-normal text-zinc-400">{t('analytics.candidate_ranking') || 'Candidate ranking'}</span>
+                                    <span>{t('analytics.why_model')}</span>
+                                    <span className="text-[10px] font-normal text-zinc-400">{t('analytics.candidate_ranking')}</span>
                                   </div>
                                   <ol className="space-y-1.5">
                                     {(q.candidates ?? []).map((candidate, index) => (
@@ -4414,7 +4413,7 @@ export function AnalyticsPage() {
                           <div className="text-[10px] text-zinc-400 truncate max-w-[140px]" title={q.provider_name}>{cleanProvider}</div>
                           {q.fallback_used && (
                             <div className="mt-0.5 inline-flex items-center rounded-md border border-rose-200/80 bg-rose-50 px-1.5 py-0.5 text-[9px] font-medium text-rose-700" title={`Attempted in order: ${(q.attempts ?? []).join(' → ')}`}>
-                              {t('analytics.fallback_badge') || 'Fallback'}
+                              {t('analytics.fallback_badge')}
                             </div>
                           )}
                         </td>
@@ -4444,10 +4443,10 @@ export function AnalyticsPage() {
                     size="sm"
                     direction="up"
                     options={[
-                      { id: '10', name: t('pagination.per_page', { count: 10 }) || '10 / page' },
-                      { id: '15', name: t('pagination.per_page', { count: 15 }) || '15 / page' },
-                      { id: '25', name: t('pagination.per_page', { count: 25 }) || '25 / page' },
-                      { id: '50', name: t('pagination.per_page', { count: 50 }) || '50 / page' },
+                      { id: '10', name: t('pagination.per_page', { count: 10 }) },
+                      { id: '15', name: t('pagination.per_page', { count: 15 }) },
+                      { id: '25', name: t('pagination.per_page', { count: 25 }) },
+                      { id: '50', name: t('pagination.per_page', { count: 50 }) },
                     ]}
                     selected={{ id: String(pageSize), name: t('pagination.per_page', { count: pageSize }) || `${pageSize} / page` }}
                     onChange={(opt) => {
@@ -4464,7 +4463,7 @@ export function AnalyticsPage() {
                   disabled={currentPage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label={t('pagination.prev') || 'Previous page'}
+                  aria-label={t('pagination.prev')}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -4510,7 +4509,7 @@ export function AnalyticsPage() {
                   disabled={currentPage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label={t('pagination.next') || 'Next page'}
+                  aria-label={t('pagination.next')}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -4664,7 +4663,7 @@ export function QualityPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            <h1 className="text-xl font-semibold tracking-tight">{t('quality.title') || 'Quality Assurance'}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t('quality.title')}</h1>
           </div>
           <div className="flex rounded-lg border border-zinc-200 bg-white p-1" role="tablist">
             {(['24h', '7d', '30d', 'all'] as const).map((r) => (
@@ -4676,12 +4675,12 @@ export function QualityPage() {
                 }`}
               >
                 {r === '24h'
-                  ? (t('quality.last_24h') || 'Last 24h')
+                  ? (t('quality.last_24h'))
                   : r === '7d'
-                  ? (t('quality.last_7d') || 'Last 7 days')
+                  ? (t('quality.last_7d'))
                   : r === '30d'
-                  ? (t('quality.last_30d') || 'Last 30 days')
-                  : (t('quality.all_time') || 'All time')}
+                  ? (t('quality.last_30d'))
+                  : (t('quality.all_time'))}
               </button>
             ))}
           </div>
@@ -4693,78 +4692,78 @@ export function QualityPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.preserved_rate') || 'Quality Preserved Rate'}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.preserved_rate')}</div>
               <div className="flex items-center gap-1">
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                  {summary?.quality_preserved_rate != null ? (t('quality.verified_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                  {summary?.quality_preserved_rate != null ? (t('quality.verified_tag')) : (t('quality.unavailable_tag'))}
                 </span>
                 <QualityHelpTip
-                  tip={t('quality.preserved_rate_tip') || 'Share of routed responses whose quality matches the configured flagship baseline, measured by comparative evaluation.'}
-                  unavailable={summary?.quality_preserved_rate == null ? (t('quality.preserved_rate_unavailable_tip') || 'Requires an independent All-Pro baseline to be configured for comparative fidelity measurement.') : undefined}
+                  tip={t('quality.preserved_rate_tip')}
+                  unavailable={summary?.quality_preserved_rate == null ? (t('quality.preserved_rate_unavailable_tip')) : undefined}
                 />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary?.quality_preserved_rate != null ? `${summary.quality_preserved_rate}%` : 'N/A'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('quality.vs_baseline') || 'vs 100% full-Pro baseline'}</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.vs_baseline')}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.shadow_agreement') || 'Shadow Pro Agreement'}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.shadow_agreement')}</div>
               <div className="flex items-center gap-1">
                 <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
-                  {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                  {summary?.shadow_agreement_score != null ? (t('quality.judge_score_tag')) : (t('quality.unavailable_tag'))}
                 </span>
                 <QualityHelpTip
-                  tip={t('quality.shadow_agreement_tip') || 'How often the shadow flagship rerun agrees with the routed model for the same prompt, sampled by the auxiliary judge.'}
-                  unavailable={summary?.shadow_agreement_score == null ? (t('quality.shadow_agreement_unavailable_tip') || 'No active shadow inference runs were sampled in this time period.') : undefined}
+                  tip={t('quality.shadow_agreement_tip')}
+                  unavailable={summary?.shadow_agreement_score == null ? (t('quality.shadow_agreement_unavailable_tip')) : undefined}
                 />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-purple-700">
               {summary?.shadow_agreement_score != null ? `${summary.shadow_agreement_score}%` : 'N/A'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('quality.similarity_sub') || 'Flash vs Pro output similarity'}</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.similarity_sub')}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.correction_rate') || 'User Correction Rate'}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.correction_rate')}</div>
               <div className="flex items-center gap-1">
                 <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 shrink-0 whitespace-nowrap">
-                  {summary?.user_correction_rate != null ? (t('quality.healthy_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                  {summary?.user_correction_rate != null ? (t('quality.healthy_tag')) : (t('quality.unavailable_tag'))}
                 </span>
                 <QualityHelpTip
-                  tip={t('quality.correction_rate_tip') || 'Share of requests followed by a retry or rephrased follow-up turn, a proxy for user dissatisfaction with the first answer.'}
-                  unavailable={summary?.user_correction_rate == null ? (t('quality.correction_rate_unavailable_tip') || 'No completed requests were recorded in this period.') : undefined}
+                  tip={t('quality.correction_rate_tip')}
+                  unavailable={summary?.user_correction_rate == null ? (t('quality.correction_rate_unavailable_tip')) : undefined}
                 />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-zinc-950">
               {summary?.user_correction_rate != null ? `${summary.user_correction_rate}%` : 'N/A'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('quality.correction_sub') || 'Multi-turn retry & rephrase rate'}</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.correction_sub')}</div>
           </div>
 
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 truncate">{t('quality.schema_compliance')}</div>
               <div className="flex items-center gap-1">
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
-                  {summary?.schema_compliance_rate != null ? (t('quality.valid_tag') || 'Observed') : (t('quality.unavailable_tag') || 'Unavailable')}
+                  {summary?.schema_compliance_rate != null ? (t('quality.valid_tag')) : (t('quality.unavailable_tag'))}
                 </span>
                 <QualityHelpTip
-                  tip={t('quality.schema_compliance_tip') || 'Share of tool-call and structured-output requests that returned valid, schema-compliant JSON.'}
-                  unavailable={summary?.schema_compliance_rate == null ? (t('quality.schema_compliance_unavailable_tip') || 'No requests containing tool calls or structured JSON schemas were recorded in this period.') : undefined}
+                  tip={t('quality.schema_compliance_tip')}
+                  unavailable={summary?.schema_compliance_rate == null ? (t('quality.schema_compliance_unavailable_tip')) : undefined}
                 />
               </div>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-600">
               {summary?.schema_compliance_rate != null ? `${summary.schema_compliance_rate}%` : 'N/A'}
             </div>
-            <div className="mt-2 text-xs text-zinc-400">{t('quality.schema_sub') || 'Structured JSON & tool outputs'}</div>
+            <div className="mt-2 text-xs text-zinc-400">{t('quality.schema_sub')}</div>
           </div>
         </div>
 
@@ -4774,7 +4773,7 @@ export function QualityPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
                 <Database className="h-4 w-4 text-sky-600" />
-                {t('quality.session_cache_title') || 'Session Cache Health'}
+                {t('quality.session_cache_title')}
               </div>
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border shrink-0 ${
@@ -4782,11 +4781,11 @@ export function QualityPage() {
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 }`}
-                title={t('quality.session_cache_tip') || 'Cache hit ratio per multi-turn session; a low ratio means the provider-side prefix cache is not being retained.'}
+                title={t('quality.session_cache_tip')}
               >
                 {sessionHealth.sessions_collapsed > 0
                   ? (t('quality.session_cache_collapsed', { count: sessionHealth.sessions_collapsed }) || `${sessionHealth.sessions_collapsed} collapsed`)
-                  : (t('quality.session_cache_healthy') || 'All healthy')}
+                  : (t('quality.session_cache_healthy'))}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-500">
@@ -4802,9 +4801,9 @@ export function QualityPage() {
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.ab_benchmark_title') || 'Routing Comparison'}</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.ab_benchmark_title')}</h2>
               <p className="mt-0.5 text-xs text-zinc-400">
-                {t('quality.ab_benchmark_subtitle') || 'Direct evidence comparing 100% All-Pro Flagship allocation against SmartGate Intelligent Routing.'}
+                {t('quality.ab_benchmark_subtitle')}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -4814,7 +4813,7 @@ export function QualityPage() {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-950 hover:text-zinc-950 transition-colors"
               >
                 <Settings2 className="h-3.5 w-3.5" />
-                <span>{baseline ? (t('usage.change_baseline') || 'Change baseline') : (t('usage.config_baseline') || 'Configure baseline')}</span>
+                <span>{baseline ? (t('usage.change_baseline')) : (t('usage.config_baseline'))}</span>
               </button>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -4829,43 +4828,43 @@ export function QualityPage() {
               <div>
                 <div className="flex items-start justify-between border-b border-zinc-200/80 pb-2">
                   <div>
-                    <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title') || 'Control: All-Pro Baseline'}</span>
+                    <span className="text-xs font-semibold text-zinc-700">{t('quality.control_title')}</span>
                     {baseline && (
                       <div className="mt-0.5 text-[11px] text-zinc-500 truncate max-w-[180px]" title={baseline.name}>
                         {baseline.name}
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] font-medium text-zinc-400">{baseline ? (t('quality.flagship_tag') || 'Configured baseline') : (t('quality.not_configured_tag') || 'Not configured')}</span>
+                  <span className="text-[10px] font-medium text-zinc-400">{baseline ? (t('quality.flagship_tag')) : (t('quality.not_configured_tag'))}</span>
                 </div>
                 {baseline ? (
                   <div className="mt-2.5 grid grid-cols-2 gap-2.5 text-xs">
                     <div>
-                      <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req')}</div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-900 font-mono">
                         {baseline.cost_per_req != null ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.p90_latency')}</div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-900 font-mono">
                         {baseline.p90_latency_ms != null ? `${(baseline.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-zinc-400 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.schema_compliance')}</div>
                       <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.schema_compliance_rate != null ? `${baseline.schema_compliance_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-zinc-400 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.task_success')}</div>
                       <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.task_success_rate != null ? `${baseline.task_success_rate}%` : 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
+                      <div className="text-zinc-400 text-[11px]">{t('quality.followup_correction')}</div>
                       <div className="mt-0.5 text-xs font-semibold text-zinc-800">
                         {baseline.correction_rate != null ? `${baseline.correction_rate}%` : 'N/A'}
                       </div>
@@ -4874,10 +4873,10 @@ export function QualityPage() {
                 ) : (
                   <div className="mt-3 text-center py-3 px-2 rounded-lg border border-dashed border-zinc-200 bg-white/70">
                     <p className="text-xs text-zinc-600 font-medium">
-                      {t('quality.no_baseline_guide') || 'No comparison baseline is configured yet.'}
+                      {t('quality.no_baseline_guide')}
                     </p>
                     <p className="mt-0.5 text-[11px] text-zinc-400">
-                      {t('quality.no_baseline_guide_desc') || 'Select a flagship model (e.g. Pro) to enable real-time cost savings and latency speedup calculation.'}
+                      {t('quality.no_baseline_guide_desc')}
                     </p>
                     <button
                       type="button"
@@ -4885,7 +4884,7 @@ export function QualityPage() {
                       className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 transition-colors"
                     >
                       <Settings2 className="h-3 w-3" />
-                      <span>{t('quality.configure_baseline_now') || 'Configure Baseline Now'}</span>
+                      <span>{t('quality.configure_baseline_now')}</span>
                     </button>
                   </div>
                 )}
@@ -4896,12 +4895,12 @@ export function QualityPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3.5 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
-                  <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title') || 'Treatment: SmartGate Intelligent Routing'}</span>
-                  <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag') || 'Observed routing'}</span>
+                  <span className="text-xs font-semibold text-emerald-900">{t('quality.treatment_title')}</span>
+                  <span className="text-[10px] font-semibold text-emerald-700">{t('quality.pareto_tag')}</span>
                 </div>
                 <div className="mt-2.5 grid grid-cols-2 gap-2.5 text-xs">
                   <div>
-                    <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req') || 'Avg Cost / Request'}</div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-sm font-bold text-emerald-700 font-mono">
                         {routing?.cost_per_req != null ? `$${routing.cost_per_req.toFixed(4)}` : 'N/A'}
@@ -4912,18 +4911,18 @@ export function QualityPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency') || 'P90 Latency'}</div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.p90_latency')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-sm font-bold text-emerald-700 font-mono">
                         {routing?.p90_latency_ms != null ? `${(routing.p90_latency_ms / 1000).toFixed(1)}s` : 'N/A'}
                       </span>
                       <span className="text-[10px] font-semibold text-emerald-600">
-                        {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' }) || 'faster'})` : ''}
+                        {routing?.speedup_pct != null ? `(${routing.speedup_pct}% ${t('quality.faster', { pct: '' })})` : ''}
                       </span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success') || 'Task Success Rate'}</div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.task_success')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-xs font-semibold text-zinc-900">
                         {routing?.task_success_rate != null ? `${routing.task_success_rate}%` : 'N/A'}
@@ -4932,7 +4931,7 @@ export function QualityPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction') || 'Follow-up Correction'}</div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.followup_correction')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-xs font-semibold text-zinc-900">
                         {routing?.correction_rate != null ? `${routing.correction_rate}%` : 'N/A'}
@@ -4941,7 +4940,7 @@ export function QualityPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-emerald-800/70 text-[11px]">{t('quality.schema_compliance') || 'Schema Compliance'}</div>
+                    <div className="text-emerald-800/70 text-[11px]">{t('quality.schema_compliance')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-xs font-semibold text-zinc-900">
                         {routing?.schema_compliance_rate != null ? `${routing.schema_compliance_rate}%` : 'N/A'}
@@ -4974,8 +4973,8 @@ export function QualityPage() {
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
           <div className="p-5 pb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.verdict_logs_title') || 'Quality Feedback & Verification Logs'}</h2>
-              <p className="mt-0.5 text-xs text-zinc-400">{t('quality.verdict_logs_subtitle') || 'Live stream of verification sources, shadow judge scores, and auto-escalations.'}</p>
+              <h2 className="text-sm font-semibold text-zinc-900">{t('quality.verdict_logs_title')}</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">{t('quality.verdict_logs_subtitle')}</p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50/70 p-1">
               {(['all', 'verified', 'schema_valid', 'escalated', 'completed', 'error'] as const).map((v) => (
@@ -4987,16 +4986,16 @@ export function QualityPage() {
                   }`}
                 >
                   {v === 'all'
-                    ? (t('quality.all_verdicts') || 'All Verdicts')
+                    ? (t('quality.all_verdicts'))
                     : v === 'verified'
-                    ? (t('quality.verdict_verified') || 'Verified')
+                    ? (t('quality.verdict_verified'))
                     : v === 'schema_valid'
-                    ? (t('quality.verdict_schema') || 'Schema Valid')
+                    ? (t('quality.verdict_schema'))
                     : v === 'escalated'
-                    ? (t('quality.verdict_escalated') || 'Escalated')
+                    ? (t('quality.verdict_escalated'))
                     : v === 'error'
-                    ? (t('quality.verdict_error') || 'Error')
-                    : (t('quality.verdict_completed') || 'Completed')}
+                    ? (t('quality.verdict_error'))
+                    : (t('quality.verdict_completed'))}
                 </button>
               ))}
             </div>
@@ -5005,19 +5004,19 @@ export function QualityPage() {
           <div className="border-t border-zinc-100 overflow-x-auto min-h-[420px]">
             {!paginatedRecords.length ? (
               <div className="py-16 text-center text-sm text-zinc-500">
-                {loading ? (t('common.loading') || 'Loading…') : (t('quality.no_records') || 'No quality records found for this period.')}
+                {loading ? (t('common.loading')) : (t('quality.no_records'))}
               </div>
             ) : (
               <table className="w-full min-w-[920px] text-left text-xs divide-y divide-zinc-100">
                 <thead className="bg-zinc-50/50">
                   <tr className="text-zinc-500">
-                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('quality.col_time_service') || 'Time / Service'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('quality.col_prompt') || 'Prompt / User Intent'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('quality.col_model') || 'Routed Model'}</th>
-                    <th className="py-2.5 px-3 font-medium min-w-[160px]">{t('quality.col_verdict') || 'Quality Verdict'}</th>
-                    <th className="py-2.5 px-3 font-medium w-[140px]">{t('quality.col_source') || 'Feedback Source'}</th>
-                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('quality.col_tokens_latency') || 'Tokens / Latency'}</th>
-                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('quality.col_cost') || 'Cost'}</th>
+                    <th className="py-2.5 px-4 font-medium w-[140px]">{t('quality.col_time_service')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[180px] max-w-[240px]">{t('quality.col_prompt')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[150px]">{t('quality.col_model')}</th>
+                    <th className="py-2.5 px-3 font-medium min-w-[160px]">{t('quality.col_verdict')}</th>
+                    <th className="py-2.5 px-3 font-medium w-[140px]">{t('quality.col_source')}</th>
+                    <th className="py-2.5 px-3 text-right font-medium w-[100px]">{t('quality.col_tokens_latency')}</th>
+                    <th className="py-2.5 px-4 text-right font-medium w-[80px]">{t('quality.col_cost')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 bg-white">
@@ -5053,12 +5052,12 @@ export function QualityPage() {
                             title={r.verdict_desc}
                           >
                             {r.verdict === 'escalated'
-                              ? `🔄 ${t('quality.verdict_escalated') || 'Escalated'}`
+                              ? `🔄 ${t('quality.verdict_escalated')}`
                               : r.verdict === 'schema_valid'
-                              ? `🛠️ ${t('quality.verdict_schema') || 'Schema Valid'}`
+                              ? `🛠️ ${t('quality.verdict_schema')}`
                               : r.verdict === 'error'
-                              ? `⚠️ ${t('quality.verdict_error') || 'Error'}`
-                              : `✓ ${t('quality.verdict_completed') || 'Completed'}`}
+                              ? `⚠️ ${t('quality.verdict_error')}`
+                              : `✓ ${t('quality.verdict_completed')}`}
                           </span>
                         </td>
                         <td className="py-3 px-3 align-middle whitespace-nowrap">
@@ -5092,10 +5091,10 @@ export function QualityPage() {
                     size="sm"
                     direction="up"
                     options={[
-                      { id: '10', name: t('pagination.per_page', { count: 10 }) || '10 / page' },
-                      { id: '15', name: t('pagination.per_page', { count: 15 }) || '15 / page' },
-                      { id: '25', name: t('pagination.per_page', { count: 25 }) || '25 / page' },
-                      { id: '50', name: t('pagination.per_page', { count: 50 }) || '50 / page' },
+                      { id: '10', name: t('pagination.per_page', { count: 10 }) },
+                      { id: '15', name: t('pagination.per_page', { count: 15 }) },
+                      { id: '25', name: t('pagination.per_page', { count: 25 }) },
+                      { id: '50', name: t('pagination.per_page', { count: 50 }) },
                     ]}
                     selected={{ id: String(pageSize), name: t('pagination.per_page', { count: pageSize }) || `${pageSize} / page` }}
                     onChange={(opt) => {
@@ -5112,7 +5111,7 @@ export function QualityPage() {
                   disabled={currentPage <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label={t('pagination.prev') || 'Previous page'}
+                  aria-label={t('pagination.prev')}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -5158,7 +5157,7 @@ export function QualityPage() {
                   disabled={currentPage >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   className="inline-flex h-8 w-8 min-w-[32px] max-w-[32px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-40 disabled:pointer-events-none"
-                  aria-label={t('pagination.next') || 'Next page'}
+                  aria-label={t('pagination.next')}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -5197,10 +5196,10 @@ function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: ()
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true" aria-labelledby="profile-title">
     <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-      <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">{t('profile.title') || 'Edit profile'}</h2><p className="mt-1 text-sm text-zinc-500">{t('profile.subtitle') || 'Update your account information.'}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>
-      <div className="mt-6 space-y-5"><Field label={t('profile.email') || 'Email'} value={updatedEmail} onChange={setUpdatedEmail} type="email" /><Field label={t('profile.new_password') || 'New password (optional)'} value={newPassword} onChange={setNewPassword} type="password" required={false} placeholder={t('profile.new_password_placeholder') || 'Leave blank to keep your password'} /><Field label={t('profile.current_password') || 'Current password'} value={currentPassword} onChange={setCurrentPassword} type="password" placeholder={t('profile.current_password_placeholder') || 'Required to save changes'} /></div>
+      <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">{t('profile.title')}</h2><p className="mt-1 text-sm text-zinc-500">{t('profile.subtitle')}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>
+      <div className="mt-6 space-y-5"><Field label={t('profile.email')} value={updatedEmail} onChange={setUpdatedEmail} type="email" /><Field label={t('profile.new_password')} value={newPassword} onChange={setNewPassword} type="password" required={false} placeholder={t('profile.new_password_placeholder')} /><Field label={t('profile.current_password')} value={currentPassword} onChange={setCurrentPassword} type="password" placeholder={t('profile.current_password_placeholder')} /></div>
       {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
-      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel') || 'Cancel'}</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving') || 'Saving…') : (t('common.save') || 'Save changes')}</button></div>
+      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel')}</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving')) : (t('common.save'))}</button></div>
     </form>
   </div>
 }

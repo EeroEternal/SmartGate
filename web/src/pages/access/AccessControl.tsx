@@ -3,6 +3,7 @@ import { Plus, X, Key, FolderPlus, Link2, Pencil } from 'lucide-react'
 import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
 import { useDialog } from '../../components/Dialog'
+import { useI18n } from '../../lib/i18n'
 import { formatMaskedKey } from '../saas/SaasPages'
 
 interface Project {
@@ -41,11 +42,12 @@ interface Grant {
   virtual_model_name: string
 }
 
-function formatLimit(value?: number | null) {
-  return value == null ? 'Unlimited' : String(value)
+function formatLimit(value: number | null | undefined, unlimited: string) {
+  return value == null ? unlimited : String(value)
 }
 
 export default function AccessControl() {
+  const { t } = useI18n()
   const [orgs, setOrgs] = useState<Org[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [keys, setKeys] = useState<ApiKey[]>([])
@@ -186,7 +188,7 @@ export default function AccessControl() {
   }
 
   const handleRevoke = async (grant: Grant) => {
-    if (!await showConfirm(`Revoke ${grant.virtual_model_name} from ${grant.project_name}?`, 'Revoke model access?')) return
+    if (!await showConfirm(t('admin.revoke_grant_msg', { model: grant.virtual_model_name, project: grant.project_name }), t('admin.revoke_grant_title'))) return
     try {
       await adminFetch('/api/admin/projects/revoke', {
         method: 'POST',
@@ -247,9 +249,9 @@ export default function AccessControl() {
       {dialog}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900">Access Control</h2>
+          <h2 className="text-2xl font-bold text-zinc-900">{t('admin.access_title')}</h2>
           <p className="text-sm text-zinc-500 mt-1">
-            Manage projects, API keys, model grants, and request limits.
+            {t('admin.access_subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -257,13 +259,13 @@ export default function AccessControl() {
             onClick={() => setIsGrantModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-zinc-300 rounded-md hover:bg-zinc-50"
           >
-            <Link2 className="w-4 h-4" /> Grant Model
+            <Link2 className="w-4 h-4" /> {t('admin.grant_model')}
           </button>
           <button
             onClick={() => setIsProjectModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-zinc-300 rounded-md hover:bg-zinc-50"
           >
-            <FolderPlus className="w-4 h-4" /> New Project
+            <FolderPlus className="w-4 h-4" /> {t('admin.new_project')}
           </button>
           <button
             onClick={() => {
@@ -272,41 +274,41 @@ export default function AccessControl() {
             }}
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-zinc-800"
           >
-            <Key className="w-4 h-4" /> Issue API Key
+            <Key className="w-4 h-4" /> {t('admin.issue_api_key')}
           </button>
         </div>
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Projects</div>
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">{t('admin.projects')}</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
             <tr>
-              <th className="px-6 py-3">Name</th>
-              <th className="px-6 py-3">RPM Limit</th>
-              <th className="px-6 py-3">Concurrency</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <th className="px-6 py-3">{t('common.name')}</th>
+              <th className="px-6 py-3">{t('admin.rpm_limit')}</th>
+              <th className="px-6 py-3">{t('admin.concurrency')}</th>
+              <th className="px-6 py-3 text-right">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {projects.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
-                  No projects yet. Create one to start issuing keys.
+                  {t('admin.no_projects')}
                 </td>
               </tr>
             ) : (
               projects.map((project) => (
                 <tr key={project.id}>
                   <td className="px-6 py-3 font-medium">{project.name}</td>
-                  <td className="px-6 py-3 font-mono">{formatLimit(project.rpm_limit)}</td>
-                  <td className="px-6 py-3 font-mono">{formatLimit(project.concurrency_limit)}</td>
+                  <td className="px-6 py-3 font-mono">{formatLimit(project.rpm_limit, t('admin.unlimited'))}</td>
+                  <td className="px-6 py-3 font-mono">{formatLimit(project.concurrency_limit, t('admin.unlimited'))}</td>
                   <td className="px-6 py-3 text-right">
                     <button
                       onClick={() => openQuotaEditor('project', project)}
                       className="inline-flex items-center gap-1 text-zinc-500 hover:text-black"
                     >
-                      <Pencil className="w-3.5 h-3.5" /> Edit Limits
+                      <Pencil className="w-3.5 h-3.5" /> {t('admin.edit_limits')}
                     </button>
                   </td>
                 </tr>
@@ -317,20 +319,20 @@ export default function AccessControl() {
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-zinc-200 font-bold">Model Grants</div>
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">{t('admin.model_grants')}</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
             <tr>
-              <th className="px-6 py-3">Project</th>
-              <th className="px-6 py-3">Virtual Model</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <th className="px-6 py-3">{t('admin.project')}</th>
+              <th className="px-6 py-3">{t('admin.virtual_model')}</th>
+              <th className="px-6 py-3 text-right">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {grants.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-6 py-8 text-center text-zinc-500">
-                  No grants yet. Grant a virtual model so project keys can call it.
+                  {t('admin.no_grants')}
                 </td>
               </tr>
             ) : (
@@ -343,7 +345,7 @@ export default function AccessControl() {
                       onClick={() => handleRevoke(grant)}
                       className="text-rose-600 hover:text-rose-800 font-medium"
                     >
-                      Revoke
+                      {t('keys.revoke')}
                     </button>
                   </td>
                 </tr>
@@ -354,23 +356,23 @@ export default function AccessControl() {
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-zinc-200 font-bold">API Keys</div>
+        <div className="px-6 py-4 border-b border-zinc-200 font-bold">{t('admin.api_keys')}</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-600 border-b border-zinc-200">
             <tr>
-              <th className="px-6 py-3">Name</th>
-              <th className="px-6 py-3">Project</th>
-              <th className="px-6 py-3">Prefix</th>
-              <th className="px-6 py-3">RPM</th>
-              <th className="px-6 py-3">Concurrency</th>
-              <th className="px-6 py-3">Created</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <th className="px-6 py-3">{t('common.name')}</th>
+              <th className="px-6 py-3">{t('admin.project')}</th>
+              <th className="px-6 py-3">{t('admin.prefix')}</th>
+              <th className="px-6 py-3">{t('admin.rpm')}</th>
+              <th className="px-6 py-3">{t('admin.concurrency')}</th>
+              <th className="px-6 py-3">{t('admin.created')}</th>
+              <th className="px-6 py-3 text-right">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {keys.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">No API keys issued yet.</td>
+                <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">{t('admin.no_keys')}</td>
               </tr>
             ) : (
               keys.map((key) => (
@@ -378,15 +380,15 @@ export default function AccessControl() {
                   <td className="px-6 py-3">{key.name}</td>
                   <td className="px-6 py-3">{projectName(key.project_id)}</td>
                   <td className="px-6 py-3 font-mono">{formatMaskedKey(key.key_prefix)}</td>
-                  <td className="px-6 py-3 font-mono">{formatLimit(key.rpm_limit)}</td>
-                  <td className="px-6 py-3 font-mono">{formatLimit(key.concurrency_limit)}</td>
+                  <td className="px-6 py-3 font-mono">{formatLimit(key.rpm_limit, t('admin.unlimited'))}</td>
+                  <td className="px-6 py-3 font-mono">{formatLimit(key.concurrency_limit, t('admin.unlimited'))}</td>
                   <td className="px-6 py-3">{new Date(key.created_at).toLocaleDateString()}</td>
                   <td className="px-6 py-3 text-right">
                     <button
                       onClick={() => openQuotaEditor('key', key)}
                       className="inline-flex items-center gap-1 text-zinc-500 hover:text-black"
                     >
-                      <Pencil className="w-3.5 h-3.5" /> Edit Limits
+                      <Pencil className="w-3.5 h-3.5" /> {t('admin.edit_limits')}
                     </button>
                   </td>
                 </tr>
@@ -400,7 +402,7 @@ export default function AccessControl() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-bold">Create Project</h3>
+              <h3 className="font-bold">{t('admin.create_project')}</h3>
               <button onClick={() => setIsProjectModalOpen(false)}>
                 <X className="w-4 h-4" />
               </button>
@@ -408,14 +410,14 @@ export default function AccessControl() {
             <form onSubmit={handleCreateProject} className="p-6 space-y-4">
               {orgs.length > 0 && selectedOrg && (
                 <Select
-                  label="Organization"
+                  label={t('admin.organization')}
                   options={orgs.map((o) => ({ id: o.id, name: o.name }))}
                   selected={selectedOrg}
                   onChange={(opt) => setSelectedOrg({ id: String(opt.id), name: opt.name })}
                 />
               )}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Project Name</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.project_name')}</label>
                 <input
                   required
                   className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
@@ -425,22 +427,22 @@ export default function AccessControl() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">RPM Limit</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.rpm_limit')}</label>
                   <input
                     type="number"
                     min="1"
-                    placeholder="Unlimited"
+                    placeholder={t('admin.unlimited')}
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                     value={projectForm.rpm_limit}
                     onChange={(e) => setProjectForm({ ...projectForm, rpm_limit: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Concurrency</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.concurrency')}</label>
                   <input
                     type="number"
                     min="1"
-                    placeholder="Unlimited"
+                    placeholder={t('admin.unlimited')}
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                     value={projectForm.concurrency_limit}
                     onChange={(e) =>
@@ -450,7 +452,7 @@ export default function AccessControl() {
                 </div>
               </div>
               <button type="submit" disabled={submitting} className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50">
-                {submitting ? 'Creating...' : 'Create Project'}
+                {submitting ? t('common.creating') : t('admin.create_project')}
               </button>
             </form>
           </div>
@@ -461,7 +463,7 @@ export default function AccessControl() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-bold">Grant Virtual Model</h3>
+              <h3 className="font-bold">{t('admin.grant_virtual_model')}</h3>
               <button onClick={() => setIsGrantModalOpen(false)}>
                 <X className="w-4 h-4" />
               </button>
@@ -469,20 +471,20 @@ export default function AccessControl() {
             <form onSubmit={handleGrant} className="p-6 space-y-4">
               {projects.length === 0 || models.length === 0 ? (
                 <p className="text-sm text-zinc-500">
-                  Need at least one project and one virtual model before granting access.
+                  {t('admin.grant_need_both')}
                 </p>
               ) : (
                 <>
                   <Select
-                    label="Project"
+                    label={t('admin.project')}
                     options={projects.map((p) => ({ id: p.id, name: p.name }))}
-                    selected={selectedProject || { id: '', name: 'Select project...' }}
+                    selected={selectedProject || { id: '', name: t('admin.select_project') }}
                     onChange={(opt) => setSelectedProject({ id: String(opt.id), name: opt.name })}
                   />
                   <Select
-                    label="Virtual Model"
+                    label={t('admin.virtual_model')}
                     options={models.map((m) => ({ id: m.id, name: m.name }))}
-                    selected={selectedModel || { id: '', name: 'Select model...' }}
+                    selected={selectedModel || { id: '', name: t('admin.select_model') }}
                     onChange={(opt) => setSelectedModel({ id: String(opt.id), name: opt.name })}
                   />
                   <button
@@ -490,7 +492,7 @@ export default function AccessControl() {
                     disabled={submitting || !selectedProject?.id || !selectedModel?.id}
                     className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
                   >
-                    {submitting ? 'Granting...' : 'Grant Access'}
+                    {submitting ? t('admin.granting') : t('admin.grant_access')}
                   </button>
                 </>
               )}
@@ -503,7 +505,7 @@ export default function AccessControl() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-bold">Issue New API Key</h3>
+              <h3 className="font-bold">{t('admin.issue_new_key')}</h3>
               <button
                 onClick={() => {
                   setIsKeyModalOpen(false)
@@ -518,25 +520,25 @@ export default function AccessControl() {
                 <div className="p-4 bg-zinc-100 rounded-md font-mono text-xs break-all border border-zinc-200">
                   {newKey.key}
                 </div>
-                <p className="text-sm text-zinc-500">Copy this key now. It will not be shown again.</p>
+                <p className="text-sm text-zinc-500">{t('admin.copy_key_now')}</p>
                 <button className="w-full bg-black text-white py-2 rounded-md" onClick={() => setIsKeyModalOpen(false)}>
-                  Done
+                  {t('keys.done')}
                 </button>
               </div>
             ) : (
               <form onSubmit={handleCreateKey} className="p-6 space-y-4">
                 {projects.length === 0 ? (
-                  <p className="text-sm text-zinc-500">Create a project first before issuing a key.</p>
+                  <p className="text-sm text-zinc-500">{t('admin.create_project_first')}</p>
                 ) : (
                   <>
                     <Select
-                      label="Project"
+                      label={t('admin.project')}
                       options={projects.map((p) => ({ id: p.id, name: p.name }))}
-                      selected={selectedProject || { id: '', name: 'Select project...' }}
+                      selected={selectedProject || { id: '', name: t('admin.select_project') }}
                       onChange={(opt) => setSelectedProject({ id: String(opt.id), name: opt.name })}
                     />
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 mb-1">Key Name</label>
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.key_name')}</label>
                       <input
                         required
                         className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm"
@@ -546,22 +548,22 @@ export default function AccessControl() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 mb-1">RPM Limit</label>
+                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.rpm_limit')}</label>
                         <input
                           type="number"
                           min="1"
-                          placeholder="Unlimited"
+                          placeholder={t('admin.unlimited')}
                           className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                           value={keyForm.rpm_limit}
                           onChange={(e) => setKeyForm({ ...keyForm, rpm_limit: e.target.value })}
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 mb-1">Concurrency</label>
+                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.concurrency')}</label>
                         <input
                           type="number"
                           min="1"
-                          placeholder="Unlimited"
+                          placeholder={t('admin.unlimited')}
                           className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                           value={keyForm.concurrency_limit}
                           onChange={(e) => setKeyForm({ ...keyForm, concurrency_limit: e.target.value })}
@@ -573,7 +575,7 @@ export default function AccessControl() {
                       disabled={submitting || !selectedProject?.id}
                       className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50"
                     >
-                      {submitting ? 'Generating...' : 'Generate'}
+                      {submitting ? t('admin.generating') : t('admin.generate')}
                     </button>
                   </>
                 )}
@@ -588,7 +590,7 @@ export default function AccessControl() {
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">
-                Edit Limits: {quotaTarget.name}
+                {t('admin.edit_limits_for', { name: quotaTarget.name })}
               </h3>
               <button onClick={() => setQuotaTarget(null)}>
                 <X className="w-4 h-4" />
@@ -597,31 +599,31 @@ export default function AccessControl() {
             <form onSubmit={handleSaveQuota} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">RPM Limit</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.rpm_limit')}</label>
                   <input
                     type="number"
                     min="1"
-                    placeholder="Unlimited"
+                    placeholder={t('admin.unlimited')}
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                     value={quotaForm.rpm_limit}
                     onChange={(e) => setQuotaForm({ ...quotaForm, rpm_limit: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Concurrency</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{t('admin.concurrency')}</label>
                   <input
                     type="number"
                     min="1"
-                    placeholder="Unlimited"
+                    placeholder={t('admin.unlimited')}
                     className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm font-mono"
                     value={quotaForm.concurrency_limit}
                     onChange={(e) => setQuotaForm({ ...quotaForm, concurrency_limit: e.target.value })}
                   />
                 </div>
               </div>
-              <p className="text-xs text-zinc-500">Leave blank for unlimited.</p>
+              <p className="text-xs text-zinc-500">{t('admin.leave_blank_unlimited')}</p>
               <button type="submit" disabled={submitting} className="w-full bg-black text-white py-2 rounded-md disabled:opacity-50">
-                {submitting ? 'Saving...' : 'Save Limits'}
+                {submitting ? t('common.saving') : t('admin.save_limits')}
               </button>
             </form>
           </div>

@@ -503,6 +503,7 @@ async fn chat_proxy(
         if let Err(error) = state
             .warm_store
             .validate_virtual_model(key, Some(&virtual_model.id))
+            .await
         {
             return warm_error(warm_status(&error), error);
         }
@@ -598,15 +599,14 @@ async fn chat_proxy(
                 }
             }
 
-            let response = unigateway_sdk::protocol::ProtocolHttpResponse::json(
-                status,
-                match body {
-                    unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => json,
-                    unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(_) => {
-                        return (StatusCode::OK, Json(serde_json::Value::Null)).into_response();
-                    }
-                },
-            );
+            let response = match body {
+                unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => {
+                    unigateway_sdk::protocol::ProtocolHttpResponse::json(status, json)
+                }
+                unigateway_sdk::protocol::ProtocolResponseBody::ServerSentEvents(stream) => {
+                    unigateway_sdk::protocol::ProtocolHttpResponse::ok_sse(stream)
+                }
+            };
             let mut resp = protocol_response_to_axum(response);
             for (name, value) in budget_headers(&budget, spent, limit) {
                 if let Some(name) = name {

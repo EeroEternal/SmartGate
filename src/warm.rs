@@ -4,7 +4,7 @@
 //! does not own Agent transcripts, compaction, or inference-engine KV blocks.
 
 use axum::http::HeaderMap;
-use redis::{Commands, Script};
+use redis::{AsyncCommands, Script};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::hash_map::DefaultHasher;
@@ -274,7 +274,6 @@ pub struct WarmStore {
     virtual_models: Mutex<HashMap<SessionKey, Option<String>>>,
     binding_store: Option<Arc<RedisBindingStore>>,
     redis_key_prefix: String,
-    publish_lock: Mutex<()>,
     metrics: Arc<WarmMetrics>,
 }
 
@@ -319,6 +318,7 @@ impl WarmMetrics {
 
 struct RedisBindingStore {
     client: redis::Client,
+    connection: tokio::sync::OnceCell<redis::aio::ConnectionManager>,
     key_prefix: String,
     idle_ttl: Option<Duration>,
     max_lifetime: Option<Duration>,
@@ -334,6 +334,7 @@ impl RedisBindingStore {
     ) -> anyhow::Result<Self> {
         Ok(Self {
             client: redis::Client::open(redis_url)?,
+            connection: tokio::sync::OnceCell::new(),
             key_prefix: format!("{}binding:", base_prefix),
             idle_ttl: lifetime.idle_ttl,
             max_lifetime: lifetime.max_lifetime,
@@ -386,6 +387,19 @@ return result"#,
         format!("{}{}", self.key_prefix, gateway_key(key).storage_key())
     }
 
+    /// Returns the shared async connection, establishing it on first use so
+    /// store construction stays synchronous. ConnectionManager is cloneable and
+    /// multiplexes commands on a single task, so no external lock is needed.
+    async fn connection(&self) -> anyhow::Result<&redis::aio::ConnectionManager> {
+        self.connection
+            .get_or_try_init(|| async {
+                redis::aio::ConnectionManager::new(self.client.clone())
+                    .await
+                    .map_err(|error| anyhow::anyhow!("failed to open Redis connection: {error}"))
+            })
+            .await
+    }
+
     fn now() -> anyhow::Result<i64> {
         Ok(SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -393,15 +407,15 @@ return result"#,
             .as_secs() as i64)
     }
 
-    fn get(
+    async fn get(
         &self,
         key: &SessionKey,
         expected_epoch: Option<u64>,
         reject_stale_epoch: bool,
     ) -> anyhow::Result<Option<String>> {
         let redis_key = self.key(key);
-        let mut connection = self.client.get_connection()?;
-        let fields: Vec<(String, String)> = connection.hgetall(&redis_key)?;
+        let mut connection = self.connection().await?.clone();
+        let fields: Vec<(String, String)> = connection.hgetall(&redis_key).await?;
         if fields.is_empty() {
             return Ok(None);
         }
@@ -415,7 +429,7 @@ return result"#,
             .max_lifetime
             .is_some_and(|lifetime| now.saturating_sub(created_at) >= lifetime.as_secs() as i64)
         {
-            let _: i32 = connection.del(&redis_key)?;
+            let _: i32 = connection.del(&redis_key).await?;
             return Ok(None);
         }
         let virtual_model_id = values.get("virtual_model_id").cloned();
@@ -424,7 +438,7 @@ return result"#,
             .and_then(|value| value.parse::<u64>().ok());
         if binding_epoch.is_none() {
             if let Some(epoch) = expected_epoch {
-                let _: () = connection.hset(&redis_key, "epoch", epoch)?;
+                let _: () = connection.hset(&redis_key, "epoch", epoch).await?;
             }
         }
         if reject_stale_epoch
@@ -436,21 +450,23 @@ return result"#,
         }
         if virtual_model_id.is_some() {
             if let Some(ttl) = self.idle_ttl {
-                let _: bool = connection.expire(&redis_key, ttl.as_secs().max(1) as i64)?;
+                let _: bool = connection
+                    .expire(&redis_key, ttl.as_secs().max(1) as i64)
+                    .await?;
             }
-            let _: () = connection.hset(&redis_key, "last_accessed_at", now)?;
+            let _: () = connection.hset(&redis_key, "last_accessed_at", now).await?;
         }
         Ok(virtual_model_id)
     }
 
-    fn publish(
+    async fn publish(
         &self,
         key: &SessionKey,
         prefix_key: &str,
         prefix: &SessionPrefix,
         virtual_model_id: Option<&str>,
     ) -> anyhow::Result<PublishResult> {
-        let mut connection = self.client.get_connection()?;
+        let mut connection = self.connection().await?.clone();
         let now = Self::now()?;
         let idle_ttl = self.idle_ttl.map_or(0, |value| value.as_secs().max(1));
         let max_lifetime = self.max_lifetime.map_or(0, |value| value.as_secs().max(1));
@@ -465,7 +481,8 @@ return result"#,
             .arg(idle_ttl)
             .arg(max_lifetime)
             .arg(virtual_model_id.unwrap_or_default())
-            .invoke(&mut connection)?;
+            .invoke_async(&mut connection)
+            .await?;
         match result {
             0 => Ok(PublishResult::Created),
             1 => Ok(PublishResult::Replaced),
@@ -477,18 +494,19 @@ return result"#,
         }
     }
 
-    fn delete(&self, key: &SessionKey, prefix_key: &str) -> anyhow::Result<()> {
-        let mut connection = self.client.get_connection()?;
+    async fn delete(&self, key: &SessionKey, prefix_key: &str) -> anyhow::Result<()> {
+        let mut connection = self.connection().await?.clone();
         let _: i32 = self
             .delete_script
             .key(prefix_key)
             .key(self.key(key))
-            .invoke(&mut connection)?;
+            .invoke_async(&mut connection)
+            .await?;
         Ok(())
     }
 
-    fn purge_expired(&self) -> anyhow::Result<usize> {
-        let mut connection = self.client.get_connection()?;
+    async fn purge_expired(&self) -> anyhow::Result<usize> {
+        let mut connection = self.connection().await?.clone();
         let pattern = format!("{}*", self.key_prefix);
         let mut cursor = 0u64;
         let now = Self::now()?;
@@ -500,9 +518,10 @@ return result"#,
                 .arg(&pattern)
                 .arg("COUNT")
                 .arg(100)
-                .query(&mut connection)?;
+                .query_async(&mut connection)
+                .await?;
             for key in keys {
-                let created_at: Option<String> = connection.hget(&key, "created_at")?;
+                let created_at: Option<String> = connection.hget(&key, "created_at").await?;
                 if self.max_lifetime.is_some_and(|lifetime| {
                     created_at
                         .as_deref()
@@ -511,7 +530,7 @@ return result"#,
                             now.saturating_sub(created) >= lifetime.as_secs() as i64
                         })
                 }) {
-                    let deleted: i32 = connection.del(key)?;
+                    let deleted: i32 = connection.del(key).await?;
                     removed += deleted as usize;
                 }
             }
@@ -582,7 +601,6 @@ impl WarmStore {
             virtual_models: Mutex::new(HashMap::new()),
             binding_store,
             redis_key_prefix,
-            publish_lock: Mutex::new(()),
             metrics: WarmMetrics::new(),
         })
     }
@@ -601,7 +619,6 @@ impl WarmStore {
             virtual_models: Mutex::new(HashMap::new()),
             binding_store: None,
             redis_key_prefix: "smartgate:warm:".to_string(),
-            publish_lock: Mutex::new(()),
             metrics: WarmMetrics::new(),
         }
     }
@@ -655,7 +672,7 @@ impl WarmStore {
         counter.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn binding_for(
+    async fn binding_for(
         &self,
         key: &SessionKey,
         reject_stale_epoch: bool,
@@ -671,6 +688,7 @@ impl WarmStore {
             };
             binding_store
                 .get(key, Some(expected_epoch), reject_stale_epoch)
+                .await
                 .map_err(|error| WarmError::StoreUnavailable(error.to_string()))
         } else {
             Ok(self
@@ -685,7 +703,7 @@ impl WarmStore {
         }
     }
 
-    fn remove_binding(&self, key: &SessionKey) -> Result<(), WarmError> {
+    async fn remove_binding(&self, key: &SessionKey) -> Result<(), WarmError> {
         if let Some(binding_store) = &self.binding_store {
             let prefix_key = format!(
                 "{}{}",
@@ -694,6 +712,7 @@ impl WarmStore {
             );
             binding_store
                 .delete(key, &prefix_key)
+                .await
                 .map_err(|error| WarmError::StoreUnavailable(error.to_string()))
         } else {
             self.virtual_models
@@ -706,12 +725,12 @@ impl WarmStore {
         }
     }
 
-    pub fn validate_virtual_model(
+    pub async fn validate_virtual_model(
         &self,
         key: &SessionKey,
         requested_virtual_model_id: Option<&str>,
     ) -> Result<(), WarmError> {
-        let binding = self.binding_for(key, true)?;
+        let binding = self.binding_for(key, true).await?;
         if let (Some(bound), Some(requested)) = (binding.as_deref(), requested_virtual_model_id) {
             if bound != requested {
                 self.metrics
@@ -723,15 +742,11 @@ impl WarmStore {
         Ok(())
     }
 
-    pub fn publish(
+    pub async fn publish(
         &self,
         key: SessionKey,
         input: PublishInput,
     ) -> Result<PrefixSnapshot, WarmError> {
-        let _publish_guard = self
-            .publish_lock
-            .lock()
-            .map_err(|_| WarmError::StoreUnavailable("publish lock poisoned".to_string()))?;
         self.metrics
             .publish_attempts
             .fetch_add(1, Ordering::Relaxed);
@@ -747,7 +762,7 @@ impl WarmStore {
         }
 
         let gateway_key = gateway_key(&key);
-        let existing_binding = self.binding_for(&key, false)?;
+        let existing_binding = self.binding_for(&key, false).await?;
         if let (Some(existing), Some(incoming)) = (
             existing_binding.as_deref(),
             input.virtual_model_id.as_deref(),
@@ -760,7 +775,7 @@ impl WarmStore {
         let existing = match self.store.get_key(&gateway_key) {
             Ok(prefix) => prefix,
             Err(SessionError::Expired(_)) => {
-                self.remove_binding(&key)?;
+                self.remove_binding(&key).await?;
                 None
             }
             Err(error) => return Err(map_session_error(error)),
@@ -804,6 +819,7 @@ impl WarmStore {
                     &prefix,
                     effective_virtual_model.as_deref(),
                 )
+                .await
                 .map_err(map_redis_publish_error)?
         } else {
             self.store
@@ -834,35 +850,34 @@ impl WarmStore {
         Ok(to_snapshot(stored, effective_virtual_model))
     }
 
-    pub fn get(&self, key: &SessionKey) -> Option<PrefixSnapshot> {
+    pub async fn get(&self, key: &SessionKey) -> Option<PrefixSnapshot> {
         let gateway_key = gateway_key(key);
         match self.store.get_key(&gateway_key) {
             Ok(Some(prefix)) => {
-                let binding = self.binding_for(key, true).ok().flatten();
+                let binding = self.binding_for(key, true).await.ok().flatten();
                 Some(to_snapshot(prefix, binding))
             }
             Ok(None) | Err(SessionError::Expired(_)) => {
-                let _ = self.remove_binding(key);
+                let _ = self.remove_binding(key).await;
                 None
             }
             Err(_) => None,
         }
     }
 
-    pub fn delete(&self, key: &SessionKey) {
-        let _publish_guard = self.publish_lock.lock().ok();
+    pub async fn delete(&self, key: &SessionKey) {
         let gateway_key = gateway_key(key);
         if let Some(binding_store) = &self.binding_store {
             let prefix_key = format!("{}{}", self.redis_key_prefix, gateway_key.storage_key());
-            let _ = binding_store.delete(key, &prefix_key);
+            let _ = binding_store.delete(key, &prefix_key).await;
         } else {
             let _ = self.store.delete_key(&gateway_key);
-            let _ = self.remove_binding(key);
+            let _ = self.remove_binding(key).await;
         }
     }
 
     /// Removes expired snapshots and their SmartGate-only model bindings.
-    pub fn purge_expired(&self) -> Result<usize, WarmError> {
+    pub async fn purge_expired(&self) -> Result<usize, WarmError> {
         self.metrics.cleanup_runs.fetch_add(1, Ordering::Relaxed);
         let removed = self.store.purge_expired().map_err(|error| {
             self.metrics
@@ -871,7 +886,7 @@ impl WarmStore {
             map_session_error(error)
         })?;
         if let Some(binding_store) = &self.binding_store {
-            let binding_removed = binding_store.purge_expired().map_err(|error| {
+            let binding_removed = binding_store.purge_expired().await.map_err(|error| {
                 self.metrics
                     .cleanup_failures
                     .fetch_add(1, Ordering::Relaxed);
@@ -889,10 +904,12 @@ impl WarmStore {
             .keys()
             .cloned()
             .collect::<Vec<_>>();
-        let expired = keys
-            .into_iter()
-            .filter(|key| self.get(key).is_none())
-            .collect::<Vec<_>>();
+        let mut expired = Vec::new();
+        for key in keys {
+            if self.get(&key).await.is_none() {
+                expired.push(key);
+            }
+        }
         if !expired.is_empty() {
             let mut bindings = self.virtual_models.lock().map_err(|_| {
                 WarmError::StoreUnavailable("binding store lock poisoned".to_string())
@@ -904,7 +921,7 @@ impl WarmStore {
         Ok(removed)
     }
 
-    pub fn assemble_delta(
+    pub async fn assemble_delta(
         &self,
         key: &SessionKey,
         context: &WarmContext,
@@ -916,12 +933,12 @@ impl WarmStore {
             Ok(Some(prefix)) => prefix,
             Ok(None) => return Err(WarmError::SessionNotFound),
             Err(SessionError::Expired(_)) => {
-                let _ = self.remove_binding(key);
+                let _ = self.remove_binding(key).await;
                 return Err(WarmError::SessionExpired);
             }
             Err(error) => return Err(map_session_error(error)),
         };
-        self.validate_virtual_model(key, virtual_model_id)?;
+        self.validate_virtual_model(key, virtual_model_id).await?;
         let expected_epoch = i64::try_from(snapshot.epoch)
             .map_err(|_| WarmError::InvalidContext("stored epoch is too large".to_string()))?;
         if context.epoch != Some(expected_epoch) {
@@ -1283,71 +1300,82 @@ mod tests {
         }
     }
 
-    #[test]
-    fn publish_is_idempotent_and_monotonic() {
+    #[tokio::test]
+    async fn publish_is_idempotent_and_monotonic() {
         let store = WarmStore::new();
         let messages = vec![json!({"role": "system", "content": "hi"})];
-        store.publish(key(), publish(1, messages.clone())).unwrap();
-        store.publish(key(), publish(1, messages)).unwrap();
+        store
+            .publish(key(), publish(1, messages.clone()))
+            .await
+            .unwrap();
+        store.publish(key(), publish(1, messages)).await.unwrap();
         assert_eq!(
-            store.publish(key(), publish(0, vec![])),
+            store.publish(key(), publish(0, vec![])).await,
             Err(WarmError::StaleEpoch)
         );
     }
 
-    #[test]
-    fn namespace_isolates_same_session_id() {
+    #[tokio::test]
+    async fn namespace_isolates_same_session_id() {
         let store = WarmStore::new();
         let mut other = key();
         other.project_id = "other-project".to_string();
         store
             .publish(key(), publish(1, vec![json!({"content": "a"})]))
+            .await
             .unwrap();
         store
             .publish(other.clone(), publish(1, vec![json!({"content": "b"})]))
+            .await
             .unwrap();
-        assert_eq!(store.get(&key()).unwrap().messages[0]["content"], "a");
-        assert_eq!(store.get(&other).unwrap().messages[0]["content"], "b");
+        assert_eq!(store.get(&key()).await.unwrap().messages[0]["content"], "a");
+        assert_eq!(store.get(&other).await.unwrap().messages[0]["content"], "b");
     }
 
-    #[test]
-    fn same_epoch_with_different_content_conflicts() {
+    #[tokio::test]
+    async fn same_epoch_with_different_content_conflicts() {
         let store = WarmStore::new();
         store
             .publish(
                 key(),
                 publish(1, vec![json!({"role": "user", "content": "a"})]),
             )
+            .await
             .unwrap();
         assert_eq!(
-            store.publish(
-                key(),
-                publish(1, vec![json!({"role": "user", "content": "b"})])
-            ),
+            store
+                .publish(
+                    key(),
+                    publish(1, vec![json!({"role": "user", "content": "b"})])
+                )
+                .await,
             Err(WarmError::EpochConflict)
         );
     }
 
-    #[test]
-    fn virtual_model_binding_is_enforced() {
+    #[tokio::test]
+    async fn virtual_model_binding_is_enforced() {
         let store = WarmStore::new();
         store
             .publish(key(), publish(1, vec![json!({"content": "a"})]))
+            .await
             .unwrap();
         assert_eq!(
-            store.publish(
-                key(),
-                PublishInput {
-                    virtual_model_id: Some("other-vm".to_string()),
-                    ..publish(2, vec![json!({"content": "b"})])
-                },
-            ),
+            store
+                .publish(
+                    key(),
+                    PublishInput {
+                        virtual_model_id: Some("other-vm".to_string()),
+                        ..publish(2, vec![json!({"content": "b"})])
+                    },
+                )
+                .await,
             Err(WarmError::VirtualModelMismatch)
         );
     }
 
-    #[test]
-    fn configured_ttl_expires_session() {
+    #[tokio::test]
+    async fn configured_ttl_expires_session() {
         let store = WarmStore::with_session_config(SessionStoreConfig {
             lifetime: unigateway_sdk::session::SessionLifetime {
                 idle_ttl: Some(Duration::from_millis(10)),
@@ -1358,29 +1386,32 @@ mod tests {
         });
         store
             .publish(key(), publish(1, vec![json!({"content": "a"})]))
+            .await
             .unwrap();
         thread::sleep(Duration::from_millis(20));
         assert_eq!(
-            store.assemble_delta(
-                &key(),
-                &WarmContext {
-                    session_id: Some(key().session_id),
-                    epoch: Some(1),
-                    delivery: Delivery::Delta,
-                    prefix_hash: None,
-                    tail_start: Some(1),
-                    request_id: None,
-                },
-                vec![],
-                Some("vm"),
-            ),
+            store
+                .assemble_delta(
+                    &key(),
+                    &WarmContext {
+                        session_id: Some(key().session_id),
+                        epoch: Some(1),
+                        delivery: Delivery::Delta,
+                        prefix_hash: None,
+                        tail_start: Some(1),
+                        request_id: None,
+                    },
+                    vec![],
+                    Some("vm"),
+                )
+                .await,
             Err(WarmError::SessionExpired)
         );
-        assert_eq!(store.get(&key()), None);
+        assert_eq!(store.get(&key()).await, None);
     }
 
-    #[test]
-    fn purge_expired_removes_store_snapshot_and_binding() {
+    #[tokio::test]
+    async fn purge_expired_removes_store_snapshot_and_binding() {
         let store = WarmStore::with_session_config(SessionStoreConfig {
             lifetime: unigateway_sdk::session::SessionLifetime {
                 idle_ttl: Some(Duration::from_millis(10)),
@@ -1391,14 +1422,15 @@ mod tests {
         });
         store
             .publish(key(), publish(1, vec![json!({"content": "a"})]))
+            .await
             .unwrap();
         thread::sleep(Duration::from_millis(20));
-        assert_eq!(store.purge_expired().unwrap(), 1);
-        assert_eq!(store.get(&key()), None);
+        assert_eq!(store.purge_expired().await.unwrap(), 1);
+        assert_eq!(store.get(&key()).await, None);
     }
 
-    #[test]
-    fn configured_assembled_limit_is_enforced() {
+    #[tokio::test]
+    async fn configured_assembled_limit_is_enforced() {
         let store = WarmStore::with_session_config(SessionStoreConfig {
             size_limits: SessionSizeLimits {
                 max_assembled_bytes: Some(40),
@@ -1408,6 +1440,7 @@ mod tests {
         });
         store
             .publish(key(), publish(1, vec![json!({"content": "prefix"})]))
+            .await
             .unwrap();
         let context = WarmContext {
             session_id: Some("session".to_string()),
@@ -1418,19 +1451,21 @@ mod tests {
             request_id: None,
         };
         assert_eq!(
-            store.assemble_delta(
-                &key(),
-                &context,
-                vec![json!({"content": "tail that exceeds the configured limit"})],
-                Some("vm"),
-            ),
+            store
+                .assemble_delta(
+                    &key(),
+                    &context,
+                    vec![json!({"content": "tail that exceeds the configured limit"})],
+                    Some("vm"),
+                )
+                .await,
             Err(WarmError::AssembledTooLarge)
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires REDIS_URL and a running Redis server"]
-    fn redis_persists_virtual_model_binding_across_store_instances() {
+    async fn redis_persists_virtual_model_binding_across_store_instances() {
         let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
         let session_id = format!("redis-redeploy-{}", std::process::id());
         let key = SessionKey {
@@ -1456,21 +1491,29 @@ mod tests {
                     virtual_model_id: Some("virtual-model-redis".to_string()),
                 },
             )
+            .await
             .unwrap();
         assert_eq!(
             first
                 .validate_virtual_model(&key, Some("wrong-model"))
+                .await
                 .unwrap_err(),
             WarmError::VirtualModelMismatch
         );
 
         let reloaded = WarmStore::try_with_config(&config).unwrap();
         assert_eq!(
-            reloaded.get(&key).unwrap().virtual_model_id.as_deref(),
+            reloaded
+                .get(&key)
+                .await
+                .unwrap()
+                .virtual_model_id
+                .as_deref(),
             Some("virtual-model-redis")
         );
         reloaded
             .validate_virtual_model(&key, Some("virtual-model-redis"))
+            .await
             .unwrap();
         assert_eq!(
             reloaded
@@ -1485,10 +1528,14 @@ mod tests {
                         virtual_model_id: Some("wrong-model".to_string()),
                     },
                 )
+                .await
                 .unwrap_err(),
             WarmError::VirtualModelMismatch
         );
-        assert_eq!(reloaded.get(&key).unwrap().messages[0]["content"], "redis");
+        assert_eq!(
+            reloaded.get(&key).await.unwrap().messages[0]["content"],
+            "redis"
+        );
         let context = WarmContext {
             session_id: Some(key.session_id.clone()),
             epoch: Some(1),
@@ -1505,18 +1552,20 @@ mod tests {
                     vec![json!({"role": "user", "content": "after redeploy"})],
                     Some("virtual-model-redis"),
                 )
+                .await
                 .unwrap()
                 .len(),
             2
         );
-        reloaded.delete(&key);
+        reloaded.delete(&key).await;
     }
 
-    #[test]
-    fn metrics_snapshot_has_bounded_warm_counters() {
+    #[tokio::test]
+    async fn metrics_snapshot_has_bounded_warm_counters() {
         let store = WarmStore::new();
         store
             .publish(key(), publish(1, vec![json!({"content": "metrics"})]))
+            .await
             .unwrap();
         let snapshot = store.metrics().snapshot();
         assert_eq!(snapshot["publish_attempts"], 1);
@@ -1610,8 +1659,8 @@ mod tests {
         assert_eq!(context.session_id, None);
     }
 
-    #[test]
-    fn delta_requires_exact_tail_start_and_epoch() {
+    #[tokio::test]
+    async fn delta_requires_exact_tail_start_and_epoch() {
         let store = WarmStore::new();
         store
             .publish(
@@ -1625,6 +1674,7 @@ mod tests {
                     virtual_model_id: Some("vm".to_string()),
                 },
             )
+            .await
             .unwrap();
         let context = WarmContext {
             session_id: Some("session".to_string()),
@@ -1641,6 +1691,7 @@ mod tests {
                 vec![json!({"role": "user", "content": "x"})],
                 Some("vm"),
             )
+            .await
             .unwrap();
         assert_eq!(assembled.len(), 2);
     }
