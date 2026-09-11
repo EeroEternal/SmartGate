@@ -20,6 +20,13 @@ use crate::{api::models::ApiResponse, auth::hash_token, config::AppState};
 use super::{conflict_error, db_error, is_unique_violation, SaasContext, SaasUser, SESSION_COOKIE};
 
 const SESSION_DAYS: i64 = 30;
+/// Email verification record row: (code hash, attempt count, expiry, used-at).
+type VerificationRow = (
+    String,
+    i32,
+    chrono::DateTime<Utc>,
+    Option<chrono::DateTime<Utc>>,
+);
 const VERIFICATION_CODE_TTL_MINUTES: i64 = 10;
 const VERIFICATION_RESEND_SECONDS: i64 = 60;
 const VERIFICATION_MAX_ATTEMPTS: i32 = 5;
@@ -94,12 +101,7 @@ pub(super) async fn register(
     let project_id = Uuid::new_v4().to_string();
 
     let mut tx = state.db.begin().await.map_err(db_error)?;
-    let verification: Option<(
-        String,
-        i32,
-        chrono::DateTime<Utc>,
-        Option<chrono::DateTime<Utc>>,
-    )> = sqlx::query_as(
+    let verification: Option<VerificationRow> = sqlx::query_as(
         "SELECT code_hash, attempts, expires_at, used_at
              FROM saas_email_verifications WHERE email = $1 FOR UPDATE",
     )

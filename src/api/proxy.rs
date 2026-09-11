@@ -29,7 +29,7 @@ use unigateway_sdk::core::ExecutionTarget;
 use unigateway_sdk::host::HostError;
 
 use super::host::SmartGatePoolHost;
-use super::judge::{classify_with_judge, difficulty_tier};
+use super::judge::{classify_with_judge, difficulty_tier, JudgeScope};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ChatProtocol {
@@ -228,18 +228,16 @@ async fn chat_proxy(
     if let Some(ref p) = pool {
         if p.judge_enabled != 0 {
             if let Some(ref judge_ep_id) = p.judge_endpoint_id {
-                if difficulty >= JUDGE_TRIGGER_MIN && difficulty <= JUDGE_TRIGGER_MAX {
-                    if let Some(judge_tier) = classify_with_judge(
-                        &state,
-                        judge_ep_id,
-                        &prompt_text,
-                        &auth.project.org_id,
-                        &auth.project.id,
-                        &auth.api_key.id,
-                        &virtual_model.id,
-                        &virtual_model.pool_id,
-                    )
-                    .await
+                if (JUDGE_TRIGGER_MIN..=JUDGE_TRIGGER_MAX).contains(&difficulty) {
+                    let scope = JudgeScope {
+                        org_id: &auth.project.org_id,
+                        project_id: &auth.project.id,
+                        key_id: &auth.api_key.id,
+                        virtual_model_id: &virtual_model.id,
+                        source_pool_id: &virtual_model.pool_id,
+                    };
+                    if let Some(judge_tier) =
+                        classify_with_judge(&state, judge_ep_id, &prompt_text, &scope).await
                     {
                         difficulty = judge_tier.score();
                         difficulty_source = "judge";
@@ -554,7 +552,7 @@ async fn chat_proxy(
                 if p.shadow_enabled == 0 {
                     return None;
                 }
-                let threshold = (p.shadow_sample_rate.max(0.0).min(1.0) * 1_000_000.0) as u128;
+                let threshold = (p.shadow_sample_rate.clamp(0.0, 1.0) * 1_000_000.0) as u128;
                 p.shadow_virtual_model_id
                     .clone()
                     .map(|name| (name, threshold))
@@ -584,16 +582,16 @@ async fn chat_proxy(
                     let request_preview = prompt_preview.clone();
                     let is_openai = protocol == ChatProtocol::OpenAi;
                     tokio::spawn(async move {
-                        run_shadow(
-                            state_clone,
-                            auth_clone,
-                            headers_clone,
-                            payload_clone,
+                        run_shadow(ShadowJob {
+                            state: state_clone,
+                            auth: auth_clone,
+                            headers: headers_clone,
+                            payload: payload_clone,
                             shadow_model_name,
                             request_preview,
                             main_preview,
                             is_openai,
-                        )
+                        })
                         .await;
                     });
                 }
@@ -642,7 +640,8 @@ async fn chat_proxy(
     }
 }
 
-async fn run_shadow(
+/// Inputs for a background shadow-flight request, grouped to keep the spawn site readable.
+struct ShadowJob {
     state: Arc<AppState>,
     auth: AuthContext,
     headers: HeaderMap,
@@ -651,25 +650,27 @@ async fn run_shadow(
     request_preview: String,
     main_preview: String,
     is_openai: bool,
-) {
+}
+
+async fn run_shadow(job: ShadowJob) {
     if let Some(result) = execute_shadow(
-        state.clone(),
-        auth.clone(),
-        headers,
-        payload,
-        shadow_model_name,
-        request_preview,
-        is_openai,
+        job.state.clone(),
+        job.auth.clone(),
+        job.headers,
+        job.payload,
+        job.shadow_model_name,
+        job.request_preview,
+        job.is_openai,
     )
     .await
     {
-        let similarity = jaccard_similarity(&main_preview, &result.response_preview);
+        let similarity = jaccard_similarity(&job.main_preview, &result.response_preview);
         let agreement = similarity > 0.3;
         if let Err(error) = store_shadow_evaluation(
-            &state.db,
-            &auth.project.org_id,
-            &auth.project.id,
-            &auth.api_key.id,
+            &job.state.db,
+            &job.auth.project.org_id,
+            &job.auth.project.id,
+            &job.auth.api_key.id,
             &result,
             similarity,
             agreement,

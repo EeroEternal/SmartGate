@@ -79,7 +79,7 @@ pub fn expected_agentic_cost(
     let cache_price = profile
         .price
         .cache_read_per_1m
-        .unwrap_or_else(|| profile.price.input_per_1m * 0.1);
+        .unwrap_or(profile.price.input_per_1m * 0.1);
     ((fresh as f64 / 1_000_000.0) * profile.price.input_per_1m
         + (cached as f64 / 1_000_000.0) * cache_price
         + (output as f64 / 1_000_000.0) * profile.price.output_per_1m)

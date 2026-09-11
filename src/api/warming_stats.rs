@@ -16,6 +16,19 @@ pub struct WarmingStatsQuery {
     pub days: Option<i64>,
 }
 
+/// Aggregate stats for turns after the first: (avg latency, avg ttft, avg cached tokens, count, sum cached tokens, sum prompt tokens).
+type LaterTurnStats = (
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+    i64,
+    Option<i64>,
+    Option<i64>,
+);
+
+/// Per-turn-index stats: (turn index, count, avg latency, avg ttft, avg cached tokens).
+type PerTurnStats = (i32, i64, Option<f64>, Option<f64>, Option<f64>);
+
 pub async fn get_warming_stats(
     State(state): State<Arc<AppState>>,
     Query(query): Query<WarmingStatsQuery>,
@@ -82,7 +95,7 @@ pub async fn get_warming_stats(
             )
         })?;
 
-    let turn2: (Option<f64>, Option<f64>, Option<f64>, i64, Option<i64>, Option<i64>) =
+    let turn2: LaterTurnStats =
         if let Some(ref pool_id) = query.pool_id {
             sqlx::query_as(
                 "SELECT AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens), COUNT(*),
@@ -112,7 +125,7 @@ pub async fn get_warming_stats(
             )
         })?;
 
-    let by_turn: Vec<(i32, i64, Option<f64>, Option<f64>, Option<f64>)> =
+    let by_turn: Vec<PerTurnStats> =
         if let Some(ref pool_id) = query.pool_id {
             sqlx::query_as(
                 "SELECT turn_index, COUNT(*), AVG(latency_ms), AVG(ttft_ms), AVG(cached_input_tokens)

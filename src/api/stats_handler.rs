@@ -89,7 +89,7 @@ impl Aggregate {
 }
 
 fn aggregate_json(aggregate: &Aggregate) -> Value {
-    let mut value = serde_json::to_value(aggregate).unwrap_or_else(|_| Value::Null);
+    let mut value = serde_json::to_value(aggregate).unwrap_or(Value::Null);
     if let Some(object) = value.as_object_mut() {
         object.insert(
             "success_rate".to_string(),

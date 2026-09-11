@@ -14,7 +14,6 @@ use unigateway_sdk::host::{
 
 use super::host::SmartGatePoolHost;
 
-const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 const PREVIEW_CHARS: usize = 500;
 
 /// Execute a shadow request to `shadow_model_name` using the same prompt as the

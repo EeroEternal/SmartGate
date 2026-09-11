@@ -16,6 +16,43 @@ use crate::{api::models::ApiResponse, config::AppState, pricing::effective_capab
 
 use super::{conflict_error, db_error, saas_strategy, sync, SaasContext};
 
+/// Model service detail row: (vm id, vm name, pool name, strategy, judge_enabled, judge_endpoint_id, pool id, shadow_enabled, shadow_virtual_model_id, shadow_sample_rate).
+type ModelServiceDetailRow = (
+    String,
+    String,
+    String,
+    String,
+    i32,
+    Option<String>,
+    String,
+    i32,
+    Option<String>,
+    f64,
+);
+
+/// Flat model service list row: (vm id, vm name, pool name, strategy, provider type, upstream model, health status, endpoint name).
+type ModelServiceListRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+/// Aggregated model service entry: (vm id, vm name, pool name, strategy, provider types, models, endpoint statuses).
+type ModelServiceSummary = (
+    String,
+    String,
+    String,
+    String,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+);
+
 #[derive(Debug, Deserialize, Clone)]
 pub(super) struct ModelEndpointRequest {
     #[serde(default)]
@@ -41,7 +78,7 @@ pub(super) struct ModelEndpointRequest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub(super) enum AddEndpointsPayload {
-    Single(ModelEndpointRequest),
+    Single(Box<ModelEndpointRequest>),
     Batch {
         endpoints: Vec<ModelEndpointRequest>,
     },
@@ -444,8 +481,7 @@ pub(super) async fn get_model_service(
     ctx: SaasContext,
     Path(model_id): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let service: Option<(String, String, String, String, i32, Option<String>, String, i32, Option<String>, f64)> =
-        sqlx::query_as(
+    let service: Option<ModelServiceDetailRow> = sqlx::query_as(
             "SELECT vm.id, vm.name, mp.name, mp.strategy, mp.judge_enabled, mp.judge_endpoint_id, mp.id,
                     mp.shadow_enabled, mp.shadow_virtual_model_id, mp.shadow_sample_rate
          FROM virtual_models vm
@@ -741,7 +777,7 @@ pub(super) async fn add_model_service_endpoint(
     Json(payload): Json<AddEndpointsPayload>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
     let endpoints_to_add: Vec<ModelEndpointRequest> = match payload {
-        AddEndpointsPayload::Single(single) => vec![single],
+        AddEndpointsPayload::Single(single) => vec![*single],
         AddEndpointsPayload::Batch { endpoints } => endpoints,
         AddEndpointsPayload::List(list) => list,
     };
@@ -906,7 +942,7 @@ pub(super) async fn list_model_services(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
 ) -> Result<Json<ApiResponse<Vec<Value>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let rows: Vec<(String, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+    let rows: Vec<ModelServiceListRow> = sqlx::query_as(
         "SELECT vm.id, vm.name, mp.name, mp.strategy, pa.provider_type, e.upstream_model_id,
                 e.health_status, e.name
          FROM virtual_models vm
@@ -924,15 +960,7 @@ pub(super) async fn list_model_services(
     .await
     .map_err(db_error)?;
 
-    let mut services: Vec<(
-        String,
-        String,
-        String,
-        String,
-        Vec<String>,
-        Vec<String>,
-        Vec<String>,
-    )> = Vec::new();
+    let mut services: Vec<ModelServiceSummary> = Vec::new();
     let mut indexes = HashMap::new();
     for row in rows {
         let index = if let Some(index) = indexes.get(&row.0) {
@@ -1384,12 +1412,10 @@ pub(super) async fn probe_model_service_endpoint(
         } else {
             format!("{}/messages", trimmed)
         }
+    } else if trimmed.ends_with("/chat/completions") {
+        trimmed.to_string()
     } else {
-        if trimmed.ends_with("/chat/completions") {
-            trimmed.to_string()
-        } else {
-            format!("{}/chat/completions", trimmed)
-        }
+        format!("{}/chat/completions", trimmed)
     };
 
     let send_probe = |body: Value| {

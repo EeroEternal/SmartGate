@@ -54,7 +54,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --locked
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Run Rust library tests
         run: cargo test --locked --lib

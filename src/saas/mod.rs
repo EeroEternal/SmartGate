@@ -169,9 +169,10 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .with_state(state)
 }
 
-fn range_since(
-    range: &str,
-) -> Result<Option<chrono::DateTime<Utc>>, (StatusCode, Json<ApiResponse<()>>)> {
+/// Shared error type for range parsing: a 400 response with no payload body.
+type RangeParseError = (StatusCode, Json<ApiResponse<()>>);
+
+fn range_since(range: &str) -> Result<Option<chrono::DateTime<Utc>>, RangeParseError> {
     match range {
         "24h" => Ok(Some(Utc::now() - Duration::hours(24))),
         "7d" => Ok(Some(Utc::now() - Duration::days(7))),

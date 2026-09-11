@@ -20,6 +20,65 @@ use crate::{
 
 use super::{db_error, range_since, RangeQuery, SaasContext};
 
+/// Aggregated usage totals keyed by provider or (provider, model) pair:
+/// (requests, prompt tokens, completion tokens, total tokens, cost, cache hit tokens, cache write tokens).
+type UsageTotals = (i64, i64, i64, i64, f64, i64, i64);
+
+/// Single row of the usage overview aggregate query.
+type UsageSummaryRow = (
+    i64,
+    i64,
+    i64,
+    i64,
+    f64,
+    f64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+);
+
+/// Single breakdown row grouped by provider and upstream model.
+type ProviderModelUsageRow = (
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+    i64,
+    f64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+);
+
+/// Single routing log entry row.
+type RoutingLogRow = (
+    String,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    String,
+    String,
+    i32,
+    i32,
+    i32,
+    i32,
+    Option<i32>,
+    f64,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 pub(super) async fn get_usage(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
@@ -33,23 +92,7 @@ pub(super) async fn get_usage(
         ("", None)
     };
     let sql = format!("SELECT COUNT(*), COALESCE(SUM(u.prompt_tokens),0), COALESCE(SUM(u.completion_tokens),0), COALESCE(SUM(u.total_tokens),0), COALESCE(SUM(u.estimated_cost),0), COALESCE(AVG(u.latency_ms)::double precision, 0.0), COALESCE(SUM(CASE WHEN u.status_code >= 200 AND u.status_code < 300 THEN 1 ELSE 0 END),0), COALESCE(SUM(u.trimmed_chars),0), COALESCE(SUM(u.cache_hit_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_hit_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_hit_tokens), COALESCE(SUM(CASE WHEN u.cache_hit_tokens IS NOT NULL THEN u.prompt_tokens ELSE 0 END),0), COALESCE(SUM(u.cache_write_tokens),0)::bigint, COALESCE(SUM(CASE WHEN u.cache_write_tokens > 0 THEN 1 ELSE 0 END),0), COUNT(u.cache_write_tokens) FROM usage_logs u JOIN projects p ON p.id = u.project_id WHERE p.org_id = $1 {where_sql}");
-    let row: (
-        i64,
-        i64,
-        i64,
-        i64,
-        f64,
-        f64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-    ) = if let Some(value) = since_value {
+    let row: UsageSummaryRow = if let Some(value) = since_value {
         sqlx::query_as(&sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -95,22 +138,7 @@ pub(super) async fn get_usage(
          WHERE p.org_id = $1 {where_sql}
          GROUP BY pa.provider_type, e.upstream_model_id",
     );
-    let breakdown_rows: Vec<(
-        String,
-        String,
-        i64,
-        i64,
-        i64,
-        i64,
-        f64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-    )> = if let Some(value) = since_value {
+    let breakdown_rows: Vec<ProviderModelUsageRow> = if let Some(value) = since_value {
         sqlx::query_as(&breakdown_sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -124,10 +152,8 @@ pub(super) async fn get_usage(
     }
     .map_err(db_error)?;
 
-    let mut provider_groups: BTreeMap<String, (i64, i64, i64, i64, f64, i64, i64)> =
-        BTreeMap::new();
-    let mut model_groups: BTreeMap<(String, String), (i64, i64, i64, i64, f64, i64, i64)> =
-        BTreeMap::new();
+    let mut provider_groups: BTreeMap<String, UsageTotals> = BTreeMap::new();
+    let mut model_groups: BTreeMap<(String, String), UsageTotals> = BTreeMap::new();
     let mut provider_reported_requests = 0_i64;
     let mut priced_requests = 0_i64;
     let mut missing_usage_groups: BTreeMap<(String, String), (i64, i64, i64)> = BTreeMap::new();
@@ -278,22 +304,7 @@ pub(super) async fn get_routing_analytics(
          LIMIT 100"
     );
 
-    let rows: Vec<(
-        String,
-        chrono::DateTime<chrono::Utc>,
-        String,
-        String,
-        String,
-        i32,
-        i32,
-        i32,
-        i32,
-        Option<i32>,
-        f64,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    )> = if let Some(value) = since_value {
+    let rows: Vec<RoutingLogRow> = if let Some(value) = since_value {
         sqlx::query_as(&logs_sql)
             .bind(&ctx.org_id)
             .bind(value)
@@ -521,10 +532,7 @@ struct QualityAnalyticsRow {
     latency_ms: i32,
     status_code: Option<i32>,
     estimated_cost: f64,
-    routing_strategy: Option<String>,
     routing_decision: Option<String>,
-    metadata: Option<String>,
-    trimmed_chars: i32,
     tool_message_chars: i32,
 }
 
@@ -547,8 +555,7 @@ pub(super) async fn get_quality_analytics(
                 COALESCE(pa.name, pa.provider_type, 'unknown') AS provider_name,
                 u.prompt_tokens, u.completion_tokens, u.total_tokens,
                 u.latency_ms, u.status_code, u.estimated_cost,
-                u.routing_strategy, u.routing_decision, u.metadata, u.trimmed_chars,
-                u.tool_message_chars
+                u.routing_decision, u.tool_message_chars
          FROM usage_logs u
          JOIN projects p ON p.id = u.project_id
          LEFT JOIN virtual_models vm ON vm.id = u.virtual_model_id
@@ -576,9 +583,6 @@ pub(super) async fn get_quality_analytics(
     let mut total_cost = 0.0;
     let mut total_latency = 0i64;
     let mut latencies: Vec<i32> = Vec::new();
-    let mut total_prompt_tokens = 0i64;
-    let mut total_completion_tokens = 0i64;
-    let mut total_trimmed_chars = 0i64;
     let mut correction_count = 0usize;
     let mut successful_count = 0usize;
     let mut pro_count = 0usize;
@@ -589,9 +593,6 @@ pub(super) async fn get_quality_analytics(
     let mut baseline_cost = 0.0;
     let mut baseline_latency = 0i64;
     let mut baseline_latencies: Vec<i32> = Vec::new();
-    let mut baseline_prompt_tokens = 0i64;
-    let mut baseline_completion_tokens = 0i64;
-    let mut baseline_trimmed_chars = 0i64;
     let mut baseline_correction_count = 0usize;
     let mut baseline_successful_count = 0usize;
     let mut baseline_schema_request_count = 0usize;
@@ -622,10 +623,7 @@ pub(super) async fn get_quality_analytics(
         latency_ms,
         status_code,
         estimated_cost: cost,
-        routing_strategy: _,
         routing_decision: decision_str,
-        metadata: _,
-        trimmed_chars,
         tool_message_chars,
     } in rows
     {
@@ -635,17 +633,11 @@ pub(super) async fn get_quality_analytics(
         total_cost += cost;
         total_latency += latency_ms as i64;
         latencies.push(latency_ms);
-        total_prompt_tokens += prompt_tokens as i64;
-        total_completion_tokens += completion_tokens as i64;
-        total_trimmed_chars += trimmed_chars as i64;
 
         if is_baseline {
             baseline_cost += cost;
             baseline_latency += latency_ms as i64;
             baseline_latencies.push(latency_ms);
-            baseline_prompt_tokens += prompt_tokens as i64;
-            baseline_completion_tokens += completion_tokens as i64;
-            baseline_trimmed_chars += trimmed_chars as i64;
             baseline_queries += 1;
         }
 
@@ -711,7 +703,7 @@ pub(super) async fn get_quality_analytics(
             }
         }
 
-        let (verdict, feedback_source, verdict_desc) = if status < 200 || status >= 300 {
+        let (verdict, feedback_source, verdict_desc) = if !(200..300).contains(&status) {
             (
                 "error",
                 "Request telemetry",
@@ -809,15 +801,13 @@ pub(super) async fn get_quality_analytics(
         None
     };
 
-    let speedup_pct = if baseline_avg_latency.is_some()
-        && baseline_avg_latency.unwrap() > 0
-        && actual_avg_latency.is_some()
-    {
-        let baseline_ms = baseline_avg_latency.unwrap() as f64;
-        let actual_ms = actual_avg_latency.unwrap() as f64;
-        Some((((baseline_ms - actual_ms) / baseline_ms * 100.0) * 10.0).round() / 10.0)
-    } else {
-        None
+    let speedup_pct = match (baseline_avg_latency, actual_avg_latency) {
+        (Some(baseline_ms), Some(actual_ms)) if baseline_ms > 0 => {
+            let baseline_ms = baseline_ms as f64;
+            let actual_ms = actual_ms as f64;
+            Some((((baseline_ms - actual_ms) / baseline_ms * 100.0) * 10.0).round() / 10.0)
+        }
+        _ => None,
     };
 
     // Shadow Flighting: compute agreement rate from recorded shadow evaluations.
@@ -833,13 +823,13 @@ pub(super) async fn get_quality_analytics(
          WHERE project_id = $1"
     };
     let (shadow_total, shadow_agreed): (i64, i64) = if let Some(value) = since_value {
-        sqlx::query_as(&shadow_eval_sql)
+        sqlx::query_as(shadow_eval_sql)
             .bind(&ctx.project_id)
             .bind(value)
             .fetch_one(&state.db)
             .await
     } else {
-        sqlx::query_as(&shadow_eval_sql)
+        sqlx::query_as(shadow_eval_sql)
             .bind(&ctx.project_id)
             .fetch_one(&state.db)
             .await

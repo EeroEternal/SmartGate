@@ -31,11 +31,24 @@ pub(super) struct CreateSaasKeyRequest {
     concurrency_limit: Option<i32>,
 }
 
+/// One row of the API key list query: (id, name, key_prefix, enabled, rpm_limit, concurrency_limit, daily_spend_limit, last_used_at, created_at).
+type ApiKeyListRow = (
+    String,
+    String,
+    String,
+    bool,
+    Option<i32>,
+    Option<i32>,
+    Option<f64>,
+    Option<chrono::DateTime<Utc>>,
+    chrono::DateTime<Utc>,
+);
+
 pub(super) async fn list_api_keys(
     State(state): State<Arc<AppState>>,
     ctx: SaasContext,
 ) -> Result<Json<ApiResponse<Vec<Value>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let rows: Vec<(String, String, String, bool, Option<i32>, Option<i32>, Option<f64>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>)> = sqlx::query_as(
+    let rows: Vec<ApiKeyListRow> = sqlx::query_as(
         "SELECT id, name, key_prefix, enabled, rpm_limit, concurrency_limit, daily_spend_limit, last_used_at, created_at FROM api_keys WHERE project_id = $1 ORDER BY created_at DESC",
     ).bind(&ctx.project_id).fetch_all(&state.db).await.map_err(db_error)?;
 

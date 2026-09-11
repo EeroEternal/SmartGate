@@ -29,7 +29,7 @@ impl UnitPrice {
     ) -> f64 {
         let hits = cache_hit_tokens.unwrap_or(0).min(prompt_tokens);
         let misses = prompt_tokens.saturating_sub(hits);
-        let cache_price = self.cache_read_per_1m.unwrap_or_else(|| {
+        let cache_price = self.cache_read_per_1m.unwrap_or({
             if self.input_per_1m > 0.0 {
                 // Default to 10% of base input price (90% discount) when cache hits occur
                 self.input_per_1m * 0.1
@@ -380,7 +380,8 @@ mod tests {
         // completion cost: 0.1M * 2.0 = 0.2
         // total: 0.318
         let cost = price.calculate_cost(1_000_000, 100_000, Some(900_000));
-        assert!((cost - 0.318).abs() < 1e-6);
+        let expected = 0.1 * 1.0 + 0.9 * 0.02 + 0.1 * 2.0;
+        assert!((cost - expected).abs() < 1e-6);
     }
 
     #[test]

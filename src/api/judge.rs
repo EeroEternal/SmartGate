@@ -58,6 +58,15 @@ pub(super) fn difficulty_tier(difficulty: f64) -> DifficultyTier {
     }
 }
 
+/// Request-scoping identifiers attached to a judge call's report metadata.
+pub(super) struct JudgeScope<'a> {
+    pub org_id: &'a str,
+    pub project_id: &'a str,
+    pub key_id: &'a str,
+    pub virtual_model_id: &'a str,
+    pub source_pool_id: &'a str,
+}
+
 /// Classify a borderline request through UniGateway's normal protocol and driver pipeline.
 ///
 /// The endpoint is loaded by the control plane, but credentials, provider protocol rendering,
@@ -66,11 +75,7 @@ pub(super) async fn classify_with_judge(
     state: &AppState,
     judge_endpoint_id: &str,
     prompt_text: &str,
-    org_id: &str,
-    project_id: &str,
-    key_id: &str,
-    virtual_model_id: &str,
-    source_pool_id: &str,
+    scope: &JudgeScope<'_>,
 ) -> Option<DifficultyTier> {
     let endpoint = crate::sync::load_endpoint_for_dispatch(&state.db, judge_endpoint_id)
         .await
@@ -78,11 +83,14 @@ pub(super) async fn classify_with_judge(
     let judge_pool_id = format!("{JUDGE_POOL_PREFIX}{judge_endpoint_id}");
     let (mut request, host_protocol) = build_judge_request(&endpoint, prompt_text)?;
     request.metadata.extend(HashMap::from([
-        ("org_id".to_string(), org_id.to_string()),
-        ("project_id".to_string(), project_id.to_string()),
-        ("key_id".to_string(), key_id.to_string()),
-        ("virtual_model_id".to_string(), virtual_model_id.to_string()),
-        ("pool_id".to_string(), source_pool_id.to_string()),
+        ("org_id".to_string(), scope.org_id.to_string()),
+        ("project_id".to_string(), scope.project_id.to_string()),
+        ("key_id".to_string(), scope.key_id.to_string()),
+        (
+            "virtual_model_id".to_string(),
+            scope.virtual_model_id.to_string(),
+        ),
+        ("pool_id".to_string(), scope.source_pool_id.to_string()),
         ("routing_strategy".to_string(), "judge".to_string()),
         ("judge_request".to_string(), "1".to_string()),
         // The outer request owns this quota permit; the judge must not release it.
