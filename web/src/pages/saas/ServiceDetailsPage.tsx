@@ -5,6 +5,7 @@ import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
+import { useBodyScrollLock } from '../../lib/scrollLock'
 import { ErrorMessage, Field, Page, errorText } from './components'
 import { callExample, catalogProviderPrefixes, computeBundleSelection, emptyEndpoint, filterCatalogModels, formatPriceInput, inferDefaultCapability, routingInfo, searchScore } from './serviceUtils'
 import { StrategyMatrixCardSelector, WorkloadPresetSelector } from './ServiceSelectors'
@@ -809,15 +810,8 @@ export function ModelProbeModal({
 function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
 
-  // Lock body scroll while the modal is open. Headless UI scrolls the selected option
-  // into view when a Listbox opens, which would otherwise scroll the page behind.
-  useEffect(() => {
-    const original = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [])
+  // Keep the page behind the dialog from scrolling while it is open.
+  useBodyScrollLock()
   const [savedAccounts, setSavedAccounts] = useState<SaasProvider[]>([])
   const [useExisting, setUseExisting] = useState(true)
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
@@ -1161,7 +1155,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
-      <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl min-w-[320px] sm:min-w-[640px] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+      <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl min-w-[320px] sm:min-w-[640px] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl [scrollbar-gutter:stable]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">{t('services.add_model')}</h2>
@@ -1293,7 +1287,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         {t('services.custom_or_additional_model')}
                       </button>
                     </div>
-                    <div className="h-48 overflow-y-auto divide-y divide-zinc-100 pr-1">
+                    <div className="h-48 overflow-y-auto divide-y divide-zinc-100 pr-1 [scrollbar-gutter:stable]">
                       {selectedModels.map((m) => (
                         <div
                           key={m.model}
@@ -1398,7 +1392,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                       />
                     </div>
 
-                    <div className="h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2">
+                    <div className="h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 [scrollbar-gutter:stable]">
                       {visibleModels.length > 0 ? (
                         <div className="space-y-1.5">
                           {visibleModels.map((m) => {

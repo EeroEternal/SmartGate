@@ -54,11 +54,19 @@ export default function Select({
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <ListboxOptions className={cn(
-              "absolute z-30 max-h-60 min-w-full overflow-auto rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-zinc-200",
-              direction === 'up' ? "bottom-full mb-1" : "mt-1",
-              isSm ? "text-xs" : "text-sm"
-            )}>
+            <ListboxOptions
+              // Dropdowns must never take over document scrolling. Headless UI defaults to
+              // `modal: true`, which hides the page scrollbar and injects a compensating
+              // `padding-right` on <html> for as long as the list is open. Next to the
+              // scroll lock owned by the surrounding modal that fights over the same
+              // layout width and makes the page behind the dialog jump sideways.
+              modal={false}
+              className={cn(
+                "absolute z-30 max-h-60 min-w-full overflow-auto rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-zinc-200",
+                direction === 'up' ? "bottom-full mb-1" : "mt-1",
+                isSm ? "text-xs" : "text-sm"
+              )}
+            >
               {options.map((option) => (
                 <ListboxOption
                   key={option.id}

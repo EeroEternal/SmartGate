@@ -21,11 +21,18 @@
 @layer base {
   html {
     scrollbar-gutter: stable;
+    /* `clip` (unlike `hidden`) keeps horizontal overflow while making the viewport
+       impossible to scroll sideways, even programmatically. Without it, focus or
+       scroll-into-view inside a dialog could push the page to the side and, because
+       no horizontal scrollbar is offered, the user could never move it back. */
+    overflow-x: clip;
   }
 
   body {
     @apply antialiased;
-    overflow-x: hidden;
+    /* Same rationale as above; `clip` also avoids turning <body> into a scroll
+       container, which would break `position: sticky` descendants. */
+    overflow-x: clip;
     background: var(--color-surface-200);
     color: var(--color-ink);
     font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
