@@ -76,13 +76,11 @@ pub fn expected_agentic_cost(
     }
     let cached = (input as f64 * AGENTIC_CACHE_FRACTION) as u32;
     let fresh = input.saturating_sub(cached);
-    let cache_price = profile
-        .price
-        .cache_read_per_1m
-        .unwrap_or(profile.price.input_per_1m * 0.1);
-    ((fresh as f64 / 1_000_000.0) * profile.price.input_per_1m
+    let input_price = profile.price.input_price();
+    let cache_price = profile.price.cache_read_per_1m.unwrap_or(input_price * 0.1);
+    ((fresh as f64 / 1_000_000.0) * input_price
         + (cached as f64 / 1_000_000.0) * cache_price
-        + (output as f64 / 1_000_000.0) * profile.price.output_per_1m)
+        + (output as f64 / 1_000_000.0) * profile.price.output_price())
         * (1.0 + err)
 }
 
@@ -272,20 +270,37 @@ mod tests {
     }
 
     #[test]
+    fn unpriced_endpoints_are_penalized_not_treated_as_free() {
+        let unpriced = EndpointProfile::default();
+        let free = EndpointProfile {
+            price: UnitPrice::known(0.0, 0.0),
+            ..Default::default()
+        };
+        let paid = EndpointProfile {
+            price: UnitPrice::known(1.0, 2.0),
+            ..Default::default()
+        };
+
+        assert_eq!(expected_cost(&unpriced, 1_000_000, 0, 0.0), f64::MAX / 8.0);
+        assert_eq!(expected_cost(&free, 1_000_000, 0, 0.0), 0.0);
+        assert!(expected_cost(&paid, 1_000_000, 0, 0.0) > 0.0);
+    }
+
+    #[test]
     fn cheaper_wins_cost_aware() {
         let m = member();
         let cheap = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 1.0,
-                output_per_1m: 2.0,
+                input_per_1m: Some(1.0),
+                output_per_1m: Some(2.0),
                 ..Default::default()
             },
             ..Default::default()
         };
         let expensive = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 10.0,
-                output_per_1m: 20.0,
+                input_per_1m: Some(10.0),
+                output_per_1m: Some(20.0),
                 ..Default::default()
             },
             ..Default::default()
@@ -338,8 +353,8 @@ mod tests {
         let m = member();
         let flash = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 0.14,
-                output_per_1m: 0.28,
+                input_per_1m: Some(0.14),
+                output_per_1m: Some(0.28),
                 ..Default::default()
             },
             capability_score: 0.65,
@@ -347,8 +362,8 @@ mod tests {
         };
         let pro = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 2.5,
-                output_per_1m: 10.0,
+                input_per_1m: Some(2.5),
+                output_per_1m: Some(10.0),
                 ..Default::default()
             },
             capability_score: 0.95,
@@ -476,16 +491,16 @@ mod tests {
         // Identical headline prices; one declares a cheaper cached-input price.
         let cache_cheap = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 1.0,
-                output_per_1m: 2.0,
+                input_per_1m: Some(1.0),
+                output_per_1m: Some(2.0),
                 cache_read_per_1m: Some(0.02),
             },
             ..Default::default()
         };
         let cache_default = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 1.0,
-                output_per_1m: 2.0,
+                input_per_1m: Some(1.0),
+                output_per_1m: Some(2.0),
                 cache_read_per_1m: None,
             },
             ..Default::default()
@@ -529,8 +544,8 @@ mod tests {
         };
         let paid_ep = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 0.1,
-                output_per_1m: 0.2,
+                input_per_1m: Some(0.1),
+                output_per_1m: Some(0.2),
                 ..Default::default()
             },
             billing_tier: crate::pricing::BillingTier::PayAsYouGo,
@@ -578,8 +593,8 @@ mod tests {
         let m = member();
         let sub_ep = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 2.0,
-                output_per_1m: 5.0,
+                input_per_1m: Some(2.0),
+                output_per_1m: Some(5.0),
                 ..Default::default()
             },
             billing_tier: crate::pricing::BillingTier::SubscriptionRolling,
@@ -591,8 +606,8 @@ mod tests {
         };
         let payg_ep = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 1.0,
-                output_per_1m: 2.5,
+                input_per_1m: Some(1.0),
+                output_per_1m: Some(2.5),
                 ..Default::default()
             },
             billing_tier: crate::pricing::BillingTier::PayAsYouGo,
@@ -641,8 +656,8 @@ mod tests {
         let m = member();
         let base_profile = EndpointProfile {
             price: UnitPrice {
-                input_per_1m: 2.0,
-                output_per_1m: 5.0,
+                input_per_1m: Some(2.0),
+                output_per_1m: Some(5.0),
                 ..Default::default()
             },
             billing_tier: crate::pricing::BillingTier::SubscriptionRolling,

@@ -997,7 +997,8 @@ async fn load_savings_baseline(
 ) -> Result<Option<SavingsBaselineRow>, sqlx::Error> {
     let baseline = sqlx::query_as::<_, SavingsBaselineRow>(
         "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
-                pa.name, e.input_price_per_1m, e.output_price_per_1m
+                pa.name, COALESCE(e.input_price_per_1m, 0) AS input_price_per_1m,
+                COALESCE(e.output_price_per_1m, 0) AS output_price_per_1m
          FROM savings_baselines sb
          JOIN virtual_models vm ON vm.id = sb.virtual_model_id
          JOIN model_pools mp ON mp.id = vm.pool_id
@@ -1048,7 +1049,8 @@ async fn load_savings_baseline(
         // persisted baseline rather than their own random candidate.
         return sqlx::query_as::<_, SavingsBaselineRow>(
             "SELECT sb.virtual_model_id, sb.endpoint_id, vm.name, e.upstream_model_id,
-                    pa.name, e.input_price_per_1m, e.output_price_per_1m
+                    pa.name, COALESCE(e.input_price_per_1m, 0) AS input_price_per_1m,
+                    COALESCE(e.output_price_per_1m, 0) AS output_price_per_1m
              FROM savings_baselines sb
              JOIN virtual_models vm ON vm.id = sb.virtual_model_id
              JOIN model_pools mp ON mp.id = vm.pool_id

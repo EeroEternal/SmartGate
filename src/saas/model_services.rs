@@ -137,6 +137,14 @@ pub(super) struct UpdateModelEndpointRequest {
     context_length: Option<i32>,
 }
 
+/// Multilingual probe input. The model is asked in Chinese and the answer is checked
+/// for Chinese keywords, so this non-English payload is intentional test data rather
+/// than a stray literal.
+const MULTILINGUAL_PROBE_PROMPT: &str = "请用中文简述大语言模型智能路由的优势。";
+
+/// Keywords a fluent Chinese answer to [`MULTILINGUAL_PROBE_PROMPT`] should contain.
+const MULTILINGUAL_PROBE_KEYWORDS: [&str; 5] = ["成本", "性能", "效率", "延迟", "路由"];
+
 /// Pool member of one model service, including the fields that explain routing.
 #[derive(Debug, sqlx::FromRow)]
 struct ServiceEndpointRow {
@@ -147,8 +155,9 @@ struct ServiceEndpointRow {
     protocol: String,
     upstream_model_id: String,
     base_url: String,
-    input_price_per_1m: f64,
-    output_price_per_1m: f64,
+    /// `None` = unpriced (unknown cost); `Some(0.0)` = free model.
+    input_price_per_1m: Option<f64>,
+    output_price_per_1m: Option<f64>,
     capability_score: f64,
     context_length: Option<i32>,
     enabled: bool,
@@ -430,8 +439,8 @@ pub(super) async fn create_model_service(
             .bind(&provider_id)
             .bind(format!("{}-{}", service_name, index + 1))
             .bind(&endpoint.upstream_model_id)
-            .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
-            .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
+            .bind(endpoint.input_price_per_1m)
+            .bind(endpoint.output_price_per_1m)
             .bind(effective_capability_score(
                 &endpoint.upstream_model_id,
                 endpoint.capability_score.unwrap_or(0.0),
@@ -906,8 +915,8 @@ pub(super) async fn add_model_service_endpoint(
             .bind(&provider_id)
             .bind(format!("model-service-{}", current_count))
             .bind(&endpoint.upstream_model_id)
-            .bind(endpoint.input_price_per_1m.unwrap_or(0.0))
-            .bind(endpoint.output_price_per_1m.unwrap_or(0.0))
+            .bind(endpoint.input_price_per_1m)
+            .bind(endpoint.output_price_per_1m)
             .bind(effective_capability_score(
                 &endpoint.upstream_model_id,
                 endpoint.capability_score.unwrap_or(0.0),
@@ -1087,7 +1096,8 @@ pub(super) async fn update_model_service_endpoint(
         .bind(input.api_key.as_deref().filter(|key| !key.trim().is_empty())).bind(&account_id)
         .execute(&mut *tx).await.map_err(db_error)?;
     sqlx::query("UPDATE endpoints SET upstream_model_id = $1, input_price_per_1m = $2, output_price_per_1m = $3, capability_score = $4, supports_tools = COALESCE($5, supports_tools), context_length = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7")
-        .bind(model).bind(input.input_price_per_1m.unwrap_or(0.0)).bind(input.output_price_per_1m.unwrap_or(0.0))
+        // Omitting a price clears it to unpriced (NULL); an explicit 0 stays a free model.
+        .bind(model).bind(input.input_price_per_1m).bind(input.output_price_per_1m)
         .bind(effective_capability_score(model, input.capability_score.unwrap_or(0.0)))
         .bind(input.supports_tools.map(|value| if value { 1 } else { 0 })).bind(input.context_length).bind(&endpoint_id)
         .execute(&mut *tx).await.map_err(db_error)?;
@@ -1560,16 +1570,14 @@ pub(super) async fn probe_model_service_endpoint(
     let nlp_body = json!({
         "model": upstream_model_id,
         "max_tokens": 100,
-        "messages": [{"role": "user", "content": "请用中文简述大语言模型智能路由的优势。"}]
+        "messages": [{"role": "user", "content": MULTILINGUAL_PROBE_PROMPT}]
     });
     if let Ok(resp) = send_probe(nlp_body).send().await {
         let latency = start.elapsed().as_millis() as u64;
         let text = resp.text().await.unwrap_or_default();
-        let passed = text.contains("成本")
-            || text.contains("性能")
-            || text.contains("效率")
-            || text.contains("延迟")
-            || text.contains("路由");
+        let passed = MULTILINGUAL_PROBE_KEYWORDS
+            .iter()
+            .any(|keyword| text.contains(keyword));
         nlp_score = if passed { 96 } else { 75 };
         probe_results.push(json!({
             "dimension": "multilingual_nlp",

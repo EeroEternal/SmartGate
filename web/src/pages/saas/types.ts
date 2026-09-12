@@ -37,7 +37,7 @@ export type DraftEndpoint = {
   context_length: string
 }
 export type ModelDna = { code_logic: number; reasoning_math: number; agent_tools: number; multilingual_nlp: number; context_retention: number; strengths: string[] }
-export type ServiceEndpoint = { id: string; provider_id: string; provider_name: string; provider_type: string; protocol: string; model: string; base_url: string; input_price_per_1m: number; output_price_per_1m: number; capability_score: number; configured_capability_score?: number; context_length?: number; enabled?: boolean; supports_tools?: boolean; health_status?: string; cooling_down?: boolean; health_observed?: boolean; total_requests?: number; total_errors?: number; preferred_for_hard_requests?: boolean; model_dna?: ModelDna }
+export type ServiceEndpoint = { id: string; provider_id: string; provider_name: string; provider_type: string; protocol: string; model: string; base_url: string; input_price_per_1m: number | null; output_price_per_1m: number | null; capability_score: number; configured_capability_score?: number; context_length?: number; enabled?: boolean; supports_tools?: boolean; health_status?: string; cooling_down?: boolean; health_observed?: boolean; total_requests?: number; total_errors?: number; preferred_for_hard_requests?: boolean; model_dna?: ModelDna }
 export type ServiceDetails = { id: string; name: string; model?: string; strategy: string; status: string; endpoint_count: number; endpoints: ServiceEndpoint[]; judge_enabled?: boolean; judge_endpoint_id?: string; shadow_enabled?: boolean; shadow_virtual_model_id?: string; shadow_sample_rate?: number }
 export type CallApi = 'openai-chat' | 'openai-responses' | 'anthropic-messages'
 export type SavingsBaseline = {
@@ -46,7 +46,7 @@ export type SavingsBaseline = {
   model_service_name: string
   model: string
   provider_name: string
-  input_price_per_1m: number
-  output_price_per_1m: number
+  input_price_per_1m: number | null
+  output_price_per_1m: number | null
 }
 

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Database, Info, Settings2, ShieldCheck, Spar
 import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import { useI18n } from '../../lib/i18n'
+import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
 import { SavingsBaselineModal } from './SavingsBaselineModal'
 import type { SavingsBaseline, Service, ServiceDetails } from './types'
@@ -327,7 +328,7 @@ export function QualityPage() {
                     <div>
                       <div className="text-zinc-400 text-[11px]">{t('quality.avg_cost_req')}</div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-900 font-mono">
-                        {baseline.cost_per_req != null ? `$${baseline.cost_per_req.toFixed(4)}` : 'N/A'}
+                        {baseline.cost_per_req != null ? formatMoney(baseline.cost_per_req) : 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -388,7 +389,7 @@ export function QualityPage() {
                     <div className="text-emerald-800/70 text-[11px]">{t('quality.avg_cost_req')}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
                       <span className="text-sm font-bold text-emerald-700 font-mono">
-                        {routing?.cost_per_req != null ? `$${routing.cost_per_req.toFixed(4)}` : 'N/A'}
+                        {routing?.cost_per_req != null ? formatMoney(routing.cost_per_req) : 'N/A'}
                       </span>
                       <span className="text-[10px] font-semibold text-emerald-600">
                         {routing?.cost_saved_pct != null ? `(-${routing.cost_saved_pct}%)` : ''}
@@ -555,7 +556,7 @@ export function QualityPage() {
                           <div className="text-[10px] text-zinc-400">{r.latency_ms}ms</div>
                         </td>
                         <td className="py-3 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900 font-mono">
-                          ${r.cost.toFixed(4)}
+                          {formatMoney(r.cost)}
                         </td>
                       </tr>
                     )

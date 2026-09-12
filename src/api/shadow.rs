@@ -196,16 +196,55 @@ pub fn extract_response_preview(body: &[u8]) -> String {
     }
 }
 
-pub fn extract_json_preview(value: &serde_json::Value) -> String {
-    let content = value
+/// Assistant text of a non-streaming answer, in either supported protocol shape.
+///
+/// Shadow flighting compares the mirrored answer with the user-facing one, so an empty
+/// preview would make every comparison look identical. The dispatch returns whichever
+/// protocol the caller spoke, so both must be understood:
+/// - OpenAI chat completions: `choices[0].message.content` (string or text parts)
+/// - Anthropic messages: `content[]` blocks with `type: "text"`
+///
+/// Provider-shape parsing belongs to UniGateway (see AGENTS.md); this stays here only
+/// until the SDK exposes response-text normalization from a `ProtocolResponseBody`.
+fn assistant_text(value: &serde_json::Value) -> Option<String> {
+    if let Some(content) = value
         .get("choices")
         .and_then(|choices| choices.as_array())
-        .and_then(|arr| arr.first())
+        .and_then(|choices| choices.first())
         .and_then(|choice| choice.get("message"))
         .and_then(|message| message.get("content"))
-        .and_then(|content| content.as_str())
-        .unwrap_or("")
-        .to_string();
+    {
+        if let Some(text) = content.as_str() {
+            return Some(text.to_string());
+        }
+        let parts = content
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|part| part.get("text").and_then(|text| text.as_str()))
+            .collect::<Vec<_>>();
+        if !parts.is_empty() {
+            return Some(parts.join("\n"));
+        }
+    }
+
+    let blocks = value
+        .get("content")
+        .and_then(|content| content.as_array())
+        .into_iter()
+        .flatten()
+        .filter(|block| block.get("type").and_then(|kind| kind.as_str()) == Some("text"))
+        .filter_map(|block| block.get("text").and_then(|text| text.as_str()))
+        .collect::<Vec<_>>();
+    if blocks.is_empty() {
+        None
+    } else {
+        Some(blocks.join("\n"))
+    }
+}
+
+pub fn extract_json_preview(value: &serde_json::Value) -> String {
+    let content = assistant_text(value).unwrap_or_default();
     if content.len() > PREVIEW_CHARS {
         content.chars().take(PREVIEW_CHARS).collect()
     } else {
@@ -246,4 +285,60 @@ pub async fn store_shadow_evaluation(
     .execute(db)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn preview_reads_openai_chat_answers() {
+        let value =
+            json!({"choices": [{"message": {"role": "assistant", "content": "hello there"}}]});
+        assert_eq!(extract_json_preview(&value), "hello there");
+    }
+
+    #[test]
+    fn preview_reads_openai_content_parts() {
+        let value = json!({"choices": [{"message": {"content": [
+            {"type": "text", "text": "part one"},
+            {"type": "text", "text": "part two"}
+        ]}}]});
+        assert_eq!(extract_json_preview(&value), "part one\npart two");
+    }
+
+    #[test]
+    fn preview_reads_anthropic_messages_answers() {
+        let value = json!({
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "internal"},
+                {"type": "text", "text": "anthropic answer"}
+            ],
+            "stop_reason": "end_turn"
+        });
+        assert_eq!(extract_json_preview(&value), "anthropic answer");
+    }
+
+    #[test]
+    fn preview_is_empty_when_no_assistant_text_exists() {
+        assert_eq!(
+            extract_json_preview(&json!({"error": {"message": "boom"}})),
+            ""
+        );
+        assert_eq!(
+            extract_json_preview(&json!({"content": [{"type": "tool_use", "id": "tool_1"}]})),
+            ""
+        );
+    }
+
+    #[test]
+    fn previews_differ_so_shadow_similarity_is_meaningful() {
+        let a = json!({"content": [{"type": "text", "text": "the quick brown fox"}]});
+        let b = json!({"content": [{"type": "text", "text": "completely different"}]});
+        assert_ne!(extract_json_preview(&a), extract_json_preview(&b));
+    }
 }

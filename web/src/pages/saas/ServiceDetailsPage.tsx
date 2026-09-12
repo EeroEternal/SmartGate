@@ -1096,8 +1096,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
         if (catItem) {
           targetModels.push({
             model: catItem.model,
-            input_price: catItem.input_price_per_1m ? Number(catItem.input_price_per_1m) : undefined,
-            output_price: catItem.output_price_per_1m ? Number(catItem.output_price_per_1m) : undefined,
+            // 0 is a free model and must be stored as such; only a missing catalog
+            // price stays undefined (unpriced).
+            input_price: catItem.input_price_per_1m ?? undefined,
+            output_price: catItem.output_price_per_1m ?? undefined,
             capability: Number(inferDefaultCapability(catItem)),
             context_length: catItem.context_length ? Number(catItem.context_length) : undefined,
           })

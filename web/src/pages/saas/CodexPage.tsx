@@ -92,7 +92,7 @@ experimental_bearer_token = "<project-api-key>"`
             {t('codex.profile_badge')}
           </span>
         </div>
-        <pre className="mt-5 overflow-x-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
+        <pre className="mt-5 whitespace-pre-wrap break-words rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{profileConfig}</code></pre>
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
           <strong>{t('codex.why_chat_title')}</strong> {t('codex.why_chat_desc', { code: 'wire_api = "chat_completions"', param: 'thinking_budget' })}
         </div>
@@ -105,7 +105,7 @@ experimental_bearer_token = "<project-api-key>"`
             {t('codex.catalog_desc', { path: '~/.codex/models.json', code: 'slug' })}
           </p>
         </div>
-        <pre className="mt-5 max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
+        <pre className="mt-5 max-h-[32rem] overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-zinc-950 p-5 text-xs leading-6 text-zinc-200"><code>{modelCatalog}</code></pre>
       </section>
 
       <section className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -114,7 +114,7 @@ experimental_bearer_token = "<project-api-key>"`
           <p className="mt-2 text-sm leading-6 text-zinc-500">
             {t('codex.start_desc')}
           </p>
-          <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre>
+          <pre className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-zinc-950 p-4 text-sm text-zinc-200"><code>/Applications/Codex.app/Contents/MacOS/ChatGPT --profile fusion</code></pre>
           <p className="mt-3 text-xs leading-5 text-zinc-500">
             {t('codex.restart_hint')}
           </p>

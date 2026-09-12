@@ -18,6 +18,56 @@ use axum::{
 use sqlx::FromRow;
 use std::sync::Arc;
 
+/// Resolve the organization a legacy admin write belongs to.
+///
+/// `provider_accounts.org_id` and `model_pools.org_id` are nullable for historical
+/// reasons, but rows written without one are invisible to every org-scoped query (the
+/// SaaS API filters by `org_id`). An explicit `org_id` always wins; otherwise it is
+/// inferred, and only when the deployment has exactly one organization.
+async fn resolve_admin_org_id(
+    db: &sqlx::PgPool,
+    requested: Option<&str>,
+) -> Result<String, (StatusCode, Json<ApiResponse<()>>)> {
+    if let Some(org_id) = requested.map(str::trim).filter(|value| !value.is_empty()) {
+        let found: Option<(String,)> = sqlx::query_as("SELECT id FROM orgs WHERE id = $1")
+            .bind(org_id)
+            .fetch_optional(db)
+            .await
+            .map_err(admin_db_error)?;
+        return found.map(|(id,)| id).ok_or_else(|| {
+            bad_request(
+                "Unknown organization: pass an existing org_id or create the organization first",
+            )
+        });
+    }
+
+    let orgs: Vec<(String,)> = sqlx::query_as("SELECT id FROM orgs ORDER BY created_at LIMIT 2")
+        .fetch_all(db)
+        .await
+        .map_err(admin_db_error)?;
+    match orgs.len() {
+        1 => Ok(orgs[0].0.clone()),
+        0 => Err(bad_request(
+            "Create an organization before adding provider accounts or model pools",
+        )),
+        _ => Err(bad_request(
+            "org_id is required when the deployment has more than one organization",
+        )),
+    }
+}
+
+fn bad_request(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
+    (StatusCode::BAD_REQUEST, Json(ApiResponse::error(message)))
+}
+
+fn admin_db_error(error: sqlx::Error) -> (StatusCode, Json<ApiResponse<()>>) {
+    tracing::error!("DB error: {}", error);
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ApiResponse::error("Database error")),
+    )
+}
+
 pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Resources
@@ -73,14 +123,28 @@ async fn create_provider(
     Json(payload): Json<CreateProviderReq>,
 ) -> Result<Json<ApiResponse<ProviderAccount>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
+    let org_id = resolve_admin_org_id(&state.db, payload.org_id.as_deref()).await?;
+    // Mirrors migration 20260813000000_provider_protocol: Anthropic accounts must not
+    // fall back to the column default, or dispatch would speak the wrong protocol.
+    let protocol = if payload
+        .provider_type
+        .to_ascii_lowercase()
+        .contains("anthropic")
+    {
+        "anthropic"
+    } else {
+        "openai"
+    };
 
     sqlx::query(
-        "INSERT INTO provider_accounts (id, name, provider_type, base_url, api_key) 
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(&id)
+    .bind(&org_id)
     .bind(&payload.name)
     .bind(&payload.provider_type)
+    .bind(protocol)
     .bind(&payload.base_url)
     .bind(&payload.api_key)
     .execute(&state.db)
@@ -141,13 +205,15 @@ async fn create_pool(
     Json(payload): Json<CreatePoolReq>,
 ) -> Result<Json<ApiResponse<ModelPool>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
+    let org_id = resolve_admin_org_id(&state.db, payload.org_id.as_deref()).await?;
 
     sqlx::query(
-        "INSERT INTO model_pools (id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars,
+        "INSERT INTO model_pools (id, org_id, name, strategy, tool_trim_enabled, tool_trim_dry_run, max_tool_chars,
          session_affinity_enabled, session_affinity_ttl_secs)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
     )
     .bind(&id)
+    .bind(&org_id)
     .bind(&payload.name)
     .bind(&payload.strategy)
     .bind(if payload.tool_trim_enabled.unwrap_or(false) { 1 } else { 0 })
@@ -283,8 +349,8 @@ struct EndpointListRow {
     cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
     priority: i32,
     weight: i32,
-    input_price_per_1m: f64,
-    output_price_per_1m: f64,
+    input_price_per_1m: Option<f64>,
+    output_price_per_1m: Option<f64>,
     capability_score: f64,
     supports_tools: Option<i32>,
     context_length: Option<i32>,
@@ -363,8 +429,8 @@ async fn create_endpoint(
     .bind(&payload.upstream_model_id)
     .bind(payload.priority.unwrap_or(1))
     .bind(payload.weight.unwrap_or(1))
-    .bind(payload.input_price_per_1m.unwrap_or(0.0))
-    .bind(payload.output_price_per_1m.unwrap_or(0.0))
+    .bind(payload.input_price_per_1m)
+    .bind(payload.output_price_per_1m)
     .bind(payload.capability_score.unwrap_or(0.5).clamp(0.0, 1.0))
     .bind(supports_tools)
     .bind(payload.context_length)

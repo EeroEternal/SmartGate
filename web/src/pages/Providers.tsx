@@ -129,7 +129,7 @@ export default function Providers() {
           priority: parseInt(endpointForm.priority, 10) || 1,
           weight: parseInt(endpointForm.weight, 10) || 1,
           input_price_per_1m:
-            endpointForm.input_price_per_1m === '' ? 0 : parseFloat(endpointForm.input_price_per_1m),
+            endpointForm.input_price_per_1m === '' ? null : parseFloat(endpointForm.input_price_per_1m),
           output_price_per_1m:
             endpointForm.output_price_per_1m === '' ? 0 : parseFloat(endpointForm.output_price_per_1m),
           capability_score: parseFloat(endpointForm.capability_score) || 0.5,

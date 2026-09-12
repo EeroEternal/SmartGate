@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import { useI18n } from '../../lib/i18n'
+import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
 
 type QueryAnalyticsItem = {
@@ -174,10 +175,10 @@ export function AnalyticsPage() {
           <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap truncate">{t('analytics.estimated_savings')}</div>
             <div className="mt-2 text-2xl font-bold text-emerald-600 whitespace-nowrap">
-              ${(data?.summary.estimated_savings || 0).toFixed(4)}
+              {formatMoney(data?.summary.estimated_savings)}
             </div>
             <div className="mt-2 text-xs text-zinc-400 whitespace-nowrap truncate">
-              {t('analytics.total_spend', { amount: (data?.summary.total_cost || 0).toFixed(4) }) || `Total spend: $${(data?.summary.total_cost || 0).toFixed(4)}`}
+              {t('analytics.total_spend', { amount: formatMoney(data?.summary.total_cost) }) || `Total spend: ${formatMoney(data?.summary.total_cost)}`}
             </div>
           </div>
         </div>
@@ -386,7 +387,7 @@ export function AnalyticsPage() {
                           <div className="text-[10px] text-zinc-400">{q.latency_ms}ms</div>
                         </td>
                         <td className="py-3 px-4 align-middle text-right whitespace-nowrap font-semibold text-zinc-900">
-                          ${q.cost.toFixed(4)}
+                          {formatMoney(q.cost)}
                         </td>
                       </tr>
                     )

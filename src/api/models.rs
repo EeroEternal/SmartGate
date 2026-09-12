@@ -37,12 +37,18 @@ pub struct CreateProviderReq {
     pub provider_type: String,
     pub base_url: String,
     pub api_key: String,
+    /// Organization that owns the account. Optional only while the deployment has a
+    /// single organization; otherwise rows would be stored without an owner and stay
+    /// invisible to every org-scoped query.
+    pub org_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreatePoolReq {
     pub name: String,
     pub strategy: String,
+    /// Organization that owns the pool; see `CreateProviderReq::org_id`.
+    pub org_id: Option<String>,
     pub tool_trim_enabled: Option<bool>,
     pub tool_trim_dry_run: Option<bool>,
     pub max_tool_chars: Option<i32>,
@@ -172,8 +178,9 @@ pub struct EndpointView {
     pub cooldown_until: Option<String>,
     pub priority: i32,
     pub weight: i32,
-    pub input_price_per_1m: f64,
-    pub output_price_per_1m: f64,
+    /// `None` = unpriced; `Some(0.0)` = free model.
+    pub input_price_per_1m: Option<f64>,
+    pub output_price_per_1m: Option<f64>,
     pub capability_score: f64,
     pub supports_tools: Option<bool>,
     pub context_length: Option<i32>,

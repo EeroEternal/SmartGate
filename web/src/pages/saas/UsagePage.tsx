@@ -1,3 +1,4 @@
+import { formatMoney } from '../../lib/format'
 import { useEffect, useState } from 'react'
 import { ChevronRight, HelpCircle, Settings2, X } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
@@ -58,7 +59,6 @@ type SavingsData = {
   basis: string
 }
 
-const money = (value: number | undefined) => `$${(value || 0).toFixed(4)}`
 const compactNumber = (value: number | undefined) => (value || 0).toLocaleString()
 const compactTokens = (value: number | undefined) => {
   const v = value || 0
@@ -203,7 +203,7 @@ export function UsagePage() {
       <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label={t('usage.requests')} value={compactNumber(data?.requests)} />
         <Stat label={t('usage.total_tokens')} value={compactTokens(data?.total_tokens)} fullValue={compactNumber(data?.total_tokens)} />
-        <Stat label={t('usage.estimated_spend')} value={money(data?.estimated_spend)} />
+        <Stat label={t('usage.estimated_spend')} value={formatMoney(data?.estimated_spend)} />
         <Stat label={t('usage.success_rate')} value={`${((data?.success_rate || 0) * 100).toFixed(1)}%`} />
       </div>
 
@@ -253,7 +253,7 @@ export function UsagePage() {
                           {spendShare.toFixed(1)}% {t('usage.share')}
                         </span>
                       </div>
-                      <span className="font-mono font-bold text-zinc-900 shrink-0">{money(item.estimated_spend)}</span>
+                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatMoney(item.estimated_spend)}</span>
                     </div>
 
                     <div className="mt-2.5 h-1.5 w-full rounded-full bg-zinc-200/60 overflow-hidden">
@@ -289,7 +289,7 @@ export function UsagePage() {
                                 </div>
                               </div>
                               <div className="text-right shrink-0">
-                                <div className="font-mono font-semibold text-zinc-800">{money(model.estimated_spend)}</div>
+                                <div className="font-mono font-semibold text-zinc-800">{formatMoney(model.estimated_spend)}</div>
                                 <div className="text-[10px] text-zinc-400">{modelShare.toFixed(0)}%</div>
                               </div>
                             </div>
@@ -326,7 +326,7 @@ export function UsagePage() {
         </div>
         <div className="mt-5 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
           <Stat label={t('usage.trimmed_chars')} value={compactNumber(savings?.trimmed_chars || data?.trimmed_chars)} />
-          <Stat label={t('usage.dollar_savings')} value={savings?.estimated_savings == null ? (t('usage.not_available')) : money(Number(savings.estimated_savings))} />
+          <Stat label={t('usage.dollar_savings')} value={savings?.estimated_savings == null ? (t('usage.not_available')) : formatMoney(Number(savings.estimated_savings))} />
         </div>
         {baseline && (
           <p className="mt-4 text-xs text-zinc-600">
@@ -365,7 +365,7 @@ export function UsagePage() {
         <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex justify-between text-sm">
             <span>{t('usage.todays_budget')}</span>
-            <span className="font-mono">{data.budget.daily_limit ? `${money(data.budget.spent_today)} / ${money(data.budget.daily_limit)}` : (t('usage.no_limit'))}</span>
+            <span className="font-mono">{data.budget.daily_limit ? `${formatMoney(data.budget.spent_today)} / ${formatMoney(data.budget.daily_limit)}` : (t('usage.no_limit'))}</span>
           </div>
           <div className="mt-3 h-2 rounded-full bg-zinc-100">
             <div className="h-full rounded-full bg-zinc-900" style={{ width: `${Math.min((data.budget.daily_limit ? data.budget.spent_today / data.budget.daily_limit : 0) * 100, 100)}%` }} />

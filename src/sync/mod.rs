@@ -25,8 +25,9 @@ struct SyncEndpointRow {
     base_url: String,
     api_key: String,
     account_name: String,
-    input_price_per_1m: f64,
-    output_price_per_1m: f64,
+    /// `None` when the endpoint has no configured price (unpriced, never "free").
+    input_price_per_1m: Option<f64>,
+    output_price_per_1m: Option<f64>,
     capability_score: f64,
     supports_tools: Option<i32>,
     context_length: Option<i32>,

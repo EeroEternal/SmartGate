@@ -64,8 +64,8 @@ fn profile_with_family(
 ) -> EndpointProfile {
     EndpointProfile {
         price: UnitPrice {
-            input_per_1m: input,
-            output_per_1m: output,
+            input_per_1m: Some(input),
+            output_per_1m: Some(output),
             cache_read_per_1m: None,
         },
         capability_score: capability,

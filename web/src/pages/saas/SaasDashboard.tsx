@@ -1,3 +1,4 @@
+import { formatMoney } from '../../lib/format'
 import { useEffect, useState } from 'react'
 import { ArrowUpRight, CheckCircle2, HelpCircle, KeyRound, Route, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -11,7 +12,6 @@ interface ApiKey { id: string }
 
 interface Usage { requests: number; total_tokens: number; estimated_spend: number; success_rate: number; trimmed_chars: number; budget: { status: string; spent_today: number; daily_limit: number | null; remaining_today: number | null } }
 
-const money = (value = 0) => `$${value.toFixed(4)}`
 const compactTokens = (value = 0) => {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
@@ -131,7 +131,7 @@ export default function SaasDashboard() {
           </section>
         )}
         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card title={t('usage.total_spend') || 'Estimated spend'} value={money(usage?.estimated_spend)} detail={t('overview.last_30_days') || 'last 30 days'} />
+          <Card title={t('usage.total_spend') || 'Estimated spend'} value={formatMoney(usage?.estimated_spend)} detail={t('overview.last_30_days') || 'last 30 days'} />
           <Card title={t('overview.total_requests') || 'Total requests'} value={(usage?.requests || 0).toLocaleString()} detail={t('overview.success_rate_detail', { rate: ((usage?.success_rate || 0) * 100).toFixed(1) }) || `${((usage?.success_rate || 0) * 100).toFixed(1)}% successful`} />
           <Card title={t('usage.tokens_consumed') || 'Tokens consumed'} value={compactTokens(usage?.total_tokens || 0)} fullValue={(usage?.total_tokens || 0).toLocaleString()} detail={t('overview.input_output') || 'input + output'} />
           <Card title={t('overview.active_services') || 'Active model services'} value={services.length.toString()} detail={t('overview.personal_services') || 'personal model services'} />
@@ -182,7 +182,7 @@ export default function SaasDashboard() {
             <div className="mt-7 space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">{t('usage.budget_limit') || 'Budget limit'}</span>
-                <span>{usage?.budget?.daily_limit ? `${money(usage.budget.spent_today)} / ${money(usage.budget.daily_limit)}` : (t('usage.no_limit') || 'No limit set')}</span>
+                <span>{usage?.budget?.daily_limit ? `${formatMoney(usage.budget.spent_today)} / ${formatMoney(usage.budget.daily_limit)}` : (t('usage.no_limit') || 'No limit set')}</span>
               </div>
               <div className="h-2 bg-zinc-800 rounded-full">
                 <div className="h-full bg-white rounded-full" style={{ width: `${Math.min((usage?.budget?.daily_limit ? usage.budget.spent_today / usage.budget.daily_limit : 0) * 100, 100)}%` }} />

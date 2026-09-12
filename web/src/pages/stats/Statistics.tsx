@@ -1,3 +1,4 @@
+import { formatMoney } from '../../lib/format'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import HealthBadge from '../../components/HealthBadge'
 import Select from '../../components/Select'
@@ -77,7 +78,6 @@ const RANGE_OPTIONS = [
 ]
 
 const number = (value = 0) => value.toLocaleString()
-const money = (value = 0) => `$${value.toFixed(4)}`
 const percent = (value = 0) => `${(value * 100).toFixed(1)}%`
 
 function MetricCard({ label, value, detail }: { label: string; value: string; detail?: ReactNode }) {
@@ -103,7 +103,7 @@ function BreakdownTable({ title, rows, value }: { title: string; rows: Breakdown
               <div key={row.name}>
                 <div className="flex justify-between gap-3 text-sm">
                   <span className="truncate" title={row.name}>{row.name}</span>
-                  <span className="font-mono text-zinc-600">{value === 'spend' ? money(amount) : number(amount)}</span>
+                  <span className="font-mono text-zinc-600">{value === 'spend' ? formatMoney(amount) : number(amount)}</span>
                 </div>
                 <div className="h-1.5 bg-zinc-100 rounded-full mt-1 overflow-hidden">
                   <div className="h-full bg-zinc-800 rounded-full" style={{ width: `${Math.max((amount / max) * 100, 2)}%` }} />
@@ -168,7 +168,7 @@ export default function Statistics() {
         <div className="bg-white border border-rose-200 rounded-lg p-5 text-sm text-rose-700">Unable to load statistics.</div>
       ) : <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard label="Estimated spend" value={money(summary?.estimated_spend)} detail="Based on configured endpoint prices" />
+          <MetricCard label="Estimated spend" value={formatMoney(summary?.estimated_spend)} detail="Based on configured endpoint prices" />
           <MetricCard label="Requests" value={number(summary?.requests)} detail={`${percent(summary?.success_rate)} success rate`} />
           <MetricCard label="Total tokens" value={number(summary?.total_tokens)} detail={<><span className="block">{number(summary?.prompt_tokens)} input</span><span className="block">{number(summary?.completion_tokens)} output</span></>} />
           <MetricCard label="Average latency" value={`${Math.round(summary?.average_latency_ms ?? 0)} ms`} detail={`P95 ${Math.round(stats.latency?.p95_ms ?? 0)} ms`} />

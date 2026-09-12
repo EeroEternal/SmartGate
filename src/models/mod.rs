@@ -48,6 +48,8 @@ pub struct ProviderAccount {
     pub provider_type: String,
     pub protocol: String,
     pub base_url: String,
+    /// Upstream credential. Never serialized: responses must not expose provider keys.
+    #[serde(skip_serializing)]
     pub api_key: String,
     pub status: String,
     pub metadata: Option<String>,
@@ -66,10 +68,10 @@ pub struct Endpoint {
     pub weight: i32,
     pub health_status: String,
     pub cooldown_until: Option<DateTime<Utc>>,
-    /// USD per 1M input tokens (0 = unpriced for CostAware).
-    pub input_price_per_1m: f64,
-    /// USD per 1M output tokens (0 = unpriced for CostAware).
-    pub output_price_per_1m: f64,
+    /// USD per 1M input tokens; `None` = unpriced (unknown cost), `Some(0.0)` = free.
+    pub input_price_per_1m: Option<f64>,
+    /// USD per 1M output tokens; `None` = unpriced (unknown cost), `Some(0.0)` = free.
+    pub output_price_per_1m: Option<f64>,
     pub capability_score: f64,
     pub supports_tools: Option<i32>,
     pub context_length: Option<i32>,

@@ -3,21 +3,46 @@
 /// Normalized unit prices for one endpoint or upstream model.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UnitPrice {
-    pub input_per_1m: f64,
-    pub output_per_1m: f64,
+    /// USD per 1M input tokens; `None` when no price is configured for the endpoint.
+    pub input_per_1m: Option<f64>,
+    /// USD per 1M output tokens; `None` when no price is configured for the endpoint.
+    pub output_per_1m: Option<f64>,
     pub cache_read_per_1m: Option<f64>,
 }
 
 impl UnitPrice {
-    /// True when the endpoint has valid unit pricing (including $0 free models).
+    /// Unit price of an endpoint with known pricing. `Some(0.0)` is a free model.
+    pub fn known(input_per_1m: f64, output_per_1m: f64) -> Self {
+        Self {
+            input_per_1m: Some(input_per_1m),
+            output_per_1m: Some(output_per_1m),
+            cache_read_per_1m: None,
+        }
+    }
+
+    /// True when the endpoint has a configured price for at least one axis.
+    ///
+    /// An endpoint without a price is *unknown*, not free: CostAware must not rank it
+    /// as the cheapest option, so callers fall back to `expected_cost`'s penalty
+    /// branch. A free model carries `Some(0.0)` and stays genuinely cheap.
     pub fn is_priced(&self) -> bool {
-        self.input_per_1m >= 0.0 && self.output_per_1m >= 0.0
+        self.input_per_1m.is_some() || self.output_per_1m.is_some()
+    }
+
+    /// Input price, treating a missing axis as 0 for arithmetic.
+    pub fn input_price(&self) -> f64 {
+        self.input_per_1m.unwrap_or(0.0)
+    }
+
+    /// Output price, treating a missing axis as 0 for arithmetic.
+    pub fn output_price(&self) -> f64 {
+        self.output_per_1m.unwrap_or(0.0)
     }
 
     /// Rough expected cost for estimated token counts.
     pub fn estimate_cost(&self, input_tokens: u32, output_tokens: u32) -> f64 {
-        (input_tokens as f64 / 1_000_000.0) * self.input_per_1m
-            + (output_tokens as f64 / 1_000_000.0) * self.output_per_1m
+        (input_tokens as f64 / 1_000_000.0) * self.input_price()
+            + (output_tokens as f64 / 1_000_000.0) * self.output_price()
     }
 
     /// Accurate cost calculation factoring in prompt cache hits.
@@ -29,18 +54,19 @@ impl UnitPrice {
     ) -> f64 {
         let hits = cache_hit_tokens.unwrap_or(0).min(prompt_tokens);
         let misses = prompt_tokens.saturating_sub(hits);
+        let input_price = self.input_price();
         let cache_price = self.cache_read_per_1m.unwrap_or({
-            if self.input_per_1m > 0.0 {
+            if input_price > 0.0 {
                 // Default to 10% of base input price (90% discount) when cache hits occur
-                self.input_per_1m * 0.1
+                input_price * 0.1
             } else {
                 0.0
             }
         });
 
-        (misses as f64 / 1_000_000.0) * self.input_per_1m
+        (misses as f64 / 1_000_000.0) * input_price
             + (hits as f64 / 1_000_000.0) * cache_price
-            + (completion_tokens as f64 / 1_000_000.0) * self.output_per_1m
+            + (completion_tokens as f64 / 1_000_000.0) * self.output_price()
     }
 }
 
@@ -368,10 +394,29 @@ mod tests {
     }
 
     #[test]
+    fn unpriced_differs_from_free() {
+        let unpriced = UnitPrice::default();
+        let free = UnitPrice::known(0.0, 0.0);
+        let paid = UnitPrice::known(0.5, 1.5);
+
+        assert!(
+            !unpriced.is_priced(),
+            "an endpoint without a configured price must not be treated as priced"
+        );
+        assert!(
+            free.is_priced(),
+            "an explicit $0 model is free, not unpriced"
+        );
+        assert!(paid.is_priced());
+        assert_eq!(free.estimate_cost(1_000_000, 1_000_000), 0.0);
+        assert!(paid.estimate_cost(1_000_000, 1_000_000) > 0.0);
+    }
+
+    #[test]
     fn test_calculate_cost_with_cache_hit() {
         let price = UnitPrice {
-            input_per_1m: 1.0,
-            output_per_1m: 2.0,
+            input_per_1m: Some(1.0),
+            output_per_1m: Some(2.0),
             cache_read_per_1m: Some(0.02),
         };
         // 1M prompt tokens with 900k cache hit + 100k cache miss, 100k completion tokens
@@ -387,8 +432,8 @@ mod tests {
     #[test]
     fn test_calculate_cost_default_discount() {
         let price = UnitPrice {
-            input_per_1m: 1.0,
-            output_per_1m: 2.0,
+            input_per_1m: Some(1.0),
+            output_per_1m: Some(2.0),
             cache_read_per_1m: None,
         };
         // default 10% discount on cache hits
