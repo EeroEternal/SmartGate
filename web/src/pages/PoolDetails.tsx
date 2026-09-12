@@ -135,7 +135,7 @@ export default function PoolDetails() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <Link to="/pools" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-black">
+      <Link to="/admin/pools" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-black">
         <ArrowLeft className="w-4 h-4" /> Back to Pools
       </Link>
 

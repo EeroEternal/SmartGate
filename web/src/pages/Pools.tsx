@@ -137,7 +137,7 @@ export default function Pools() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link
-                        to={`/pools/${pool.id}`}
+                        to={`/admin/pools/${pool.id}`}
                         className="text-zinc-500 hover:text-black font-medium"
                       >
                         {t('admin.manage_endpoints')}

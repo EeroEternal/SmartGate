@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
@@ -123,8 +123,10 @@ function Dashboard() {
 function Sidebar() {
   const { t } = useI18n()
   const location = useLocation()
+  // The admin console lives under /admin so that its links do not collide with the
+  // marketing routes; the dashboard is only active on its exact path.
   const isActive = (path: string) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+    path === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(path)
 
   const navItemClass = (path: string) =>
     `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -144,27 +146,27 @@ function Sidebar() {
         </h1>
       </div>
       <nav className="flex-1 p-4 space-y-1">
-        <Link to="/" className={navItemClass('/')}>
+        <Link to="/admin" className={navItemClass('/admin')}>
           <LayoutDashboard className="w-4 h-4" />
           {t('nav.dashboard')}
         </Link>
-        <Link to="/providers" className={navItemClass('/providers')}>
+        <Link to="/admin/providers" className={navItemClass('/admin/providers')}>
           <Database className="w-4 h-4" />
           {t('nav.providers')}
         </Link>
-        <Link to="/pools" className={navItemClass('/pools')}>
+        <Link to="/admin/pools" className={navItemClass('/admin/pools')}>
           <Layers className="w-4 h-4" />
           {t('nav.pools')}
         </Link>
-        <Link to="/virtual-models" className={navItemClass('/virtual-models')}>
+        <Link to="/admin/virtual-models" className={navItemClass('/admin/virtual-models')}>
           <Box className="w-4 h-4" />
           {t('nav.virtual_models')}
         </Link>
-        <Link to="/access" className={navItemClass('/access')}>
+        <Link to="/admin/access" className={navItemClass('/admin/access')}>
           <ShieldCheck className="w-4 h-4" />
           {t('nav.access_keys')}
         </Link>
-        <Link to="/stats" className={navItemClass('/stats')}>
+        <Link to="/admin/stats" className={navItemClass('/admin/stats')}>
           <Activity className="w-4 h-4" />
           {t('nav.statistics')}
         </Link>
@@ -211,6 +213,16 @@ function HeaderHealth() {
   )
 }
 
+/**
+ * Keeps the pre-/admin links (`/pools/<id>` and friends) working by forwarding them to
+ * the canonical admin console URL, splat included.
+ */
+function LegacyAdminRedirect({ to }: { to: string }) {
+  const params = useParams()
+  const rest = params['*']
+  return <Navigate to={rest ? `${to}/${rest}` : to} replace />
+}
+
 function AdminConsole() {
   const { t } = useI18n()
   return (
@@ -225,8 +237,8 @@ function AdminConsole() {
           </div>
         </header>
         <main className="p-8">
+          {/* Paths below are relative to the /admin mount point. */}
           <Routes>
-            <Route path="/admin" element={<Dashboard />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/pools" element={<Pools />} />
@@ -264,11 +276,13 @@ function App() {
           <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
           <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
           <Route path="/admin/*" element={<AdminConsole />} />
-          <Route path="/providers" element={<AdminConsole />} />
-          <Route path="/pools/*" element={<AdminConsole />} />
-          <Route path="/virtual-models" element={<AdminConsole />} />
-          <Route path="/access" element={<AdminConsole />} />
-          <Route path="/stats" element={<AdminConsole />} />
+          {/* Legacy admin URLs: these used to mount the console directly, which left the
+              nested console routes unable to match, so they rendered the dashboard. */}
+          <Route path="/providers" element={<LegacyAdminRedirect to="/admin/providers" />} />
+          <Route path="/pools/*" element={<LegacyAdminRedirect to="/admin/pools" />} />
+          <Route path="/virtual-models" element={<LegacyAdminRedirect to="/admin/virtual-models" />} />
+          <Route path="/access" element={<LegacyAdminRedirect to="/admin/access" />} />
+          <Route path="/stats" element={<LegacyAdminRedirect to="/admin/stats" />} />
           <Route path="*" element={<LandingPage />} />
         </Routes>
       </Router>
