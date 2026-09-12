@@ -58,7 +58,10 @@
     "view_all": "查看全部",
     "copy_message": "复制消息",
     "default_account": "账户",
-    "signed_in_as": "当前登录"
+    "signed_in_as": "当前登录",
+    "something_went_wrong": "出现问题",
+    "not_applicable": "不适用",
+    "open_account_menu": "打开账户菜单"
   },
   "pagination": {
     "showing": "显示第 {start}–{end} 条，共 {total} 条记录",
@@ -264,7 +267,23 @@
     "judge_model_fallback": "已启用",
     "probe_failed": "能力探测失败",
     "probe_request_failed": "探测请求失败",
-    "test_connection_hint": "验证 API Key 与上游端点是否可达"
+    "test_connection_hint": "验证 API Key 与上游端点是否可达",
+    "free_badge": "免费",
+    "context_badge": "{value} 上下文",
+    "connection_failed": "连接失败：{message}",
+    "auto_badge": "自动",
+    "hide_api_key": "隐藏 API 密钥",
+    "show_api_key": "显示 API 密钥",
+    "probe_score_label": "探测得分：",
+    "probe_tool_schema_label": "工具 Schema：",
+    "probe_tool_supported": "支持 ✅",
+    "probe_tool_standard": "仅标准文本",
+    "probe_breakdown_title": "5D 基准明细",
+    "api_openai_chat": "OpenAI Chat",
+    "api_openai_responses": "OpenAI Responses",
+    "api_anthropic_messages": "Anthropic Messages",
+    "routing_default_desc": "在你的已连接提供商之间路由请求。",
+    "api_examples": "API 示例"
   },
   "evaluation": {
     "title": "模型评估与能力基准看板",
@@ -296,7 +315,9 @@
     "col_price": "价格 (输入/输出)",
     "no_models": "暂无接入模型。创建模型服务并添加 Provider 后即可查看评估数据。",
     "no_matching_models": "未找到匹配的模型。",
-    "run_probe": "开始探针"
+    "run_probe": "开始探针",
+    "provider_points": "{provider} • {score} 分",
+    "price_per_1m": "{price}/1M tokens"
   },
   "keys": {
     "title": "API 密钥",
@@ -362,7 +383,27 @@
     "profile_providers": "Provider",
     "profile_usage_sources": "用量来源",
     "profile_quality_unavailable": "独立质量证据尚不可用。这些工作负载统计不代表质量评分。",
-    "key_prefix": "API Key 前缀"
+    "key_prefix": "API Key 前缀",
+    "key_label": "密钥：",
+    "service_badge_single": "1 个服务",
+    "service_badge_plural": "{count} 个服务",
+    "service_badge_all": "全部服务",
+    "error_name_required": "密钥名称为必填项",
+    "error_name_exists": "已存在同名 API 密钥",
+    "error_select_service": "请至少选择一个模型服务",
+    "edit_title": "编辑 API 密钥",
+    "edit_desc": "更新此密钥可调用的服务。",
+    "create_desc": "此密钥可调用所选的模型服务。",
+    "model_note_edit": "请求必须使用所选服务名称之一作为 {code} 的值。",
+    "model_note_create": "在每个请求中，使用所选服务名称作为 {code} 的值。",
+    "need_service_edit": "编辑此密钥前请先创建模型服务。",
+    "need_service_create": "创建 API 密钥前请先创建模型服务。",
+    "download_title": "SmartGate API 密钥",
+    "download_key_line": "密钥：{key}",
+    "download_base_url_line": "Base URL：{url}",
+    "download_services_line": "已授权模型服务：{services}",
+    "download_example_request": "示例请求：",
+    "create_title": "创建 API 密钥"
   },
   "analytics": {
     "title": "路由分析与复杂度洞察",
@@ -543,7 +584,8 @@
     "save_baseline": "保存基线",
     "tracking_desc": "SmartGate 持续追踪花费与复杂度路由信号，助您做出更优的模型决策。",
     "no_trimming": "暂未记录到上下文剪裁数据。",
-    "unknown_provider": "未知提供商"
+    "unknown_provider": "未知提供商",
+    "error_select_service_model": "请先选择模型服务和模型。"
   },
   "profile": {
     "title": "编辑个人资料",
@@ -567,7 +609,18 @@
     "have_account": "已有账号？直接登录",
     "no_account": "还没有账号？立即注册",
     "code_sent": "验证码已发送至您的邮箱",
-    "auth_failed": "认证失败，请检查账号密码或验证码。"
+    "auth_failed": "认证失败，请检查账号密码或验证码。",
+    "register_subtitle": "你的个人 AI 网关从这里开始。",
+    "login_subtitle": "登录以管理你的模型服务。",
+    "send_code_failed": "无法发送验证码",
+    "continue_failed": "无法继续",
+    "password_hint": "至少 10 个字符。",
+    "code_placeholder_enter": "输入 6 位验证码",
+    "code_placeholder_send_first": "请先发送验证码",
+    "code_expires": "验证码 10 分钟后失效。",
+    "code_will_send": "我们会向你的邮箱发送一次性验证码。",
+    "resend_code": "重新发送验证码",
+    "please_wait": "请稍候…"
   },
   "errors": {
     "network_error": "网络请求失败，请检查网络连接。",
@@ -575,7 +628,10 @@
     "forbidden": "您没有执行此操作的权限。",
     "not_found": "请求的资源不存在。",
     "server_error": "服务器内部错误，请稍后重试。",
-    "upstream_error": "上游模型提供商错误：{message}"
+    "upstream_error": "上游模型提供商错误：{message}",
+    "boundary_title": "页面出错了",
+    "boundary_message": "该页面意外停止，请刷新后继续。",
+    "boundary_action": "刷新"
   },
   "openrouter": {
     "title": "OpenRouter 市场雷达",
@@ -641,7 +697,9 @@
     "err_reasoning_desc": "请使用包含 {effort} 与 {description} 的对象格式，切勿使用普通字符串。",
     "err_path_title": "AbsolutePathBuf 路径解析错误：",
     "err_path_desc": "请确保独立 Profile 中正确配置了绝对路径 {config}。",
-    "security_warning": "请妥善保管 {token} 密钥。切勿将包含真实密钥的 Profile 文件提交至公开代码仓库；建议设置本地只读权限并在密钥泄漏时立即轮换。"
+    "security_warning": "请妥善保管 {token} 密钥。切勿将包含真实密钥的 Profile 文件提交至公开代码仓库；建议设置本地只读权限并在密钥泄漏时立即轮换。",
+    "catalog_effort_low": "低推理强度",
+    "catalog_effort_high": "高推理强度"
   },
   "providers": {
     "account_vault": "Provider 凭证中心",
@@ -660,7 +718,17 @@
     "cannot_delete_has_endpoints": "无法删除该 Provider：当前仍有 {count} 个模型端点正在关联使用此账户。",
     "use_connected_account": "使用已连接的 Provider 账户",
     "connect_new_account": "录入新凭证",
-    "select_account": "选择已有 Provider 账户"
+    "select_account": "选择已有 Provider 账户",
+    "error_load": "加载提供商失败",
+    "error_delete": "删除提供商失败",
+    "error_update": "更新提供商失败",
+    "error_save": "保存提供商失败",
+    "error_test_required": "测试需要填写 Base URL 和 API Key",
+    "error_fields_required": "名称、Base URL 和 API Key 为必填项",
+    "test_passed": "提供商连接验证成功！",
+    "test_failed": "连接测试失败",
+    "name_placeholder": "OpenRouter 主账号",
+    "new_api_key_label": "新的 API Key（留空则保留现有密钥）"
   },
   "admin": {
     "dashboard_subtitle": "端点健康状态与最近网关流量。",
@@ -764,6 +832,58 @@
     "leave_blank_unlimited": "留空表示无限制。",
     "save_limits": "保存限额",
     "revoke_grant_title": "撤销模型访问权限？",
-    "revoke_grant_msg": "从 {project} 撤销 {model}？"
+    "revoke_grant_msg": "从 {project} 撤销 {model}？",
+    "token_hint": "运维控制台使用本部署的管理员令牌鉴权。令牌只保留在当前标签页，不会打进前端包。",
+    "token_label": "管理员令牌",
+    "token_placeholder": "粘贴 ADMIN_TOKEN",
+    "token_submit": "进入控制台",
+    "token_invalid": "令牌被拒绝，请核对 ADMIN_TOKEN 后重试。"
+  },
+  "landing": {
+    "badge": "成本感知的 AI 路由",
+    "title_line1": "用对的模型。",
+    "title_line2": "默认花得更少。",
+    "hero_desc": "SmartGate 为你的 AI 模型服务提供统一的简单 API，按成本、能力和健康状况路由每个请求，避免多花冤枉钱。",
+    "hero_codex_note": "通过 OpenAI Responses API 与 Codex 配合使用。",
+    "create_workspace": "创建工作区",
+    "have_account": "已有账号？",
+    "get_started": "开始使用",
+    "mock_routing_impact": "路由效果",
+    "mock_saving_now": "● 正在省钱",
+    "mock_estimated_saved": "预计节省",
+    "mock_this_month": "本月",
+    "mock_vs_default": "对比默认路由",
+    "mock_without_routing": "无成本路由",
+    "mock_with_routing": "使用 SmartGate 路由",
+    "mock_requests_optimized": "已优化请求",
+    "feature1_title": "一个端点，更智能的路由",
+    "feature1_text": "只需接入一次模型提供商，SmartGate 便按成本、能力和健康状况路由每个请求。",
+    "feature2_title": "清楚用量",
+    "feature2_text": "查看 Token、预估花费、响应时间，以及处理请求的模型服务。",
+    "feature3_title": "默认更省",
+    "feature3_text": "成本感知路由与上下文控制帮你避免为超出任务所需的能力付费。",
+    "built_for_codex": "为 Codex 打造",
+    "codex_title": "将 Codex 融入你的模型栈。",
+    "codex_desc": "通过 OpenAI Responses API 在 Codex 中使用 SmartGate。保留熟悉的 Codex 体验，由 SmartGate 在后台处理模型选择、提供商回退、预算与用量可见性。",
+    "codex_chip_gui": "支持 Codex GUI",
+    "codex_chip_routing": "智能模型路由",
+    "codex_chip_budget": "用量与预算控制",
+    "mock_workflow": "你的编码工作流",
+    "mock_connected": "已连接",
+    "mock_codex_requests": "Codex 请求",
+    "mock_one_gateway": "单一网关",
+    "mock_model_providers": "模型提供商",
+    "mock_smart_fallback": "智能回退",
+    "mock_spend_visibility": "花费可见性",
+    "mock_always_on": "始终开启",
+    "cta_title": "你的模型，你的密钥，你的数据。",
+    "cta_desc": "从个人工作区开始，按需扩展。",
+    "start_free": "免费开始",
+    "footer_copyright": "© SmartGate",
+    "footer_tagline": "花得更少，掌控每一个 Token。"
+  },
+  "dialog": {
+    "ok": "确定",
+    "confirm_title": "确定要继续吗？"
   }
 }

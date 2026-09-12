@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useI18n } from '../lib/i18n'
 import { useModal } from '../lib/modal'
 
 type DialogState = {
@@ -11,16 +12,17 @@ type DialogState = {
 }
 
 export function Dialog({ state, onConfirm, onCancel }: { state: DialogState; onConfirm: () => void; onCancel: () => void }) {
+  const { t } = useI18n()
   const dialogRef = useModal({ onClose: onCancel })
   return (
-    <div ref={dialogRef} className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/40 p-4" role="presentation" onMouseDown={onCancel}>
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/40 p-4" role="presentation" onMouseDown={onCancel}>
+      <div ref={dialogRef} className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="dialog-title" className="text-lg font-semibold text-zinc-950">{state.title}</h2>
             <div className="mt-2 text-sm leading-6 text-zinc-600">{state.message}</div>
           </div>
-          <button type="button" onClick={onCancel} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+          <button type="button" onClick={onCancel} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -36,6 +38,7 @@ export function Dialog({ state, onConfirm, onCancel }: { state: DialogState; onC
 }
 
 export function useDialog() {
+  const { t } = useI18n()
   const [state, setState] = useState<DialogState | null>(null)
   const resolver = useRef<((confirmed: boolean) => void) | null>(null)
 
@@ -50,15 +53,15 @@ export function useDialog() {
     resolver.current = null
   }, [])
 
-  const showAlert = useCallback((message: ReactNode, title = 'Something went wrong') => new Promise<void>((resolve) => {
+  const showAlert = useCallback((message: ReactNode, title = t('common.something_went_wrong')) => new Promise<void>((resolve) => {
     resolver.current = () => resolve()
-    setState({ title, message, confirmLabel: 'OK' })
-  }), [])
+    setState({ title, message, confirmLabel: t('dialog.ok') })
+  }), [t])
 
-  const showConfirm = useCallback((message: ReactNode, title = 'Are you sure?') => new Promise<boolean>((resolve) => {
+  const showConfirm = useCallback((message: ReactNode, title = t('dialog.confirm_title')) => new Promise<boolean>((resolve) => {
     resolver.current = resolve
-    setState({ title, message, confirmLabel: 'Confirm', cancelLabel: 'Cancel', destructive: true })
-  }), [])
+    setState({ title, message, confirmLabel: t('common.confirm'), cancelLabel: t('common.cancel'), destructive: true })
+  }), [t])
 
   return {
     dialog: state ? <Dialog state={state} onConfirm={() => close(true)} onCancel={() => close(false)} /> : null,

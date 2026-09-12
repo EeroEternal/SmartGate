@@ -34,7 +34,7 @@ export default function ProvidersPage() {
         setProviders(res.data)
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to load providers')
+      setError(e.message || t('providers.error_load'))
     } finally {
       setLoading(false)
     }
@@ -46,12 +46,12 @@ export default function ProvidersPage() {
 
   async function handleDelete(provider: SaasProvider) {
     if (provider.endpoint_count > 0) {
-      alert(t('providers.cannot_delete_has_endpoints', { count: provider.endpoint_count }) || `Cannot delete provider: ${provider.endpoint_count} model endpoints are currently linked to it.`)
+      alert(t('providers.cannot_delete_has_endpoints', { count: provider.endpoint_count }))
       return
     }
     const confirmed = await showConfirm(
-      t('providers.delete_confirm_desc', { name: provider.name }) || `Are you sure you want to delete ${provider.name}?`,
-      t('providers.delete_title') || 'Delete Provider Account'
+      t('providers.delete_confirm_desc', { name: provider.name }),
+      t('providers.delete_title')
     )
     if (!confirmed) return
 
@@ -59,7 +59,7 @@ export default function ProvidersPage() {
       await saasFetch(`/api/saas/providers/${provider.id}`, { method: 'DELETE' })
       loadData()
     } catch (e: any) {
-      setError(e.message || 'Failed to delete provider')
+      setError(e.message || t('providers.error_delete'))
     }
   }
 
@@ -149,8 +149,8 @@ export default function ProvidersPage() {
                     <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
                       <span className={`h-1.5 w-1.5 rounded-full ${count > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                       {count === 1
-                        ? (t('services.providers_connected_single') || '1 endpoint connected')
-                        : t('services.providers_connected', { count }) || `${count} endpoints connected`}
+                        ? (t('services.providers_connected_single'))
+                        : t('services.providers_connected', { count })}
                     </span>
                   </div>
 
@@ -165,13 +165,13 @@ export default function ProvidersPage() {
                     onClick={() => setEditingProvider(p)}
                     className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
                   >
-                    {t('common.edit') || 'Edit'} →
+                    {t('common.edit')} →
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(p)}
                     className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                    title={t('common.delete') || 'Delete'}
+                    title={t('common.delete')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -231,7 +231,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
 
   async function handleTest() {
     if (!baseUrl.trim() || !apiKey.trim()) {
-      setError('Base URL and API Key are required to test')
+      setError(t('providers.error_test_required'))
       return
     }
     setTestStatus('testing')
@@ -252,21 +252,21 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
       })
       if (res.success && res.data?.passed !== false) {
         setTestStatus('passed')
-        setTestMsg(res.data?.message || 'Provider connection verified!')
+        setTestMsg(res.data?.message || t('providers.test_passed'))
       } else {
         setTestStatus('failed')
-        setTestMsg(res.message || 'Connection test failed')
+        setTestMsg(res.message || t('providers.test_failed'))
       }
     } catch (e: any) {
       setTestStatus('failed')
-      setTestMsg(e.message || 'Connection test failed')
+      setTestMsg(e.message || t('providers.test_failed'))
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !baseUrl.trim() || !apiKey.trim()) {
-      setError('Name, Base URL and API Key are required')
+      setError(t('providers.error_fields_required'))
       return
     }
     setBusy(true)
@@ -284,7 +284,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
       })
       onCreated()
     } catch (e: any) {
-      setError(e.message || 'Failed to save provider')
+      setError(e.message || t('providers.error_save'))
     } finally {
       setBusy(false)
     }
@@ -324,12 +324,12 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="OpenRouter Main"
+              placeholder={t('providers.name_placeholder')}
               className="w-full h-9 rounded-md border border-zinc-300 px-3 py-1.5 text-xs focus:border-zinc-900 focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label') || 'Protocol'}</label>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label')}</label>
             <Select
               selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }}
               onChange={(opt) => setProtocol(String(opt.id))}
@@ -343,7 +343,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url') || 'Base URL'}</label>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url')}</label>
           <input
             required
             type="text"
@@ -356,7 +356,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-medium text-zinc-700">{t('services.api_key') || 'API Key'}</label>
+            <label className="block text-xs font-medium text-zinc-700">{t('services.api_key')}</label>
             <button
               type="button"
               onClick={handleTest}
@@ -364,7 +364,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
               className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover disabled:text-zinc-400"
             >
               <Zap className={`h-3.5 w-3.5 ${testStatus === 'testing' ? 'animate-pulse text-amber-500' : ''}`} />
-              {testStatus === 'testing' ? (t('services.testing') || 'Testing…') : (t('services.test_connection') || 'Test Key')}
+              {testStatus === 'testing' ? t('services.testing') : t('services.test_connection')}
             </button>
           </div>
           <input
@@ -445,7 +445,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
       })
       onUpdated()
     } catch (e: any) {
-      setError(e.message || 'Failed to update provider')
+      setError(e.message || t('providers.error_update'))
     } finally {
       setBusy(false)
     }
@@ -476,7 +476,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label') || 'Protocol'}</label>
+            <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.protocol_label')}</label>
             <Select
               selected={{ id: protocol, name: protocol === 'anthropic' ? 'Anthropic' : 'OpenAI' }}
               onChange={(opt) => setProtocol(String(opt.id))}
@@ -490,7 +490,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url') || 'Base URL'}</label>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">{t('services.base_url')}</label>
           <input
             required
             type="text"
@@ -502,7 +502,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
 
         <div>
           <label className="block text-xs font-medium text-zinc-700 mb-1">
-            New API Key (Leave empty to keep existing key)
+            {t('providers.new_api_key_label')}
           </label>
           <input
             type="password"

@@ -75,13 +75,13 @@ export function SaasLayout({ children }: { children: ReactNode }) {
       <div className="flex items-center gap-4">
         <LanguageSwitcher size="sm" />
         <div ref={accountRef} className="relative">
-          <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Open account menu" aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
+          <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label={t('common.open_account_menu')} aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
             <UserCircle className="h-6 w-6" />
             <ChevronDown className={`h-4 w-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
           </button>
           {accountOpen && <div role="menu" className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
             <div className="border-b border-zinc-100 px-3 py-2"><div className="text-xs text-zinc-400">{t('common.signed_in_as')}</div><div className="mt-1 truncate text-sm font-medium text-zinc-900">{email || t('common.default_account')}</div></div>
-            <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> Edit profile</button>
+            <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); setProfileOpen(true) }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><Pencil className="h-4 w-4" /> {t('profile.title')}</button>
             <button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"><LogOut className="h-4 w-4" /> {t('nav.sign_out')}</button>
           </div>}
           {profileOpen && <ProfileDialog email={email} onClose={() => setProfileOpen(false)} onSaved={(updatedEmail) => { setEmail(updatedEmail); setProfileOpen(false) }} />}
@@ -138,7 +138,7 @@ function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: ()
 
   return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true" aria-labelledby="profile-title">
     <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-      <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">{t('profile.title')}</h2><p className="mt-1 text-sm text-zinc-500">{t('profile.subtitle')}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>
+      <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">{t('profile.title')}</h2><p className="mt-1 text-sm text-zinc-500">{t('profile.subtitle')}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}><X className="h-5 w-5" /></button></div>
       <div className="mt-6 space-y-5"><Field label={t('profile.email')} value={updatedEmail} onChange={setUpdatedEmail} type="email" /><Field label={t('profile.new_password')} value={newPassword} onChange={setNewPassword} type="password" required={false} placeholder={t('profile.new_password_placeholder')} /><Field label={t('profile.current_password')} value={currentPassword} onChange={setCurrentPassword} type="password" placeholder={t('profile.current_password_placeholder')} /></div>
       {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
       <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel')}</button><button disabled={busy} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? (t('common.saving')) : (t('common.save'))}</button></div>

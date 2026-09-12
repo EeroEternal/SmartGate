@@ -25,8 +25,8 @@ experimental_bearer_token = "<project-api-key>"`
     "max_context_window": 128000,
     "default_reasoning_level": "high",
     "supported_reasoning_levels": [
-      {"effort": "low", "description": "Low reasoning effort"},
-      {"effort": "high", "description": "High reasoning effort"}
+      {"effort": "low", "description": "${t('codex.catalog_effort_low')}"},
+      {"effort": "high", "description": "${t('codex.catalog_effort_high')}"}
     ],
     "supports_parallel_tool_calls": true,
     "support_verbosity": true,

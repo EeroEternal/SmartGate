@@ -156,19 +156,19 @@ export function EvaluationPage() {
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_coding')}</div>
           <div className="mt-2 text-xl font-bold text-purple-700 truncate" title={topCoding?.model}>{topCoding ? formatShortModel(topCoding.model) : '—'}</div>
-          <div className="mt-2 text-xs text-zinc-400">{topCoding?.provider_name ? `${topCoding.provider_name} • ${topCoding.model_dna?.code_logic || 96} pts` : '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topCoding?.provider_name ? t('evaluation.provider_points', { provider: topCoding.provider_name, score: topCoding.model_dna?.code_logic || 96 }) : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_reasoning')}</div>
           <div className="mt-2 text-xl font-bold text-amber-600 truncate" title={topReasoning?.model}>{topReasoning ? formatShortModel(topReasoning.model) : '—'}</div>
-          <div className="mt-2 text-xs text-zinc-400">{topReasoning?.provider_name ? `${topReasoning.provider_name} • ${topReasoning.model_dna?.reasoning_math || 98} pts` : '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topReasoning?.provider_name ? t('evaluation.provider_points', { provider: topReasoning.provider_name, score: topReasoning.model_dna?.reasoning_math || 98 }) : '—'}</div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash')}</div>
           <div className="mt-2 text-xl font-bold text-emerald-600 truncate" title={topFlash?.model}>{topFlash ? formatShortModel(topFlash.model) : '—'}</div>
-          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `${formatMoney(topFlash.input_price_per_1m)}/1M tokens` : '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topFlash ? t('evaluation.price_per_1m', { price: formatMoney(topFlash.input_price_per_1m) }) : '—'}</div>
         </div>
       </div>
 
@@ -180,7 +180,7 @@ export function EvaluationPage() {
               {t('radar.badge')}
             </span>
             <span className="text-xs text-zinc-500 font-medium">
-              {t('evaluation.max_compare_hint', { count: selectedIds.length }) || `Comparing ${selectedIds.length}/4 models`}
+              {t('evaluation.max_compare_hint', { count: selectedIds.length })}
             </span>
             <span title={t('evaluation.radar_desc') || t('radar.subtitle')} className="cursor-help text-zinc-400 hover:text-zinc-600 transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />

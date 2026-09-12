@@ -1,33 +1,43 @@
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
-import { AnalyticsPage } from './pages/saas/AnalyticsPage'
-import { CodexPage } from './pages/saas/CodexPage'
-import { EvaluationPage } from './pages/saas/EvaluationPage'
-import { KeysPage } from './pages/saas/KeysPage'
-import { NewServicePage } from './pages/saas/NewServicePage'
-import OpenRouterPage from './pages/saas/OpenRouterPage'
-import ProvidersPage from './pages/saas/ProvidersPage'
-import { QualityPage } from './pages/saas/QualityPage'
 import { SaasLayout } from './pages/saas/SaasLayout'
-import { ServiceDetailsPage } from './pages/saas/ServiceDetailsPage'
-import { ServicesPage } from './pages/saas/ServicesPage'
-import { UsagePage } from './pages/saas/UsagePage'
+import AdminTokenGate from './components/AdminTokenGate'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import HealthBadge from './components/HealthBadge'
 import { adminFetch } from './lib/api'
 import BrandMark from './components/BrandMark'
-import Providers from './pages/Providers'
-import Pools from './pages/Pools'
-import PoolDetails from './pages/PoolDetails'
-import VirtualModels from './pages/VirtualModels'
-import AccessControl from './pages/access/AccessControl'
-import Statistics from './pages/stats/Statistics'
 
 import { I18nProvider, useI18n } from './lib/i18n'
 import { LanguageSwitcher } from './components/LanguageSwitcher'
+
+/**
+ * Page-level code splitting. The console and dashboard only ship on first visit, which
+ * keeps the initial bundle to the shell plus the landing/auth pages.
+ */
+const lazyNamed = <T extends Record<string, ComponentType>>(loader: () => Promise<T>, name: keyof T) =>
+  lazy(() => loader().then((module) => ({ default: module[name] })))
+
+const AnalyticsPage = lazyNamed(() => import('./pages/saas/AnalyticsPage'), 'AnalyticsPage')
+const CodexPage = lazyNamed(() => import('./pages/saas/CodexPage'), 'CodexPage')
+const EvaluationPage = lazyNamed(() => import('./pages/saas/EvaluationPage'), 'EvaluationPage')
+const KeysPage = lazyNamed(() => import('./pages/saas/KeysPage'), 'KeysPage')
+const NewServicePage = lazyNamed(() => import('./pages/saas/NewServicePage'), 'NewServicePage')
+const QualityPage = lazyNamed(() => import('./pages/saas/QualityPage'), 'QualityPage')
+const ServiceDetailsPage = lazyNamed(() => import('./pages/saas/ServiceDetailsPage'), 'ServiceDetailsPage')
+const ServicesPage = lazyNamed(() => import('./pages/saas/ServicesPage'), 'ServicesPage')
+const UsagePage = lazyNamed(() => import('./pages/saas/UsagePage'), 'UsagePage')
+const OpenRouterPage = lazy(() => import('./pages/saas/OpenRouterPage'))
+const ProvidersPage = lazy(() => import('./pages/saas/ProvidersPage'))
+const Providers = lazy(() => import('./pages/Providers'))
+const Pools = lazy(() => import('./pages/Pools'))
+const PoolDetails = lazy(() => import('./pages/PoolDetails'))
+const VirtualModels = lazy(() => import('./pages/VirtualModels'))
+const AccessControl = lazy(() => import('./pages/access/AccessControl'))
+const Statistics = lazy(() => import('./pages/stats/Statistics'))
 
 interface EndpointHealth {
   healthy: number
@@ -213,6 +223,22 @@ function HeaderHealth() {
   )
 }
 
+function PageLoading() {
+  const { t } = useI18n()
+  return <div className="p-8 text-sm text-zinc-500">{t('common.loading')}</div>
+}
+
+/** Marketing/app page shell: keeps the sidebar and header while a route chunk loads. */
+function SaasPage({ children }: { children: ReactNode }) {
+  return (
+    <SaasLayout>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoading />}>{children}</Suspense>
+      </ErrorBoundary>
+    </SaasLayout>
+  )
+}
+
 /**
  * Keeps the pre-/admin links (`/pools/<id>` and friends) working by forwarding them to
  * the canonical admin console URL, splat included.
@@ -238,16 +264,20 @@ function AdminConsole() {
         </header>
         <main className="p-8">
           {/* Paths below are relative to the /admin mount point. */}
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/providers" element={<Providers />} />
-            <Route path="/pools" element={<Pools />} />
-            <Route path="/pools/:id" element={<PoolDetails />} />
-            <Route path="/virtual-models" element={<VirtualModels />} />
-            <Route path="/access" element={<AccessControl />} />
-            <Route path="/stats" element={<Statistics />} />
-            <Route path="*" element={<div className="text-zinc-500">{t('admin.under_construction')}</div>} />
-          </Routes>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/providers" element={<Providers />} />
+                <Route path="/pools" element={<Pools />} />
+                <Route path="/pools/:id" element={<PoolDetails />} />
+                <Route path="/virtual-models" element={<VirtualModels />} />
+                <Route path="/access" element={<AccessControl />} />
+                <Route path="/stats" element={<Statistics />} />
+                <Route path="*" element={<div className="text-zinc-500">{t('admin.under_construction')}</div>} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>
@@ -263,19 +293,26 @@ function App() {
           <Route path="/login" element={<AuthPage mode="login" />} />
           <Route path="/register" element={<AuthPage mode="register" />} />
           <Route path="/app" element={<SaasDashboard />} />
-          <Route path="/app/services" element={<SaasLayout><ServicesPage /></SaasLayout>} />
-          <Route path="/app/services/new" element={<SaasLayout><NewServicePage /></SaasLayout>} />
-          <Route path="/app/services/:id" element={<SaasLayout><ServiceDetailsPage /></SaasLayout>} />
-          <Route path="/app/providers" element={<SaasLayout><ProvidersPage /></SaasLayout>} />
-          <Route path="/app/keys" element={<SaasLayout><KeysPage /></SaasLayout>} />
-          <Route path="/app/openrouter" element={<SaasLayout><OpenRouterPage /></SaasLayout>} />
-          <Route path="/app/evaluation" element={<SaasLayout><EvaluationPage /></SaasLayout>} />
-          <Route path="/app/codex" element={<SaasLayout><CodexPage /></SaasLayout>} />
-          <Route path="/app/analytics" element={<SaasLayout><AnalyticsPage /></SaasLayout>} />
-          <Route path="/app/quality" element={<SaasLayout><QualityPage /></SaasLayout>} />
-          <Route path="/app/usage" element={<SaasLayout><UsagePage /></SaasLayout>} />
+          <Route path="/app/services" element={<SaasPage><ServicesPage /></SaasPage>} />
+          <Route path="/app/services/new" element={<SaasPage><NewServicePage /></SaasPage>} />
+          <Route path="/app/services/:id" element={<SaasPage><ServiceDetailsPage /></SaasPage>} />
+          <Route path="/app/providers" element={<SaasPage><ProvidersPage /></SaasPage>} />
+          <Route path="/app/keys" element={<SaasPage><KeysPage /></SaasPage>} />
+          <Route path="/app/openrouter" element={<SaasPage><OpenRouterPage /></SaasPage>} />
+          <Route path="/app/evaluation" element={<SaasPage><EvaluationPage /></SaasPage>} />
+          <Route path="/app/codex" element={<SaasPage><CodexPage /></SaasPage>} />
+          <Route path="/app/analytics" element={<SaasPage><AnalyticsPage /></SaasPage>} />
+          <Route path="/app/quality" element={<SaasPage><QualityPage /></SaasPage>} />
+          <Route path="/app/usage" element={<SaasPage><UsagePage /></SaasPage>} />
           <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
-          <Route path="/admin/*" element={<AdminConsole />} />
+          <Route
+            path="/admin/*"
+            element={
+              <AdminTokenGate>
+                <AdminConsole />
+              </AdminTokenGate>
+            }
+          />
           {/* Legacy admin URLs: these used to mount the console directly, which left the
               nested console routes unable to match, so they rendered the dashboard. */}
           <Route path="/providers" element={<LegacyAdminRedirect to="/admin/providers" />} />

@@ -58,7 +58,10 @@
     "view_all": "전체 보기",
     "copy_message": "메시지 복사",
     "default_account": "계정",
-    "signed_in_as": "로그인 계정"
+    "signed_in_as": "로그인 계정",
+    "something_went_wrong": "문제가 발생했습니다",
+    "not_applicable": "해당 없음",
+    "open_account_menu": "계정 메뉴 열기"
   },
   "pagination": {
     "showing": "{total}개 중 {start}–{end}개 표시",
@@ -264,7 +267,23 @@
     "judge_model_fallback": "사용 중",
     "probe_failed": "역량 프로브 실패",
     "probe_request_failed": "프로브 요청 실패",
-    "test_connection_hint": "API 키와 업스트림 엔드포인트 연결 가능 여부 확인"
+    "test_connection_hint": "API 키와 업스트림 엔드포인트 연결 가능 여부 확인",
+    "free_badge": "무료",
+    "context_badge": "{value} 컨텍스트",
+    "connection_failed": "연결 실패: {message}",
+    "auto_badge": "자동",
+    "hide_api_key": "API 키 숨기기",
+    "show_api_key": "API 키 표시",
+    "probe_score_label": "프로브 점수:",
+    "probe_tool_schema_label": "도구 스키마:",
+    "probe_tool_supported": "지원 ✅",
+    "probe_tool_standard": "표준 텍스트만",
+    "probe_breakdown_title": "5D 벤치마크 상세",
+    "api_openai_chat": "OpenAI Chat",
+    "api_openai_responses": "OpenAI Responses",
+    "api_anthropic_messages": "Anthropic Messages",
+    "routing_default_desc": "연결된 제공자 간에 요청을 라우팅합니다.",
+    "api_examples": "API 예시"
   },
   "evaluation": {
     "title": "모델 평가 및 역량 벤치마크",
@@ -296,7 +315,9 @@
     "col_price": "가격 (In/Out)",
     "no_models": "연결된 모델이 없습니다. 모델 서비스를 생성하고 제공자를 추가하십시오.",
     "no_matching_models": "일치하는 모델이 없습니다.",
-    "run_probe": "프로브 실행"
+    "run_probe": "프로브 실행",
+    "provider_points": "{provider} • {score}점",
+    "price_per_1m": "{price}/1M 토큰"
   },
   "keys": {
     "title": "API 키",
@@ -362,7 +383,27 @@
     "profile_providers": "프로바이더",
     "profile_usage_sources": "사용량 소스",
     "profile_quality_unavailable": "독립적인 품질 근거를 아직 사용할 수 없습니다. 이 워크로드 통계는 품질 점수를 의미하지 않습니다.",
-    "key_prefix": "API 키 접두사"
+    "key_prefix": "API 키 접두사",
+    "key_label": "키:",
+    "service_badge_single": "서비스 1개",
+    "service_badge_plural": "서비스 {count}개",
+    "service_badge_all": "모든 서비스",
+    "error_name_required": "키 이름은 필수입니다",
+    "error_name_exists": "같은 이름의 API 키가 이미 존재합니다",
+    "error_select_service": "모델 서비스를 하나 이상 선택하세요",
+    "edit_title": "API 키 편집",
+    "edit_desc": "이 키가 호출할 수 있는 서비스를 업데이트합니다.",
+    "create_desc": "이 키는 선택한 모델 서비스를 호출할 수 있습니다.",
+    "model_note_edit": "요청은 선택한 서비스 이름 중 하나를 {code} 값으로 사용해야 합니다.",
+    "model_note_create": "각 요청에서 선택한 서비스 이름을 {code} 값으로 사용하세요.",
+    "need_service_edit": "이 키를 편집하기 전에 모델 서비스를 만드세요.",
+    "need_service_create": "API 키를 만들기 전에 모델 서비스를 만드세요.",
+    "download_title": "SmartGate API 키",
+    "download_key_line": "키: {key}",
+    "download_base_url_line": "Base URL: {url}",
+    "download_services_line": "승인된 모델 서비스: {services}",
+    "download_example_request": "요청 예시:",
+    "create_title": "API 키 만들기"
   },
   "analytics": {
     "title": "라우팅 분석 및 복잡성 통찰",
@@ -543,7 +584,8 @@
     "save_baseline": "기준 저장",
     "tracking_desc": "SmartGate는 지출 및 라우팅 신호를 추적하여 더 나은 모델 선택을 지원합니다.",
     "no_trimming": "컨텍스트 트리밍이 아직 기록되지 않았습니다.",
-    "unknown_provider": "알 수 없는 프로바이더"
+    "unknown_provider": "알 수 없는 프로바이더",
+    "error_select_service_model": "먼저 모델 서비스와 모델을 선택하세요."
   },
   "profile": {
     "title": "프로필 수정",
@@ -567,7 +609,18 @@
     "have_account": "이미 계정이 있으신가요? 로그인",
     "no_account": "계정이 없으신가요? 가입하기",
     "code_sent": "인증 코드가 이메일로 전송되었습니다",
-    "auth_failed": "인증에 실패했습니다. 자격 증명을 확인하십시오."
+    "auth_failed": "인증에 실패했습니다. 자격 증명을 확인하십시오.",
+    "register_subtitle": "당신의 개인 AI 게이트웨이가 여기서 시작됩니다.",
+    "login_subtitle": "로그인하여 모델 서비스를 관리하세요.",
+    "send_code_failed": "인증 코드를 보낼 수 없습니다",
+    "continue_failed": "계속할 수 없습니다",
+    "password_hint": "10자 이상이어야 합니다.",
+    "code_placeholder_enter": "6자리 코드를 입력하세요",
+    "code_placeholder_send_first": "먼저 코드를 전송하세요",
+    "code_expires": "코드는 10분 후 만료됩니다.",
+    "code_will_send": "이메일로 일회용 코드를 보내드립니다.",
+    "resend_code": "코드 다시 보내기",
+    "please_wait": "잠시만 기다려 주세요…"
   },
   "errors": {
     "network_error": "네트워크 요청 실패. 연결을 확인하십시오.",
@@ -575,7 +628,10 @@
     "forbidden": "이 작업을 수행할 권한이 없습니다.",
     "not_found": "요청한 리소스를 찾을 수 없습니다.",
     "server_error": "서버 내부 오류가 발생했습니다. 나중에 다시 시도하십시오.",
-    "upstream_error": "업스트림 모델 제공자 오류: {message}"
+    "upstream_error": "업스트림 모델 제공자 오류: {message}",
+    "boundary_title": "문제가 발생했습니다",
+    "boundary_message": "이 페이지가 예기치 않게 중단되었습니다. 새로고침해 주세요.",
+    "boundary_action": "새로고침"
   },
   "openrouter": {
     "title": "OpenRouter 시장 레이더",
@@ -641,7 +697,9 @@
     "err_reasoning_desc": "문자열 대신 {effort} 및 {description} 이 포함된 객체 형식을 사용하십시오.",
     "err_path_title": "AbsolutePathBuf 경로 오류:",
     "err_path_desc": "독립 실행형 Profile에 {config} 절대 경로를 올바르게 유지하십시오.",
-    "security_warning": "{token} 키를 안전하게 보관하십시오. 실제 키가 포함된 Profile 파일을 공개 저장소에 커밋하지 마십시오."
+    "security_warning": "{token} 키를 안전하게 보관하십시오. 실제 키가 포함된 Profile 파일을 공개 저장소에 커밋하지 마십시오.",
+    "catalog_effort_low": "낮은 추론 강도",
+    "catalog_effort_high": "높은 추론 강도"
   },
   "providers": {
     "account_vault": "제공자 계정 관리",
@@ -660,7 +718,17 @@
     "cannot_delete_has_endpoints": "제공자를 삭제할 수 없습니다: 현재 {count}개의 모델 엔드포인트가 이 계정에 연결되어 있습니다.",
     "use_connected_account": "연결된 제공자 계정 사용",
     "connect_new_account": "새 자격 증명 추가",
-    "select_account": "연결된 제공자 계정 선택"
+    "select_account": "연결된 제공자 계정 선택",
+    "error_load": "제공자를 불러오지 못했습니다",
+    "error_delete": "제공자를 삭제하지 못했습니다",
+    "error_update": "제공자를 업데이트하지 못했습니다",
+    "error_save": "제공자를 저장하지 못했습니다",
+    "error_test_required": "테스트하려면 Base URL과 API 키가 필요합니다",
+    "error_fields_required": "이름, Base URL, API 키는 필수입니다",
+    "test_passed": "제공자 연결이 확인되었습니다!",
+    "test_failed": "연결 테스트 실패",
+    "name_placeholder": "OpenRouter 메인",
+    "new_api_key_label": "새 API 키 (비워 두면 기존 키 유지)"
   },
   "admin": {
     "dashboard_subtitle": "엔드포인트 상태 및 최근 게이트웨이 트래픽.",
@@ -764,6 +832,58 @@
     "leave_blank_unlimited": "비워두면 무제한입니다.",
     "save_limits": "제한 저장",
     "revoke_grant_title": "모델 액세스를 취소하시겠습니까?",
-    "revoke_grant_msg": "{project}에서 {model}을(를) 취소하시겠습니까?"
+    "revoke_grant_msg": "{project}에서 {model}을(를) 취소하시겠습니까?",
+    "token_hint": "운영 콘솔은 이 배포의 관리자 토큰으로 인증합니다. 토큰은 이 탭에만 보관되며 프런트엔드 번들에 포함되지 않습니다.",
+    "token_label": "관리자 토큰",
+    "token_placeholder": "ADMIN_TOKEN 붙여넣기",
+    "token_submit": "콘솔 열기",
+    "token_invalid": "토큰이 거부되었습니다. ADMIN_TOKEN을 확인한 뒤 다시 시도하세요."
+  },
+  "landing": {
+    "badge": "비용 인식 AI 라우팅",
+    "title_line1": "올바른 모델을 사용하세요.",
+    "title_line2": "기본적으로 더 적게 지출하세요.",
+    "hero_desc": "SmartGate는 AI 모델 서비스를 위한 단일 API를 제공하며 비용, 성능, 상태를 기준으로 각 요청을 라우팅해 과지출을 막습니다.",
+    "hero_codex_note": "OpenAI Responses API를 통해 Codex와 연동됩니다.",
+    "create_workspace": "워크스페이스 만들기",
+    "have_account": "이미 계정이 있으신가요?",
+    "get_started": "시작하기",
+    "mock_routing_impact": "라우팅 효과",
+    "mock_saving_now": "● 절약 중",
+    "mock_estimated_saved": "예상 절감액",
+    "mock_this_month": "이번 달",
+    "mock_vs_default": "기본 라우팅 대비",
+    "mock_without_routing": "비용 라우팅 없음",
+    "mock_with_routing": "SmartGate 라우팅 사용",
+    "mock_requests_optimized": "최적화된 요청",
+    "feature1_title": "하나의 엔드포인트, 더 스마트한 라우팅",
+    "feature1_text": "모델 제공자를 한 번 연결하면 SmartGate가 비용, 성능, 상태를 기준으로 각 요청을 라우팅합니다.",
+    "feature2_title": "사용량 파악",
+    "feature2_text": "토큰, 예상 비용, 응답 시간, 요청을 처리한 모델 서비스를 확인하세요.",
+    "feature3_title": "기본적으로 더 적게 지출",
+    "feature3_text": "비용 인식 라우팅과 컨텍스트 제어로 작업에 필요 이상의 비용을 지불하지 않도록 합니다.",
+    "built_for_codex": "Codex를 위해 제작",
+    "codex_title": "Codex를 모델 스택에 통합하세요.",
+    "codex_desc": "OpenAI Responses API를 통해 Codex와 SmartGate를 함께 사용하세요. 익숙한 Codex 경험을 유지하면서 모델 선택, 제공자 폴백, 예산, 사용량 가시성은 SmartGate가 처리합니다.",
+    "codex_chip_gui": "Codex GUI 지원",
+    "codex_chip_routing": "스마트 모델 라우팅",
+    "codex_chip_budget": "사용량 및 예산 관리",
+    "mock_workflow": "당신의 코딩 워크플로",
+    "mock_connected": "연결됨",
+    "mock_codex_requests": "Codex 요청",
+    "mock_one_gateway": "단일 게이트웨이",
+    "mock_model_providers": "모델 제공자",
+    "mock_smart_fallback": "스마트 폴백",
+    "mock_spend_visibility": "지출 가시성",
+    "mock_always_on": "항상 켜짐",
+    "cta_title": "당신의 모델, 당신의 키, 당신의 숫자.",
+    "cta_desc": "개인 워크스페이스로 시작하고 필요할 때만 확장하세요.",
+    "start_free": "무료로 시작",
+    "footer_copyright": "© SmartGate",
+    "footer_tagline": "더 적게 지출하고 모든 토큰을 관리하세요."
+  },
+  "dialog": {
+    "ok": "확인",
+    "confirm_title": "계속하시겠습니까?"
   }
 }

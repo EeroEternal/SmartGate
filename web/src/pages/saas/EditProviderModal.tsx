@@ -93,7 +93,7 @@ export function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { e
           <div>
             <h2 className="text-lg font-semibold">{t('services.edit_model')}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>

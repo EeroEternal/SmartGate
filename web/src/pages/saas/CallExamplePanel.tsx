@@ -6,13 +6,13 @@ import type { CallApi } from './types'
 
 export function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: string; onChange: (api: CallApi) => void }) {
   const { t } = useI18n()
-  const example = callExample(api, model)
+  const example = callExample(api, model, t)
   const command = [`curl ${example.path} \\`, ...example.headers.map((header) => `  -H "${header}" \\`), `  -d '${example.body}'`].join('\n')
   const [copied, setCopied] = useState(false)
   const tabs: { id: CallApi; label: string }[] = [
-    { id: 'openai-chat', label: 'OpenAI Chat' },
-    { id: 'openai-responses', label: 'OpenAI Responses' },
-    { id: 'anthropic-messages', label: 'Anthropic Messages' },
+    { id: 'openai-chat', label: t('services.api_openai_chat') },
+    { id: 'openai-responses', label: t('services.api_openai_responses') },
+    { id: 'anthropic-messages', label: t('services.api_anthropic_messages') },
   ]
   async function copyExample() {
     await navigator.clipboard.writeText(command)
@@ -22,7 +22,7 @@ export function CallExamplePanel({ api, model, onChange }: { api: CallApi; model
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label="API examples">
+        <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" role="tablist" aria-label={t('services.api_examples')}>
           {tabs.map((tab) => (
             <button
               key={tab.id}

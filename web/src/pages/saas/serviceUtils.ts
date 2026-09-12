@@ -131,11 +131,11 @@ export function routingInfo(strategy: string, t: (key: string, params?: Record<s
       description: t('services.strategy_round_robin_desc'),
     },
   }
-  return map[strategy] || { label: strategy.replaceAll('_', ' '), description: 'Routes requests across your connected providers.' }
+  return map[strategy] || { label: strategy.replaceAll('_', ' '), description: t('services.routing_default_desc') }
 }
 
-export function serviceStatusLabel(status: string) {
-  return status === 'draft' ? 'Setup needed' : 'Ready'
+export function serviceStatusLabel(status: string, t: (key: string, params?: Record<string, string | number>) => string) {
+  return status === 'draft' ? t('services.setup_needed') : t('services.ready')
 }
 export const emptyEndpoint = (): DraftEndpoint => ({ provider_type: 'custom', custom_provider_id: '', protocol: 'openai', base_url: '', api_key: '', upstream_model_id: '', input_price_per_1m: '', output_price_per_1m: '', capability_score: '', context_length: '' })
 
@@ -152,10 +152,10 @@ export function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[
   const provider = catalog.find((item) => item.provider_id === endpoint.provider_type)?.provider_name
   return [provider || (endpoint.custom_provider_id || t('services.provider_not_selected')), endpoint.upstream_model_id || t('services.model_not_selected')]
 }
-export function callExample(api: CallApi, model: string) {
+export function callExample(api: CallApi, model: string, t: (key: string, params?: Record<string, string | number>) => string) {
   if (api === 'openai-responses') {
     return {
-      label: 'OpenAI Responses',
+      label: t('services.api_openai_responses'),
       path: 'https://smartgate.run/v1/responses',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
       body: `{"model":"${model}","input":"Hello"}`,
@@ -163,14 +163,14 @@ export function callExample(api: CallApi, model: string) {
   }
   if (api === 'anthropic-messages') {
     return {
-      label: 'Anthropic Messages',
+      label: t('services.api_anthropic_messages'),
       path: 'https://smartgate.run/v1/messages',
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'anthropic-version: 2023-06-01', 'Content-Type: application/json'],
       body: `{"model":"${model}","max_tokens":128,"messages":[{"role":"user","content":"Hello"}]}`,
     }
   }
   return {
-    label: 'OpenAI Chat',
+    label: t('services.api_openai_chat'),
     path: 'https://smartgate.run/v1/chat/completions',
     headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
     body: `{"model":"${model}","messages":[{"role":"user","content":"Hello"}]}`,

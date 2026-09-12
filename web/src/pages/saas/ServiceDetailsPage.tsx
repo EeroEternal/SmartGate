@@ -46,11 +46,11 @@ export function ServiceDetailsPage() {
     try {
       await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'POST' })
       setTestResults((results) => ({ ...results, [endpointId]: 'passed' }))
-      setTestToast({ type: 'success', message: 'Connection verified successfully' })
+      setTestToast({ type: 'success', message: t('services.test_passed') })
       window.setTimeout(() => setTestToast(null), 5000)
     } catch (e) {
       setTestResults((results) => ({ ...results, [endpointId]: 'failed' }))
-      setTestToast({ type: 'error', message: `Connection failed: ${errorText(e)}` })
+      setTestToast({ type: 'error', message: t('services.connection_failed', { message: errorText(e) }) })
       window.setTimeout(() => setTestToast(null), 12000)
     } finally {
       setTestingEndpoint(null)
@@ -157,7 +157,7 @@ export function ServiceDetailsPage() {
           <span className="text-xs text-zinc-400">
             {service.endpoints.length === 1
               ? (t('services.providers_connected_single'))
-              : t('services.providers_connected', { count: service.endpoints.length }) || `${service.endpoints.length} models connected`}
+              : t('services.providers_connected', { count: service.endpoints.length })}
           </span>
         </div>
         {service.endpoints.length ? (
@@ -174,7 +174,7 @@ export function ServiceDetailsPage() {
                       </span>
                       {endpoint.configured_capability_score != null && Math.abs(endpoint.configured_capability_score - (endpoint.capability_score ?? 0)) > 0.005 && (
                         <span className="rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-500">
-                          auto
+                          {t('services.auto_badge')}
                         </span>
                       )}
                       {endpoint.preferred_for_hard_requests && (

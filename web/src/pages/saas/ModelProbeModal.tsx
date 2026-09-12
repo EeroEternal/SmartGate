@@ -89,7 +89,7 @@ export function ModelProbeModal({
             type="button"
             onClick={onClose}
             className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -134,8 +134,8 @@ export function ModelProbeModal({
                     {t('services.probe_completed')}
                   </div>
                   <div className="text-xs text-emerald-700 mt-0.5">
-                    Probed Score: <span className="font-mono font-bold">{probeResult.probed_capability_score.toFixed(2)}</span> • Tool Schema:{' '}
-                    {probeResult.supports_tools ? 'Supported ✅' : 'Standard Text Only'}
+                    {t('services.probe_score_label')} <span className="font-mono font-bold">{probeResult.probed_capability_score.toFixed(2)}</span> • {t('services.probe_tool_schema_label')}{' '}
+                    {probeResult.supports_tools ? t('services.probe_tool_supported') : t('services.probe_tool_standard')}
                   </div>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export function ModelProbeModal({
 
             <div className="rounded-xl border border-zinc-200 p-4">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
-                5D Benchmark Breakdown
+                {t('services.probe_breakdown_title')}
               </h4>
               <div className="space-y-2.5">
                 {probeResult.probe_details.map((detail, idx) => (

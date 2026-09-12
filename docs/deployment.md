@@ -66,7 +66,7 @@ Set this Pages environment variable for both Preview and Production as appropria
 |---|---|
 | `VITE_API_BASE_URL` | `https://api.example.com` |
 
-Do not set `VITE_ADMIN_TOKEN` in a public Pages build. Vite variables are embedded into browser JavaScript. Admin authentication must remain a backend secret.
+Never put the admin token in a `VITE_*` variable: Vite inlines those into the public JavaScript bundle. The operator enters the token at runtime in the console's sign-in form and it is kept in `sessionStorage` for that tab only.
 
 ## 4. Custom domains
 
@@ -85,7 +85,13 @@ Provider API keys are not deployment variables. Add them only through the SmartG
 
 ## 6. Admin access
 
-The current Admin UI uses `VITE_ADMIN_TOKEN` for compatibility, which is not safe for a public production build because it becomes browser-visible. For the first deployment, keep Admin Console access restricted and do not expose an Admin token through Cloudflare Pages. Before public production use, move Admin authentication to a server-side session or a separately protected admin origin.
+The operations console at `/admin` authenticates with the API's `ADMIN_TOKEN`. Open the console and paste the token into the sign-in form: it is stored in `sessionStorage` for that tab and sent as `Authorization: Bearer <token>` to `/api/admin/*`. No token is compiled into the frontend bundle, and a rejected token is discarded so the form is shown again.
+
+Because the token still travels from the browser, treat the console as an operator surface:
+
+- keep `ADMIN_TOKEN` long and random, and rotate it when an operator leaves;
+- restrict who can reach `/admin` on the frontend origin if the deployment is public;
+- a future iteration can replace the shared token with a per-user admin session, which would make the console auditable per operator.
 
 ## 7. First smoke test
 

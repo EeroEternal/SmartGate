@@ -133,12 +133,14 @@ export function KeysPage() {
                   {/* Key metadata badges matching service/provider card styles */}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-700 border border-zinc-200/60" title={t('keys.key_prefix')}>
-                      <span className="text-[10px] font-sans text-zinc-400 uppercase font-semibold">Key:</span>
+                      <span className="text-[10px] font-sans text-zinc-400 uppercase font-semibold">{t('keys.key_label')}</span>
                       {masked}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 border border-purple-200/70">
                       <Sparkles className="h-3 w-3" />
-                      {serviceCount > 0 ? `${serviceCount} ${serviceCount === 1 ? 'Service' : 'Services'}` : 'All Services'}
+                      {serviceCount > 0
+                        ? (serviceCount === 1 ? t('keys.service_badge_single') : t('keys.service_badge_plural', { count: serviceCount }))
+                        : t('keys.service_badge_all')}
                     </span>
                   </div>
 
@@ -241,12 +243,12 @@ export function KeysPage() {
   )
 }
 
-function profilePercent(value: number | null | undefined) {
-  return value == null ? 'N/A' : `${(value * 100).toFixed(1)}%`
+function profilePercent(value: number | null | undefined, fallback: string) {
+  return value == null ? fallback : `${(value * 100).toFixed(1)}%`
 }
 
-function profileNumber(value: number | null | undefined, suffix = '') {
-  return value == null ? 'N/A' : `${value.toLocaleString()}${suffix}`
+function profileNumber(value: number | null | undefined, fallback: string, suffix = '') {
+  return value == null ? fallback : `${value.toLocaleString()}${suffix}`
 }
 
 function ProfileMetric({ label, value }: { label: string; value: string }) {
@@ -254,8 +256,9 @@ function ProfileMetric({ label, value }: { label: string; value: string }) {
 }
 
 function ProfileBreakdown({ title, values }: { title: string; values: Record<string, number> }) {
+  const { t } = useI18n()
   const entries = Object.entries(values)
-  return <div><h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{title}</h3>{entries.length ? <div className="mt-2 space-y-1.5">{entries.map(([name, count]) => <div key={name} className="flex items-center justify-between gap-3 text-xs"><span className="truncate text-zinc-600">{name}</span><span className="font-mono text-zinc-900">{count.toLocaleString()}</span></div>)}</div> : <div className="mt-2 text-xs text-zinc-400">N/A</div>}</div>
+  return <div><h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{title}</h3>{entries.length ? <div className="mt-2 space-y-1.5">{entries.map(([name, count]) => <div key={name} className="flex items-center justify-between gap-3 text-xs"><span className="truncate text-zinc-600">{name}</span><span className="font-mono text-zinc-900">{count.toLocaleString()}</span></div>)}</div> : <div className="mt-2 text-xs text-zinc-400">{t('common.not_applicable')}</div>}</div>
 }
 
 function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () => void }) {
@@ -275,8 +278,8 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
       .finally(() => setLoading(false))
   }, [keyData.id, range])
 
-  const rate = (value: number | null | undefined) => profilePercent(value)
-  const latency = (value: number | null | undefined) => profileNumber(value, ' ms')
+  const rate = (value: number | null | undefined) => profilePercent(value, t('common.not_applicable'))
+  const latency = (value: number | null | undefined) => profileNumber(value, t('common.not_applicable'), ' ms')
 
   return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
     <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
@@ -295,14 +298,14 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
           <ProfileMetric label={t('keys.profile_samples')} value={profile.sample_count.toLocaleString()} />
           <ProfileMetric label={t('keys.profile_confidence')} value={profile.confidence.replace('_', ' ')} />
           <ProfileMetric label={t('keys.profile_success_rate')} value={rate(profile.requests.success_rate)} />
-          <ProfileMetric label={t('keys.profile_last_observed')} value={profile.last_observed_at || 'N/A'} />
+          <ProfileMetric label={t('keys.profile_last_observed')} value={profile.last_observed_at || t('common.not_applicable')} />
         </div>
         <div className="grid gap-5 md:grid-cols-2">
           <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_requests')}</h3><div className="mt-3 grid grid-cols-3 gap-2"><ProfileMetric label={t('keys.profile_total')} value={profile.requests.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_successful')} value={profile.requests.successful.toLocaleString()} /><ProfileMetric label={t('keys.profile_failed')} value={profile.requests.failed.toLocaleString()} /></div></section>
           <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_latency')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label="P50" value={latency(profile.latency_ms.p50)} /><ProfileMetric label="P95" value={latency(profile.latency_ms.p95)} /><ProfileMetric label="TTFT P95" value={latency(profile.latency_ms.ttft_p95)} /><ProfileMetric label={t('keys.profile_average')} value={latency(profile.latency_ms.average)} /></div></section>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
-          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_tokens_cost')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_total_tokens')} value={profile.tokens.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_avg_tokens')} value={profileNumber(profile.tokens.average_per_request)} /><ProfileMetric label={t('keys.profile_total_cost')} value={formatMoney(profile.cost.total)} /><ProfileMetric label={t('keys.profile_avg_cost')} value={profile.cost.average_per_request == null ? 'N/A' : formatMoney(profile.cost.average_per_request)} /></div></section>
+          <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_tokens_cost')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_total_tokens')} value={profile.tokens.total.toLocaleString()} /><ProfileMetric label={t('keys.profile_avg_tokens')} value={profileNumber(profile.tokens.average_per_request, t('common.not_applicable'))} /><ProfileMetric label={t('keys.profile_total_cost')} value={formatMoney(profile.cost.total)} /><ProfileMetric label={t('keys.profile_avg_cost')} value={profile.cost.average_per_request == null ? t('common.not_applicable') : formatMoney(profile.cost.average_per_request)} /></div></section>
           <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-900">{t('keys.profile_behavior')}</h3><div className="mt-3 grid grid-cols-2 gap-2"><ProfileMetric label={t('keys.profile_tools')} value={rate(profile.workload.tool_request_rate)} /><ProfileMetric label={t('keys.profile_fallbacks')} value={rate(profile.workload.fallback_rate)} /><ProfileMetric label={t('keys.profile_sessions')} value={rate(profile.workload.session_rate)} /><ProfileMetric label={t('keys.profile_affinity')} value={rate(profile.workload.affinity_hit_rate)} /></div></section>
         </div>
         <div className="grid gap-5 md:grid-cols-4"><ProfileBreakdown title={t('keys.profile_difficulty')} values={profile.workload.difficulty_tiers} /><ProfileBreakdown title={t('keys.profile_difficulty_sources')} values={profile.workload.difficulty_sources} /><ProfileBreakdown title={t('keys.profile_providers')} values={profile.providers} /><ProfileBreakdown title={t('keys.profile_usage_sources')} values={profile.cost.usage_sources} /></div>
@@ -313,18 +316,20 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
 }
 
 function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: { keyData: Key; services: Service[]; existingNames: string[]; onClose: () => void; onUpdate: (id: string, name: string, modelServiceIds: string[]) => Promise<void> }) {
+  const { t } = useI18n()
   const dialogRef = useModal({ onClose })
   const [name, setName] = useState(keyData.name)
   const [selected, setSelected] = useState<string[]>(keyData.model_services?.map((service) => service.id) || [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [noteBefore, noteAfter] = t('keys.model_note_edit').split('{code}')
   function toggle(id: string) { setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]) }
   async function submit(event: FormEvent) {
     event.preventDefault()
     const normalizedName = name.trim()
-    if (!normalizedName) { setError('Key name is required'); return }
-    if (existingNames.some((value) => value.toLowerCase() === normalizedName.toLowerCase() && value !== keyData.name)) { setError('An API key with this name already exists'); return }
-    if (!selected.length) { setError('Select at least one model service'); return }
+    if (!normalizedName) { setError(t('keys.error_name_required')); return }
+    if (existingNames.some((value) => value.toLowerCase() === normalizedName.toLowerCase() && value !== keyData.name)) { setError(t('keys.error_name_exists')); return }
+    if (!selected.length) { setError(t('keys.error_select_service')); return }
     setBusy(true); setError('')
     try { await onUpdate(keyData.id, normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
@@ -332,16 +337,16 @@ function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: {
     <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Edit API key</h2>
-          <p className="mt-1 text-sm text-zinc-500">Update the services this key can call.</p>
+          <h2 className="text-lg font-semibold">{t('keys.edit_title')}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{t('keys.edit_desc')}</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label="Close"><X className="h-5 w-5" /></button>
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
       </div>
       <div className="mt-6 space-y-5">
-        <Field label="Key name" value={name} onChange={setName} placeholder="Production app" />
+        <Field label={t('keys.key_name')} value={name} onChange={setName} placeholder={t('keys.key_name_placeholder')} />
         <fieldset>
-          <legend className="text-sm font-medium text-zinc-700">Model services</legend>
-          <p className="mt-1 text-xs text-zinc-500">Requests must use one of the selected service names as the <code>model</code> value.</p>
+          <legend className="text-sm font-medium text-zinc-700">{t('nav.model_services')}</legend>
+          <p className="mt-1 text-xs text-zinc-500">{noteBefore}<code>model</code>{noteAfter}</p>
           <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
             {services.length ? (
               services.map((service) => (
@@ -356,33 +361,35 @@ function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: {
                 </label>
               ))
             ) : (
-              <p className="px-3 py-2 text-sm text-zinc-500">Create a model service before editing this key.</p>
+              <p className="px-3 py-2 text-sm text-zinc-500">{t('keys.need_service_edit')}</p>
             )}
           </div>
         </fieldset>
       </div>
       {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
       <div className="mt-6 flex justify-end gap-3">
-        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button>
-        <button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save changes'}</button>
+        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel')}</button>
+        <button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? t('common.saving') : t('common.save')}</button>
       </div>
     </form>
   </div>
 }
 
 function CreateKeyModal({ services, existingNames, onClose, onCreate }: { services: Service[]; existingNames: string[]; onClose: () => void; onCreate: (name: string, modelServiceIds: string[]) => Promise<void> }) {
+  const { t } = useI18n()
   const dialogRef = useModal({ onClose })
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [noteBefore, noteAfter] = t('keys.model_note_create').split('{code}')
   function toggle(id: string) { setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]) }
   async function submit(event: FormEvent) {
     event.preventDefault()
     const normalizedName = name.trim()
-    if (!normalizedName) { setError('Key name is required'); return }
-    if (existingNames.some((value) => value.toLowerCase() === normalizedName.toLowerCase())) { setError('An API key with this name already exists'); return }
-    if (!selected.length) { setError('Select at least one model service'); return }
+    if (!normalizedName) { setError(t('keys.error_name_required')); return }
+    if (existingNames.some((value) => value.toLowerCase() === normalizedName.toLowerCase())) { setError(t('keys.error_name_exists')); return }
+    if (!selected.length) { setError(t('keys.error_select_service')); return }
     setBusy(true); setError('')
     try { await onCreate(normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
@@ -390,16 +397,16 @@ function CreateKeyModal({ services, existingNames, onClose, onCreate }: { servic
     <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Create API key</h2>
-          <p className="mt-1 text-sm text-zinc-500">This key can call the selected model services.</p>
+          <h2 className="text-lg font-semibold">{t('keys.create_title')}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{t('keys.create_desc')}</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label="Close"><X className="h-5 w-5" /></button>
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
       </div>
       <div className="mt-6 space-y-5">
-        <Field label="Key name" value={name} onChange={setName} placeholder="Production app" />
+        <Field label={t('keys.key_name')} value={name} onChange={setName} placeholder={t('keys.key_name_placeholder')} />
         <fieldset>
-          <legend className="text-sm font-medium text-zinc-700">Model services</legend>
-          <p className="mt-1 text-xs text-zinc-500">In each request, use the selected service name as the <code>model</code> value.</p>
+          <legend className="text-sm font-medium text-zinc-700">{t('nav.model_services')}</legend>
+          <p className="mt-1 text-xs text-zinc-500">{noteBefore}<code>model</code>{noteAfter}</p>
           <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
             {services.length ? (
               services.map((service) => (
@@ -414,15 +421,15 @@ function CreateKeyModal({ services, existingNames, onClose, onCreate }: { servic
                 </label>
               ))
             ) : (
-              <p className="px-3 py-2 text-sm text-zinc-500">Create a model service before creating an API key.</p>
+              <p className="px-3 py-2 text-sm text-zinc-500">{t('keys.need_service_create')}</p>
             )}
           </div>
         </fieldset>
       </div>
       {error && <div className="mt-4"><ErrorMessage text={error} /></div>}
       <div className="mt-6 flex justify-end gap-3">
-        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">Cancel</button>
-        <button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create key'}</button>
+        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-600">{t('common.cancel')}</button>
+        <button disabled={busy || !services.length} className="rounded-lg bg-zinc-950 px-5 py-2.5 text-sm text-white disabled:opacity-50">{busy ? t('common.creating') : t('keys.create_button')}</button>
       </div>
     </form>
   </div>
@@ -453,14 +460,14 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
 
   function downloadKey() {
     const content = [
-      'SmartGate API Key',
+      t('keys.download_title'),
       '=================',
       '',
-      `Key: ${rawKey}`,
-      `Base URL: ${baseUrl}`,
-      `Authorized model services: ${serviceNames.join(', ') || 'n/a'}`,
+      t('keys.download_key_line', { key: rawKey }),
+      t('keys.download_base_url_line', { url: baseUrl }),
+      t('keys.download_services_line', { services: serviceNames.join(', ') || t('common.not_applicable') }),
       '',
-      'Example request:',
+      t('keys.download_example_request'),
       '',
       curlExample,
       '',

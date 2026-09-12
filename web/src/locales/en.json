@@ -58,7 +58,10 @@
     "view_all": "View all",
     "copy_message": "Copy message",
     "default_account": "Account",
-    "signed_in_as": "Signed in as"
+    "signed_in_as": "Signed in as",
+    "something_went_wrong": "Something went wrong",
+    "not_applicable": "N/A",
+    "open_account_menu": "Open account menu"
   },
   "pagination": {
     "showing": "Showing {start}–{end} of {total} records",
@@ -264,7 +267,23 @@
     "judge_model_fallback": "Enabled",
     "probe_failed": "Capability probe failed",
     "probe_request_failed": "Probe request failed",
-    "test_connection_hint": "Verify if API key and upstream endpoint are reachable"
+    "test_connection_hint": "Verify if API key and upstream endpoint are reachable",
+    "free_badge": "FREE",
+    "context_badge": "{value} ctx",
+    "connection_failed": "Connection failed: {message}",
+    "auto_badge": "auto",
+    "hide_api_key": "Hide API key",
+    "show_api_key": "Show API key",
+    "probe_score_label": "Probed Score:",
+    "probe_tool_schema_label": "Tool Schema:",
+    "probe_tool_supported": "Supported ✅",
+    "probe_tool_standard": "Standard Text Only",
+    "probe_breakdown_title": "5D Benchmark Breakdown",
+    "api_openai_chat": "OpenAI Chat",
+    "api_openai_responses": "OpenAI Responses",
+    "api_anthropic_messages": "Anthropic Messages",
+    "routing_default_desc": "Routes requests across your connected providers.",
+    "api_examples": "API examples"
   },
   "evaluation": {
     "title": "Model Evaluation & DNA Benchmarking",
@@ -296,7 +315,9 @@
     "col_price": "Price (In/Out)",
     "no_models": "No models or endpoints connected yet. Create a model service and add providers to view evaluations.",
     "no_matching_models": "No matching models found.",
-    "run_probe": "Run Probe"
+    "run_probe": "Run Probe",
+    "provider_points": "{provider} • {score} pts",
+    "price_per_1m": "{price}/1M tokens"
   },
   "keys": {
     "title": "API keys",
@@ -362,7 +383,27 @@
     "profile_providers": "Providers",
     "profile_usage_sources": "Usage sources",
     "profile_quality_unavailable": "Independent quality evidence is not available yet. These workload statistics do not represent a quality score.",
-    "key_prefix": "API Key Prefix"
+    "key_prefix": "API Key Prefix",
+    "key_label": "Key:",
+    "service_badge_single": "1 Service",
+    "service_badge_plural": "{count} Services",
+    "service_badge_all": "All Services",
+    "error_name_required": "Key name is required",
+    "error_name_exists": "An API key with this name already exists",
+    "error_select_service": "Select at least one model service",
+    "edit_title": "Edit API key",
+    "edit_desc": "Update the services this key can call.",
+    "create_desc": "This key can call the selected model services.",
+    "model_note_edit": "Requests must use one of the selected service names as the {code} value.",
+    "model_note_create": "In each request, use the selected service name as the {code} value.",
+    "need_service_edit": "Create a model service before editing this key.",
+    "need_service_create": "Create a model service before creating an API key.",
+    "download_title": "SmartGate API Key",
+    "download_key_line": "Key: {key}",
+    "download_base_url_line": "Base URL: {url}",
+    "download_services_line": "Authorized model services: {services}",
+    "download_example_request": "Example request:",
+    "create_title": "Create API key"
   },
   "analytics": {
     "title": "Routing Analytics & Complexity Insights",
@@ -543,7 +584,8 @@
     "save_baseline": "Save baseline",
     "tracking_desc": "Your gateway is tracking spend and routing signals so you can make better model choices.",
     "no_trimming": "No context trimming recorded yet.",
-    "unknown_provider": "Unknown provider"
+    "unknown_provider": "Unknown provider",
+    "error_select_service_model": "Select a model service and model first."
   },
   "profile": {
     "title": "Edit profile",
@@ -584,7 +626,9 @@
     "err_reasoning_desc": "use objects with {effort} and {description}, not strings.",
     "err_path_title": "AbsolutePathBuf error:",
     "err_path_desc": "keep {config} in the standalone Profile.",
-    "security_warning": "Keep {token} private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed."
+    "security_warning": "Keep {token} private. Do not commit the Profile file when it contains a real key; restrict local permissions and rotate the key if it is exposed.",
+    "catalog_effort_low": "Low reasoning effort",
+    "catalog_effort_high": "High reasoning effort"
   },
   "auth": {
     "sign_in": "Sign in to SmartGate",
@@ -599,7 +643,18 @@
     "have_account": "Already have an account? Sign in",
     "no_account": "Don't have an account? Sign up",
     "code_sent": "Verification code sent to your email",
-    "auth_failed": "Authentication failed. Please check your credentials."
+    "auth_failed": "Authentication failed. Please check your credentials.",
+    "register_subtitle": "Your personal AI gateway starts here.",
+    "login_subtitle": "Sign in to manage your model services.",
+    "send_code_failed": "Unable to send the verification code",
+    "continue_failed": "Unable to continue",
+    "password_hint": "At least 10 characters.",
+    "code_placeholder_enter": "Enter the 6-digit code",
+    "code_placeholder_send_first": "Send a code first",
+    "code_expires": "The code expires in 10 minutes.",
+    "code_will_send": "We will send a one-time code to your email.",
+    "resend_code": "Resend code",
+    "please_wait": "Please wait…"
   },
   "errors": {
     "network_error": "Network request failed. Please check your connection.",
@@ -607,7 +662,10 @@
     "forbidden": "You do not have permission to perform this action.",
     "not_found": "The requested resource was not found.",
     "server_error": "An internal server error occurred. Please try again later.",
-    "upstream_error": "Upstream model provider error: {message}"
+    "upstream_error": "Upstream model provider error: {message}",
+    "boundary_title": "Something went wrong",
+    "boundary_message": "This page stopped unexpectedly. Reload to continue.",
+    "boundary_action": "Reload"
   },
   "openrouter": {
     "title": "OpenRouter Market Radar",
@@ -660,7 +718,17 @@
     "cannot_delete_has_endpoints": "Cannot delete provider: {count} model endpoints are currently linked to it.",
     "use_connected_account": "Use Connected Provider Account",
     "connect_new_account": "Add New Credentials",
-    "select_account": "Select Connected Account"
+    "select_account": "Select Connected Account",
+    "error_load": "Failed to load providers",
+    "error_delete": "Failed to delete provider",
+    "error_update": "Failed to update provider",
+    "error_save": "Failed to save provider",
+    "error_test_required": "Base URL and API Key are required to test",
+    "error_fields_required": "Name, Base URL and API Key are required",
+    "test_passed": "Provider connection verified!",
+    "test_failed": "Connection test failed",
+    "name_placeholder": "OpenRouter Main",
+    "new_api_key_label": "New API Key (Leave empty to keep existing key)"
   },
   "admin": {
     "dashboard_subtitle": "Endpoint health and recent gateway traffic.",
@@ -764,6 +832,58 @@
     "leave_blank_unlimited": "Leave blank for unlimited.",
     "save_limits": "Save Limits",
     "revoke_grant_title": "Revoke model access?",
-    "revoke_grant_msg": "Revoke {model} from {project}?"
+    "revoke_grant_msg": "Revoke {model} from {project}?",
+    "token_hint": "The operations console authenticates with this deployment's admin token. It stays in this tab and is never shipped in the frontend bundle.",
+    "token_label": "Admin token",
+    "token_placeholder": "Paste ADMIN_TOKEN",
+    "token_submit": "Open console",
+    "token_invalid": "The token was rejected. Check ADMIN_TOKEN and try again."
+  },
+  "landing": {
+    "badge": "Cost-aware AI routing",
+    "title_line1": "Use the right model.",
+    "title_line2": "Spend less by default.",
+    "hero_desc": "SmartGate gives you one simple API for your AI model services, routing each request by cost, capability, and health so you do not overpay.",
+    "hero_codex_note": "Works with Codex through the OpenAI Responses API.",
+    "create_workspace": "Create your workspace",
+    "have_account": "Already have an account?",
+    "get_started": "Get started",
+    "mock_routing_impact": "Routing impact",
+    "mock_saving_now": "● Saving now",
+    "mock_estimated_saved": "Estimated saved",
+    "mock_this_month": "this month",
+    "mock_vs_default": "vs. default routing",
+    "mock_without_routing": "Without cost routing",
+    "mock_with_routing": "With SmartGate routing",
+    "mock_requests_optimized": "Requests optimized",
+    "feature1_title": "One endpoint, smarter routing",
+    "feature1_text": "Connect your model providers once and let SmartGate route each request by cost, capability, and health.",
+    "feature2_title": "Know what you use",
+    "feature2_text": "See tokens, estimated spend, response time, and the model services serving your requests.",
+    "feature3_title": "Spend less by default",
+    "feature3_text": "Cost-aware routing and context controls help you avoid paying for more capacity than each task needs.",
+    "built_for_codex": "Built for Codex",
+    "codex_title": "Bring Codex into your model stack.",
+    "codex_desc": "Use SmartGate with Codex through the OpenAI Responses API. Keep the Codex experience you know while SmartGate handles model choice, provider fallback, budgets, and usage visibility behind the scenes.",
+    "codex_chip_gui": "Codex GUI support",
+    "codex_chip_routing": "Smart model routing",
+    "codex_chip_budget": "Usage and budget controls",
+    "mock_workflow": "Your coding workflow",
+    "mock_connected": "Connected",
+    "mock_codex_requests": "Codex requests",
+    "mock_one_gateway": "One gateway",
+    "mock_model_providers": "Model providers",
+    "mock_smart_fallback": "Smart fallback",
+    "mock_spend_visibility": "Spend visibility",
+    "mock_always_on": "Always on",
+    "cta_title": "Your models, your keys, your numbers.",
+    "cta_desc": "Start with a personal workspace and grow only when you need to.",
+    "start_free": "Start free",
+    "footer_copyright": "© SmartGate",
+    "footer_tagline": "Spend less. Stay in control of every token."
+  },
+  "dialog": {
+    "ok": "OK",
+    "confirm_title": "Are you sure?"
   }
 }

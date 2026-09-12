@@ -1,9 +1,27 @@
 import { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import en from '../../locales/en.json'
+import zh from '../../locales/zh.json'
+import ja from '../../locales/ja.json'
+import ko from '../../locales/ko.json'
+
+// Non-React helpers (e.g. error handling outside the render tree) cannot call
+// useI18n(). Resolve the generic error message from the active language here so
+// no user-visible English fallback stays hardcoded in components.
+const ERROR_FALLBACKS: Record<string, string> = {
+  en: en.common.something_went_wrong,
+  zh: zh.common.something_went_wrong,
+  ja: ja.common.something_went_wrong,
+  ko: ko.common.something_went_wrong,
+}
 
 export function Coverage({ label, value, detail }: { label: string; value: number; detail: string }) { return <div><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono">{Math.round(value * 100)}%</span></div><div className="mt-2 h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(value * 100, value > 0 ? 2 : 0)}%` }} /></div><div className="mt-1 text-xs text-zinc-500">{detail}</div></div> }
 
-export function errorText(error: unknown) { return error instanceof globalThis.Error ? error.message : 'Something went wrong' }
+export function errorText(error: unknown) {
+  if (error instanceof globalThis.Error) return error.message
+  const language = typeof localStorage !== 'undefined' ? localStorage.getItem('smartgate_lang') : null
+  return (language && ERROR_FALLBACKS[language]) || ERROR_FALLBACKS.en
+}
 export function Page({ action, children }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) { return <div>{action && <div className="flex justify-end">{action}</div>}<div className={action ? 'mt-6' : ''}>{children}</div></div> }
 export function Field({ label, value, onChange, placeholder, type = 'text', required = true, alignWithSelect = false, size = 'md' }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; required?: boolean; alignWithSelect?: boolean; size?: 'sm' | 'md' }) {
   if (size === 'sm') {

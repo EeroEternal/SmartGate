@@ -58,7 +58,10 @@
     "view_all": "すべて見る",
     "copy_message": "メッセージをコピー",
     "default_account": "アカウント",
-    "signed_in_as": "ログイン中"
+    "signed_in_as": "ログイン中",
+    "something_went_wrong": "問題が発生しました",
+    "not_applicable": "該当なし",
+    "open_account_menu": "アカウントメニューを開く"
   },
   "pagination": {
     "showing": "{total} 件中 {start}–{end} 件を表示",
@@ -264,7 +267,23 @@
     "judge_model_fallback": "有効",
     "probe_failed": "ケイパビリティプローブに失敗しました",
     "probe_request_failed": "プローブリクエストに失敗しました",
-    "test_connection_hint": "API キーと上流エンドポイントの到達可能性を確認します"
+    "test_connection_hint": "API キーと上流エンドポイントの到達可能性を確認します",
+    "free_badge": "無料",
+    "context_badge": "{value} コンテキスト",
+    "connection_failed": "接続に失敗しました: {message}",
+    "auto_badge": "自動",
+    "hide_api_key": "API キーを非表示",
+    "show_api_key": "API キーを表示",
+    "probe_score_label": "プローブスコア:",
+    "probe_tool_schema_label": "ツールスキーマ:",
+    "probe_tool_supported": "対応 ✅",
+    "probe_tool_standard": "標準テキストのみ",
+    "probe_breakdown_title": "5D ベンチマーク内訳",
+    "api_openai_chat": "OpenAI Chat",
+    "api_openai_responses": "OpenAI Responses",
+    "api_anthropic_messages": "Anthropic Messages",
+    "routing_default_desc": "接続済みのプロバイダー間でリクエストをルーティングします。",
+    "api_examples": "API の例"
   },
   "evaluation": {
     "title": "モデル評価と能力ベンチマーク",
@@ -296,7 +315,9 @@
     "col_price": "価格 (In/Out)",
     "no_models": "接続されているモデルがありません。モデルサービスを作成してプロバイダーを追加してください。",
     "no_matching_models": "一致するモデルが見つかりません。",
-    "run_probe": "プローブを実行"
+    "run_probe": "プローブを実行",
+    "provider_points": "{provider} • {score} ポイント",
+    "price_per_1m": "{price}/100万トークン"
   },
   "keys": {
     "title": "API キー",
@@ -362,7 +383,27 @@
     "profile_providers": "プロバイダー",
     "profile_usage_sources": "使用量ソース",
     "profile_quality_unavailable": "独立した品質エビデンスはまだ利用できません。これらのワークロード統計は品質スコアを表しません。",
-    "key_prefix": "API キープレフィックス"
+    "key_prefix": "API キープレフィックス",
+    "key_label": "キー:",
+    "service_badge_single": "1 サービス",
+    "service_badge_plural": "{count} サービス",
+    "service_badge_all": "すべてのサービス",
+    "error_name_required": "キー名は必須です",
+    "error_name_exists": "同名の API キーがすでに存在します",
+    "error_select_service": "モデルサービスを 1 つ以上選択してください",
+    "edit_title": "API キーを編集",
+    "edit_desc": "このキーが呼び出せるサービスを更新します。",
+    "create_desc": "このキーは選択したモデルサービスを呼び出せます。",
+    "model_note_edit": "リクエストでは、選択したサービス名のいずれかを {code} の値として使用してください。",
+    "model_note_create": "各リクエストでは、選択したサービス名を {code} の値として使用してください。",
+    "need_service_edit": "このキーを編集する前にモデルサービスを作成してください。",
+    "need_service_create": "API キーを作成する前にモデルサービスを作成してください。",
+    "download_title": "SmartGate API キー",
+    "download_key_line": "キー: {key}",
+    "download_base_url_line": "Base URL: {url}",
+    "download_services_line": "認可済みモデルサービス: {services}",
+    "download_example_request": "リクエスト例:",
+    "create_title": "API キーを作成"
   },
   "analytics": {
     "title": "ルーティング分析と複雑性インサイト",
@@ -543,7 +584,8 @@
     "save_baseline": "基準を保存",
     "tracking_desc": "SmartGate は支出とルーティングシグナルを追跡し、より良いモデル選択をサポートします。",
     "no_trimming": "コンテキストトリミングはまだ記録されていません。",
-    "unknown_provider": "不明なプロバイダー"
+    "unknown_provider": "不明なプロバイダー",
+    "error_select_service_model": "先にモデルサービスとモデルを選択してください。"
   },
   "profile": {
     "title": "プロファイルを編集",
@@ -567,7 +609,18 @@
     "have_account": "すでにアカウントをお持ちですか？ ログイン",
     "no_account": "アカウントをお持ちでないですか？ 新規登録",
     "code_sent": "確認コードがメールに送信されました",
-    "auth_failed": "認証に失敗しました。認証情報を確認してください。"
+    "auth_failed": "認証に失敗しました。認証情報を確認してください。",
+    "register_subtitle": "あなた専用の AI ゲートウェイはここから始まります。",
+    "login_subtitle": "サインインしてモデルサービスを管理します。",
+    "send_code_failed": "認証コードを送信できませんでした",
+    "continue_failed": "続行できません",
+    "password_hint": "10 文字以上で入力してください。",
+    "code_placeholder_enter": "6 桁のコードを入力",
+    "code_placeholder_send_first": "先にコードを送信してください",
+    "code_expires": "コードは 10 分で失効します。",
+    "code_will_send": "ワンタイムコードをメールで送信します。",
+    "resend_code": "コードを再送信",
+    "please_wait": "お待ちください…"
   },
   "errors": {
     "network_error": "ネットワークリクエストに失敗しました。接続を確認してください。",
@@ -575,7 +628,10 @@
     "forbidden": "この操作を実行する権限がありません。",
     "not_found": "リクエストされたリソースが見つかりませんでした。",
     "server_error": "サーバー内部エラーが発生しました。しばらくしてから再試行してください。",
-    "upstream_error": "上流モデルプロバイダーエラー: {message}"
+    "upstream_error": "上流モデルプロバイダーエラー: {message}",
+    "boundary_title": "問題が発生しました",
+    "boundary_message": "このページは予期せず停止しました。再読み込みしてください。",
+    "boundary_action": "再読み込み"
   },
   "openrouter": {
     "title": "OpenRouter 市場レーダー",
@@ -641,7 +697,9 @@
     "err_reasoning_desc": "文字列ではなく、{effort} と {description} を含むオブジェクトを使用してください。",
     "err_path_title": "AbsolutePathBuf パスエラー:",
     "err_path_desc": "独立した Profile に {config} の絶対パスを正しく設定してください。",
-    "security_warning": "{token} は秘密に保ってください。実際のキーが含まれる Profile ファイルを Git リポジトリにコミットしないでください。"
+    "security_warning": "{token} は秘密に保ってください。実際のキーが含まれる Profile ファイルを Git リポジトリにコミットしないでください。",
+    "catalog_effort_low": "低い推論強度",
+    "catalog_effort_high": "高い推論強度"
   },
   "providers": {
     "account_vault": "プロバイダーアカウント",
@@ -660,7 +718,17 @@
     "cannot_delete_has_endpoints": "プロバイダーを削除できません: 現在 {count} 個のモデルエンドポイントがこのアカウントにリンクされています。",
     "use_connected_account": "接続済みアカウントを使用",
     "connect_new_account": "新しい認証情報を入力",
-    "select_account": "接続済みアカウントを選択"
+    "select_account": "接続済みアカウントを選択",
+    "error_load": "プロバイダーの読み込みに失敗しました",
+    "error_delete": "プロバイダーの削除に失敗しました",
+    "error_update": "プロバイダーの更新に失敗しました",
+    "error_save": "プロバイダーの保存に失敗しました",
+    "error_test_required": "テストには Base URL と API キーが必要です",
+    "error_fields_required": "名前、Base URL、API キーは必須です",
+    "test_passed": "プロバイダー接続を確認しました！",
+    "test_failed": "接続テストに失敗しました",
+    "name_placeholder": "OpenRouter メイン",
+    "new_api_key_label": "新しい API キー（空欄の場合は既存のキーを保持）"
   },
   "admin": {
     "dashboard_subtitle": "エンドポイントのヘルスと最近のゲートウェイトラフィック。",
@@ -764,6 +832,58 @@
     "leave_blank_unlimited": "空欄の場合は無制限です。",
     "save_limits": "制限を保存",
     "revoke_grant_title": "モデルアクセスを取り消しますか？",
-    "revoke_grant_msg": "{project} から {model} を取り消しますか？"
+    "revoke_grant_msg": "{project} から {model} を取り消しますか？",
+    "token_hint": "運用コンソールはこのデプロイの管理者トークンで認証します。トークンはこのタブにのみ保持され、フロントエンドのバンドルには含まれません。",
+    "token_label": "管理者トークン",
+    "token_placeholder": "ADMIN_TOKEN を貼り付け",
+    "token_submit": "コンソールを開く",
+    "token_invalid": "トークンが拒否されました。ADMIN_TOKEN を確認して再試行してください。"
+  },
+  "landing": {
+    "badge": "コスト重視の AI ルーティング",
+    "title_line1": "適切なモデルを。",
+    "title_line2": "デフォルトでコストを削減。",
+    "hero_desc": "SmartGate は AI モデルサービス向けのシンプルな単一 API を提供し、コスト・能力・健全性に基づいて各リクエストをルーティングし、過剰な支払いを防ぎます。",
+    "hero_codex_note": "OpenAI Responses API 経由で Codex と連携します。",
+    "create_workspace": "ワークスペースを作成",
+    "have_account": "すでにアカウントをお持ちですか？",
+    "get_started": "始める",
+    "mock_routing_impact": "ルーティング効果",
+    "mock_saving_now": "● 節約中",
+    "mock_estimated_saved": "推定節約額",
+    "mock_this_month": "今月",
+    "mock_vs_default": "デフォルトルーティング比",
+    "mock_without_routing": "コストルーティングなし",
+    "mock_with_routing": "SmartGate ルーティングあり",
+    "mock_requests_optimized": "最適化されたリクエスト",
+    "feature1_title": "単一エンドポイント、より賢いルーティング",
+    "feature1_text": "モデルプロバイダーを一度接続するだけで、SmartGate がコスト・能力・健全性に基づいて各リクエストをルーティングします。",
+    "feature2_title": "利用状況を把握",
+    "feature2_text": "トークン、推定コスト、応答時間、リクエストを処理したモデルサービスを確認できます。",
+    "feature3_title": "デフォルトでコスト削減",
+    "feature3_text": "コスト重視のルーティングとコンテキスト制御により、タスクに不要な能力への支払いを防ぎます。",
+    "built_for_codex": "Codex のために設計",
+    "codex_title": "Codex をモデルスタックに統合。",
+    "codex_desc": "OpenAI Responses API 経由で Codex と SmartGate を併用します。使い慣れた Codex 体験を保ちながら、モデル選択・プロバイダーフォールバック・予算・利用状況の可視化は SmartGate が舞台裏で処理します。",
+    "codex_chip_gui": "Codex GUI 対応",
+    "codex_chip_routing": "スマートモデルルーティング",
+    "codex_chip_budget": "利用状況と予算の管理",
+    "mock_workflow": "あなたのコーディングワークフロー",
+    "mock_connected": "接続済み",
+    "mock_codex_requests": "Codex リクエスト",
+    "mock_one_gateway": "単一ゲートウェイ",
+    "mock_model_providers": "モデルプロバイダー",
+    "mock_smart_fallback": "スマートフォールバック",
+    "mock_spend_visibility": "コストの可視化",
+    "mock_always_on": "常時有効",
+    "cta_title": "あなたのモデル、あなたのキー、あなたの数値。",
+    "cta_desc": "個人ワークスペースから始め、必要なときだけ拡張できます。",
+    "start_free": "無料で開始",
+    "footer_copyright": "© SmartGate",
+    "footer_tagline": "コストを抑え、すべてのトークンを管理。"
+  },
+  "dialog": {
+    "ok": "OK",
+    "confirm_title": "よろしいですか？"
   }
 }

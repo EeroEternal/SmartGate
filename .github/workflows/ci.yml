@@ -26,6 +26,18 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smartgate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -57,6 +69,8 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Run Rust library tests
+        env:
+          SMARTGATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/smartgate_test
         run: cargo test --locked --lib
 
       - name: Run Redis Warm integration test

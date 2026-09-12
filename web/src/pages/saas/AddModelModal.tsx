@@ -141,7 +141,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
     : filteredModels
 
   const formatPrice = (val: number) => {
-    if (val === 0) return 'FREE'
+    if (val === 0) return t('services.free_badge')
     if (val < 0.0001) return `<$0.0001`
     const rounded = Number(val.toPrecision(4))
     return `$${rounded}`
@@ -362,7 +362,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
           <div>
             <h2 className="text-lg font-semibold">{t('services.add_model')}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label={t('common.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -517,13 +517,13 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                           <div className="shrink-0 text-right">
                             <div className="font-mono font-medium text-zinc-700">
                               {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
-                                <span className="text-emerald-600 font-semibold">FREE</span>
+                                <span className="text-emerald-600 font-semibold">{t('services.free_badge')}</span>
                               ) : (
                                 <span>{formatPrice(m.input_price_per_1m)}/1M</span>
                               )}
                             </div>
                             {m.context_length && (
-                              <div className="text-[10px] text-zinc-400">{m.context_length.toLocaleString()} ctx</div>
+                              <div className="text-[10px] text-zinc-400">{t('services.context_badge', { value: m.context_length.toLocaleString() })}</div>
                             )}
                           </div>
                         </div>
@@ -619,7 +619,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                                     </span>
                                     <div className="shrink-0 text-[11px] font-mono text-zinc-500">
                                       {m.input_price_per_1m === 0 && m.output_price_per_1m === 0 ? (
-                                        <span className="text-emerald-600 font-semibold">FREE</span>
+                                        <span className="text-emerald-600 font-semibold">{t('services.free_badge')}</span>
                                       ) : (
                                         <span>{formatPrice(m.input_price_per_1m)}/1M</span>
                                       )}
@@ -627,7 +627,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                                   </div>
                                   <div className="mt-0.5 text-[11px] text-zinc-400 truncate">
                                     <code className="text-zinc-600">{m.model}</code>
-                                    {m.context_length ? ` ${m.context_length.toLocaleString()} ctx` : ''}
+                                    {m.context_length ? ` ${t('services.context_badge', { value: m.context_length.toLocaleString() })}` : ''}
                                   </div>
                                 </div>
                               </label>
@@ -670,7 +670,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                       type="text"
                       value={draft.upstream_model_id}
                       onChange={(e) => patch({ upstream_model_id: e.target.value })}
-                      placeholder="e.g. deepseek-chat or gpt-4o"
+                      placeholder={t('services.custom_model_placeholder')}
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-xs outline-none focus:border-primary"
                     />
                   </div>
@@ -682,7 +682,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                   label={t('services.model_label')}
                   value={draft.upstream_model_id}
                   onChange={(val) => patch({ upstream_model_id: val })}
-                  placeholder="deepseek-chat or gpt-4o"
+                  placeholder={t('services.custom_model_placeholder')}
                 />
                 <Select
                   label={t('services.protocol_label')}
@@ -725,7 +725,7 @@ export function AddModelModal({ catalog: initialCatalog, providers: _, serviceId
                     type="button"
                     onClick={() => setVisible((value) => !value)}
                     className="absolute inset-y-0 right-0 px-3 text-zinc-400"
-                    aria-label={visible ? 'Hide API key' : 'Show API key'}
+                    aria-label={visible ? t('services.hide_api_key') : t('services.show_api_key')}
                   >
                     {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
