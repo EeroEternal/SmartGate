@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HelpCircle, Search, Sparkles } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
 import { useI18n } from '../../lib/i18n'
+import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
 import { ModelProbeModal } from './ServiceDetailsPage'
 import type { CallApi, ModelDna, Service, ServiceDetails, ServiceEndpoint } from './types'
@@ -126,7 +127,8 @@ export function EvaluationPage() {
 
   const topCoding = [...endpoints].sort((a, b) => (b.model_dna?.code_logic || Math.round((b.capability_score || 0.5) * 100)) - (a.model_dna?.code_logic || Math.round((a.capability_score || 0.5) * 100)))[0]
   const topReasoning = [...endpoints].sort((a, b) => (b.model_dna?.reasoning_math || Math.round((b.capability_score || 0.5) * 98)) - (a.model_dna?.reasoning_math || Math.round((a.capability_score || 0.5) * 98)))[0]
-  const topFlash = [...endpoints].sort((a, b) => (a.input_price_per_1m || 0.1) - (b.input_price_per_1m || 0.1))[0]
+  // An endpoint without a configured price is unknown, not cheap, so it sorts last.
+  const topFlash = [...endpoints].sort((a, b) => (a.input_price_per_1m ?? Number.POSITIVE_INFINITY) - (b.input_price_per_1m ?? Number.POSITIVE_INFINITY))[0]
 
   return (
     <Page>
@@ -166,7 +168,7 @@ export function EvaluationPage() {
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 whitespace-nowrap">{t('evaluation.top_flash')}</div>
           <div className="mt-2 text-xl font-bold text-emerald-600 truncate" title={topFlash?.model}>{topFlash ? formatShortModel(topFlash.model) : '—'}</div>
-          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `$${(topFlash.input_price_per_1m ?? 0.14).toFixed(2)}/1M tokens` : '—'}</div>
+          <div className="mt-2 text-xs text-zinc-400">{topFlash ? `${formatMoney(topFlash.input_price_per_1m)}/1M tokens` : '—'}</div>
         </div>
       </div>
 
@@ -620,7 +622,7 @@ export function EvaluationPage() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span className="text-xs font-mono text-zinc-600">
-                          ${(ep.input_price_per_1m ?? 0.14).toFixed(2)} / ${(ep.output_price_per_1m ?? 0.28).toFixed(2)}
+                          {formatMoney(ep.input_price_per_1m)} / {formatMoney(ep.output_price_per_1m)}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-right">

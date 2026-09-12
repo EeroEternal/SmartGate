@@ -268,7 +268,7 @@ export default function Providers() {
                     <HealthBadge status={ep.enabled ? ep.health_status : 'disabled'} />
                   </td>
                   <td className="px-6 py-4 font-mono text-xs">
-                    {(ep.input_price_per_1m ?? 0).toFixed(2)} / {(ep.output_price_per_1m ?? 0).toFixed(2)}
+                    {ep.input_price_per_1m == null ? '—' : ep.input_price_per_1m.toFixed(2)} / {ep.output_price_per_1m == null ? '—' : ep.output_price_per_1m.toFixed(2)}
                   </td>
                   <td className="px-6 py-4 font-mono text-xs">
                     {(ep.capability_score ?? 0.5).toFixed(2)}
