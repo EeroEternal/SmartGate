@@ -808,6 +808,16 @@ export function ModelProbeModal({
 
 function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
+
+  // Lock body scroll while the modal is open. Headless UI scrolls the selected option
+  // into view when a Listbox opens, which would otherwise scroll the page behind.
+  useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [])
   const [savedAccounts, setSavedAccounts] = useState<SaasProvider[]>([])
   const [useExisting, setUseExisting] = useState(true)
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
@@ -945,7 +955,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
 
   const accountOptions = savedAccounts.map((a) => ({
     id: a.id,
-    name: `${a.name} (${a.provider_type} • ${a.protocol})`,
+    name: a.name,
   }))
 
   const providerPrefixes = useMemo(() => catalogProviderPrefixes(models), [models])
