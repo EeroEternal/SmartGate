@@ -6,7 +6,7 @@ import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
 import { ErrorMessage, Field, Page, errorText } from './components'
-import { callExample, emptyEndpoint, formatPriceInput, inferDefaultCapability, routingInfo } from './serviceUtils'
+import { callExample, catalogProviderPrefixes, computeBundleSelection, emptyEndpoint, filterCatalogModels, formatPriceInput, inferDefaultCapability, routingInfo, searchScore } from './serviceUtils'
 import { StrategyMatrixCardSelector, WorkloadPresetSelector } from './ServiceSelectors'
 import type { SaasProvider } from './ProvidersPage'
 import type { CallApi, CatalogOffering, CatalogProvider, DraftEndpoint, ModelDna, Service, ServiceDetails, ServiceEndpoint } from './types'
@@ -819,6 +819,9 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle')
   const [testMsg, setTestMsg] = useState('')
   const [modelSearch, setModelSearch] = useState('')
+  const [prefixFilter, setPrefixFilter] = useState('')
+  const [freeOnlyFilter, setFreeOnlyFilter] = useState(false)
+  const [maxPriceFilter, setMaxPriceFilter] = useState('')
   const [selectedBundle, setSelectedBundle] = useState<'custom' | 'balanced' | 'free' | 'reasoning'>('balanced')
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([])
   const [openRouterModels, setOpenRouterModels] = useState<CatalogOffering[]>([])
@@ -843,7 +846,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
         cache_write_price_per_1m: 0,
         supports_tools: true,
         supports_vision: false,
-        supports_reasoning: m.id.includes('r1') || m.id.includes('reasoning') || m.id.includes('o1') || m.id.includes('o3'),
+        supports_reasoning: /(?:^|[^a-z0-9])(?:r1|o1|o3)(?:[^a-z0-9]|$)/i.test(m.id) || m.id.includes('reasoning'),
         context_length: m.context_length,
       }))
 
@@ -909,39 +912,24 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   // Automatically populate selectedModelIds if a smart bundle is active and selection is empty
   useEffect(() => {
     if (models.length > 0 && selectedBundle !== 'custom' && selectedModelIds.length === 0) {
-      if (selectedBundle === 'balanced') {
-        const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
-        const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
-        const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
-        const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
-        setSelectedModelIds(Array.from(new Set(targetIds)))
-      } else if (selectedBundle === 'free') {
-        const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
-        setSelectedModelIds(freeModels)
-      } else if (selectedBundle === 'reasoning') {
-        const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
-        setSelectedModelIds(reasoningModels)
+      const targetIds = computeBundleSelection(selectedBundle, models)
+      if (targetIds.length > 0) {
+        setSelectedModelIds(targetIds)
       }
     }
   }, [models, selectedBundle, selectedModelIds.length])
 
-  const modelQuery = modelSearch.trim().toLowerCase()
-  const filteredModels = models
-    .map((m) => {
-      if (!modelQuery) return { model: m, score: 1 }
-      const id = (m.model || '').toLowerCase()
-      const name = (m.model_name || '').toLowerCase()
-      let score = 0
-      if (id === modelQuery || id.endsWith(`/${modelQuery}`)) score = 100
-      else if (id.startsWith(modelQuery) || id.includes(`/${modelQuery}`) || name.startsWith(modelQuery)) score = 80
-      else if (id.includes(modelQuery) || name.includes(modelQuery)) score = 40
-      return { model: m, score }
-    })
-    .filter((item) => item.score > 0)
+  const matchedModels = useMemo(
+    () => filterCatalogModels(models, { query: modelSearch, providerPrefix: prefixFilter, freeOnly: freeOnlyFilter, maxInputPrice: maxPriceFilter }),
+    [models, modelSearch, prefixFilter, freeOnlyFilter, maxPriceFilter]
+  )
+  const filteredModels = matchedModels
+    .map((m) => ({ model: m, score: searchScore(m, modelSearch) }))
     .sort((a, b) => b.score - a.score)
     .map((item) => item.model)
   const selectedModels = models.filter((m) => selectedModelIds.includes(m.model))
-  const visibleModels = modelQuery
+  const hasActiveFilter = modelSearch.trim() !== '' || prefixFilter !== '' || freeOnlyFilter || maxPriceFilter.trim() !== ''
+  const visibleModels = hasActiveFilter
     ? [...selectedModels, ...filteredModels.filter((m) => !selectedModelIds.includes(m.model))]
     : filteredModels
 
@@ -956,6 +944,13 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     id: a.id,
     name: `${a.name} (${a.provider_type} • ${a.protocol})`,
   }))
+
+  const providerPrefixes = useMemo(() => catalogProviderPrefixes(models), [models])
+  const prefixOptions = [
+    { id: '', name: t('services.filter_all_providers') },
+    ...providerPrefixes.map((p) => ({ id: p, name: p })),
+  ]
+  const selectedPrefixOption = prefixOptions.find((o) => o.id === prefixFilter) || prefixOptions[0]
 
   const presetProviderOptions = [
     { id: 'openrouter', name: 'OpenRouter' },
@@ -1066,7 +1061,15 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!useExisting && (!draft.base_url.trim() || !draft.api_key.trim())) {
-      setError('Base URL and API key are required for new provider accounts.')
+      setError(t('services.error_base_url_apikey_required'))
+      return
+    }
+    if (!useExisting && draft.provider_type === 'custom' && !draft.custom_provider_id.trim()) {
+      setError(t('services.error_custom_provider_required'))
+      return
+    }
+    if (!useExisting && !draft.upstream_model_id.trim() && selectedModelIds.length === 0) {
+      setError(t('services.error_no_model_selected'))
       return
     }
 
@@ -1110,7 +1113,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     }
 
     if (targetModels.length === 0) {
-      setError('Please select or input at least one upstream model.')
+      setError(t('services.error_no_model_selected'))
       return
     }
 
@@ -1216,11 +1219,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         type="button"
                         onClick={() => {
                           setSelectedBundle('balanced')
-                          const freeOrCheap = models.find((m) => m.model.endsWith(':free') || m.input_price_per_1m === 0) || models.find((m) => /flash|mini|7b|8b/i.test(m.model))
-                          const mid = models.find((m) => /deepseek-chat|deepseek-v3|qwen-2.5-72b|gpt-4o-mini/i.test(m.model)) || models[Math.min(1, models.length - 1)]
-                          const pro = models.find((m) => /deepseek-reasoner|deepseek-r1|claude-3-5-sonnet|claude-3-7-sonnet|o1|o3|gpt-4o|qwen-max/i.test(m.model)) || models[0]
-                          const targetIds = [freeOrCheap?.model, mid?.model, pro?.model].filter((id): id is string => Boolean(id))
-                          setSelectedModelIds(Array.from(new Set(targetIds)))
+                          setSelectedModelIds(computeBundleSelection('balanced', models))
                         }}
                         className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-all ${
                           selectedBundle === 'balanced'
@@ -1234,7 +1233,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         type="button"
                         onClick={() => {
                           setSelectedBundle('free')
-                          const freeModels = models.filter((m) => m.model.endsWith(':free') || (m.input_price_per_1m === 0 && m.output_price_per_1m === 0)).map((m) => m.model)
+                          const freeModels = computeBundleSelection('free', models)
                           if (freeModels.length > 0) {
                             setSelectedModelIds(freeModels)
                           }
@@ -1251,7 +1250,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         type="button"
                         onClick={() => {
                           setSelectedBundle('reasoning')
-                          const reasoningModels = models.filter((m) => /reasoner|r1|o1|o3|sonnet|opus|pro|max/i.test(m.model)).slice(0, 3).map((m) => m.model)
+                          const reasoningModels = computeBundleSelection('reasoning', models)
                           if (reasoningModels.length > 0) {
                             setSelectedModelIds(reasoningModels)
                           }
@@ -1283,7 +1282,25 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                     </div>
                     <div className="h-44 overflow-y-auto divide-y divide-zinc-100 pr-1">
                       {selectedModels.map((m) => (
-                        <div key={m.model} className="flex items-center justify-between py-2 text-xs">
+                        <div
+                          key={m.model}
+                          role="checkbox"
+                          aria-checked="true"
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedBundle('custom')
+                            toggleModelSelection(m)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSelectedBundle('custom')
+                              toggleModelSelection(m)
+                            }
+                          }}
+                          title={t('services.remove_from_selection')}
+                          className="flex cursor-pointer items-center justify-between rounded-md py-2 text-xs transition-colors hover:bg-zinc-50"
+                        >
                           <div className="min-w-0 pr-2">
                             <div className="font-medium text-zinc-900 truncate">{m.model_name || m.model}</div>
                             <div className="text-[11px] text-zinc-400 font-mono truncate">{m.model}</div>
@@ -1307,6 +1324,52 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                 ) : (
                   /* Custom manual search and selection mode */
                   <div>
+                    {currentProviderType === 'openrouter' && (
+                      <div className="mb-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/60 p-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Select
+                            size="sm"
+                            label={t('services.filter_provider_prefix')}
+                            options={prefixOptions}
+                            selected={selectedPrefixOption}
+                            onChange={(option) => setPrefixFilter(String(option.id))}
+                          />
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">{t('services.filter_max_input_price')}</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={maxPriceFilter}
+                              onChange={(e) => setMaxPriceFilter(e.target.value)}
+                              placeholder={t('services.price_cap_placeholder')}
+                              className="h-9 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-primary"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-700">
+                            <input
+                              type="checkbox"
+                              checked={freeOnlyFilter}
+                              onChange={(e) => setFreeOnlyFilter(e.target.checked)}
+                              className="h-3.5 w-3.5 rounded accent-zinc-900"
+                            />
+                            {t('services.filter_free_only')}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const matching = matchedModels.map((m) => m.model)
+                              setSelectedModelIds(Array.from(new Set([...selectedModelIds, ...matching])))
+                            }}
+                            disabled={matchedModels.length === 0}
+                            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {t('services.select_all_matching', { count: matchedModels.length })}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="relative mb-2">
                       <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
                       <input
