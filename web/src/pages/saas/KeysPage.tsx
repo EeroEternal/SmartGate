@@ -4,6 +4,7 @@ import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
+import { useModal } from '../../lib/modal'
 import { Empty, ErrorMessage, Field, Page, errorText, formatMaskedKey } from './components'
 import { cleanServiceName } from './serviceUtils'
 import type { Service } from './types'
@@ -257,6 +258,7 @@ function ProfileBreakdown({ title, values }: { title: string; values: Record<str
 }
 
 function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () => void }) {
+  const dialogRef = useModal({ onClose })
   const { t } = useI18n()
   const [range, setRange] = useState<'24h' | '7d' | '30d' | 'all'>('7d')
   const [profile, setProfile] = useState<ApiKeyProfile | null>(null)
@@ -275,7 +277,7 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
   const rate = (value: number | null | undefined) => profilePercent(value)
   const latency = (value: number | null | undefined) => profileNumber(value, ' ms')
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+  return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
     <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
         <div><h2 className="text-lg font-semibold text-zinc-950">{t('keys.profile_title')}</h2><p className="mt-1 text-sm font-medium text-zinc-600">{keyData.name}</p><p className="mt-1 text-sm text-zinc-500">{t('keys.profile_subtitle')}</p></div>
@@ -310,6 +312,7 @@ function ApiKeyProfileModal({ keyData, onClose }: { keyData: Key; onClose: () =>
 }
 
 function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: { keyData: Key; services: Service[]; existingNames: string[]; onClose: () => void; onUpdate: (id: string, name: string, modelServiceIds: string[]) => Promise<void> }) {
+  const dialogRef = useModal({ onClose })
   const [name, setName] = useState(keyData.name)
   const [selected, setSelected] = useState<string[]>(keyData.model_services?.map((service) => service.id) || [])
   const [busy, setBusy] = useState(false)
@@ -324,7 +327,7 @@ function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: {
     setBusy(true); setError('')
     try { await onUpdate(keyData.id, normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+  return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
     <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -367,6 +370,7 @@ function EditKeyModal({ keyData, services, existingNames, onClose, onUpdate }: {
 }
 
 function CreateKeyModal({ services, existingNames, onClose, onCreate }: { services: Service[]; existingNames: string[]; onClose: () => void; onCreate: (name: string, modelServiceIds: string[]) => Promise<void> }) {
+  const dialogRef = useModal({ onClose })
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -381,7 +385,7 @@ function CreateKeyModal({ services, existingNames, onClose, onCreate }: { servic
     setBusy(true); setError('')
     try { await onCreate(normalizedName, selected) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+  return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
     <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -426,6 +430,7 @@ function CreateKeyModal({ services, existingNames, onClose, onCreate }: { servic
 /// Success dialog shown right after an API key is created: reveal-once key with
 /// copy/download actions and a ready-to-run request example.
 function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; serviceNames: string[]; onClose: () => void }) {
+  const dialogRef = useModal({ onClose })
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const exampleModel = serviceNames[0] || 'your-model-service'
@@ -469,7 +474,7 @@ function KeyCreatedModal({ rawKey, serviceNames, onClose }: { rawKey: string; se
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>

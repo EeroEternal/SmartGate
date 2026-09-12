@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronRight, HelpCircle, Settings2, X } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
 import { useI18n } from '../../lib/i18n'
+import { useModal } from '../../lib/modal'
 import { Coverage, ErrorMessage, Page, Stat, errorText } from './components'
 import { SavingsBaselineModal } from './SavingsBaselineModal'
 import type { SavingsBaseline, Service, ServiceDetails } from './types'
@@ -82,8 +83,9 @@ function MissingTokensModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>

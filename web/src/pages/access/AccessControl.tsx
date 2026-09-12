@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, X, Key, FolderPlus, Link2, Pencil } from 'lucide-react'
 import Select from '../../components/Select'
 import { adminFetch } from '../../lib/api'
+import { useModal } from '../../lib/modal'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
 import { formatMaskedKey } from '../saas/components'
@@ -72,6 +73,10 @@ export default function AccessControl() {
   const [quotaForm, setQuotaForm] = useState({ rpm_limit: '', concurrency_limit: '' })
   const [submitting, setSubmitting] = useState(false)
   const { dialog, showAlert, showConfirm } = useDialog()
+  const projectDialogRef = useModal({ enabled: isProjectModalOpen, onClose: () => setIsProjectModalOpen(false) })
+  const grantDialogRef = useModal({ enabled: isGrantModalOpen, onClose: () => setIsGrantModalOpen(false) })
+  const keyDialogRef = useModal({ enabled: isKeyModalOpen, onClose: () => setIsKeyModalOpen(false) })
+  const quotaDialogRef = useModal({ enabled: Boolean(quotaTarget), onClose: () => setQuotaTarget(null) })
 
   useEffect(() => {
     fetchData()
@@ -399,7 +404,7 @@ export default function AccessControl() {
       </div>
 
       {isProjectModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={projectDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">{t('admin.create_project')}</h3>
@@ -460,7 +465,7 @@ export default function AccessControl() {
       )}
 
       {isGrantModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={grantDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">{t('admin.grant_virtual_model')}</h3>
@@ -502,7 +507,7 @@ export default function AccessControl() {
       )}
 
       {isKeyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={keyDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">{t('admin.issue_new_key')}</h3>
@@ -586,7 +591,7 @@ export default function AccessControl() {
       )}
 
       {quotaTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={quotaDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">

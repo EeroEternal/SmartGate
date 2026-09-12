@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import BrandMark from '../../components/BrandMark'
 import { useI18n } from '../../lib/i18n'
+import { useModal } from '../../lib/modal'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import { ErrorMessage, Field, errorText } from './components'
 
@@ -114,6 +115,7 @@ export function SaasLayout({ children }: { children: ReactNode }) {
 }
 function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: () => void; onSaved: (email: string) => void }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [updatedEmail, setUpdatedEmail] = useState(email)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -134,7 +136,7 @@ function ProfileDialog({ email, onClose, onSaved }: { email: string; onClose: ()
     }
   }
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+  return <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true" aria-labelledby="profile-title">
     <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-4"><div><h2 id="profile-title" className="text-lg font-semibold">{t('profile.title')}</h2><p className="mt-1 text-sm text-zinc-500">{t('profile.subtitle')}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Close"><X className="h-5 w-5" /></button></div>
       <div className="mt-6 space-y-5"><Field label={t('profile.email')} value={updatedEmail} onChange={setUpdatedEmail} type="email" /><Field label={t('profile.new_password')} value={newPassword} onChange={setNewPassword} type="password" required={false} placeholder={t('profile.new_password_placeholder')} /><Field label={t('profile.current_password')} value={currentPassword} onChange={setCurrentPassword} type="password" placeholder={t('profile.current_password_placeholder')} /></div>

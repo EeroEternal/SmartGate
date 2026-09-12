@@ -5,7 +5,7 @@ import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
-import { useBodyScrollLock } from '../../lib/scrollLock'
+import { useModal } from '../../lib/modal'
 import { ErrorMessage, Field, Page, errorText } from './components'
 import { callExample, catalogProviderPrefixes, computeBundleSelection, emptyEndpoint, filterCatalogModels, formatPriceInput, inferDefaultCapability, routingInfo, searchScore } from './serviceUtils'
 import { StrategyMatrixCardSelector, WorkloadPresetSelector } from './ServiceSelectors'
@@ -289,6 +289,7 @@ function CallExamplePanel({ api, model, onChange }: { api: CallApi; model: strin
 
 function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetails; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [serviceName, setServiceName] = useState(service.name)
   const [nextStrategy, setNextStrategy] = useState(service.strategy)
   const [preset, setPreset] = useState('coding')
@@ -339,7 +340,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-xs overflow-y-auto" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-xs overflow-y-auto" role="dialog" aria-modal="true">
       <form onSubmit={submit} className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
@@ -457,6 +458,7 @@ function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetai
 
 function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint: ServiceEndpoint; serviceId: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [providerName, setProviderName] = useState(endpoint.provider_name)
   const [providerType] = useState(endpoint.provider_type)
   const [protocol, setProtocol] = useState(endpoint.protocol || 'openai')
@@ -533,7 +535,7 @@ function EditProviderModal({ endpoint, serviceId, onClose, onSaved }: { endpoint
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -626,6 +628,7 @@ export function ModelProbeModal({
   onSaved: () => void
 }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [probing, setProbing] = useState(false)
   const [probeResult, setProbeResult] = useState<{
     endpoint_id: string
@@ -678,7 +681,7 @@ export function ModelProbeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/30 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2.5">
@@ -810,8 +813,7 @@ export function ModelProbeModal({
 function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClose, onSaved }: { catalog: CatalogOffering[]; providers: { id: string; name: string; modelCount: number }[]; serviceId: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
 
-  // Keep the page behind the dialog from scrolling while it is open.
-  useBodyScrollLock()
+  const dialogRef = useModal({ onClose })
   const [savedAccounts, setSavedAccounts] = useState<SaasProvider[]>([])
   const [useExisting, setUseExisting] = useState(true)
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
@@ -1154,7 +1156,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl min-w-[320px] sm:min-w-[640px] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl [scrollbar-gutter:stable]">
         <div className="flex items-start justify-between gap-4">
           <div>

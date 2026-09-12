@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Server, CheckCircle2, AlertCircle, Trash2, Pencil, Zap, RefreshCw, HelpCircle, X, ShieldCheck } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
 import { useI18n } from '../../lib/i18n'
+import { useModal } from '../../lib/modal'
 import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
 
@@ -217,6 +218,7 @@ export default function ProvidersPage() {
 
 function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [selectedPreset, setSelectedPreset] = useState(PRESET_PROVIDERS[0].id)
   const [name, setName] = useState(PRESET_PROVIDERS[0].name)
   const [baseUrl, setBaseUrl] = useState(PRESET_PROVIDERS[0].base_url)
@@ -299,7 +301,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>
@@ -429,6 +431,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
 
 function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasProvider; onClose: () => void; onUpdated: () => void }) {
   const { t } = useI18n()
+  const dialogRef = useModal({ onClose })
   const [name, setName] = useState(provider.name)
   const [baseUrl, setBaseUrl] = useState(provider.base_url)
   const [protocol, setProtocol] = useState(provider.protocol)
@@ -459,7 +462,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: SaasPro
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
           <div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import { adminFetch } from '../lib/api'
+import { useModal } from '../lib/modal'
 import { useDialog } from '../components/Dialog'
 import { useI18n } from '../lib/i18n'
 
@@ -35,6 +36,7 @@ export default function Pools() {
   const selectedStrategy = strategyOptions.find((o) => o.id === strategy.id) ?? strategyOptions[0]
   const [submitting, setSubmitting] = useState(false)
   const { dialog, showAlert } = useDialog()
+  const dialogRef = useModal({ enabled: isModalOpen, onClose: () => setIsModalOpen(false) })
 
   useEffect(() => {
     fetchPools()
@@ -150,7 +152,7 @@ export default function Pools() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={dialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">{t('admin.create_pool_title')}</h3>

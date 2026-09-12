@@ -4,6 +4,7 @@ import { Plus, X, ArrowLeft, RefreshCw } from 'lucide-react'
 import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
+import { useModal } from '../lib/modal'
 
 interface EndpointOption {
   id: string
@@ -41,6 +42,7 @@ export default function PoolDetails() {
   const [members, setMembers] = useState<PoolEndpoint[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [isBindModalOpen, setIsBindModalOpen] = useState(false)
+  const dialogRef = useModal({ enabled: isBindModalOpen, onClose: () => setIsBindModalOpen(false) })
   const [selectedEndpoint, setSelectedEndpoint] = useState<{ id: string; name: string } | null>(null)
   const [priority, setPriority] = useState('1')
   const [weight, setWeight] = useState('1')
@@ -257,7 +259,7 @@ export default function PoolDetails() {
       </div>
 
       {isBindModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={dialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center">
               <h3 className="font-bold">Bind Endpoint</h3>

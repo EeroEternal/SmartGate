@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Activity, CheckCheck, HelpCircle, Sparkles, TrendingDown, X } from 'lucide-react'
 import { useI18n } from '../../lib/i18n'
+import { useModal } from '../../lib/modal'
 
 interface StrategyMatrixCardSelectorProps {
   selectedStrategy: string
@@ -73,6 +74,7 @@ interface WorkloadPresetSelectorProps {
 export function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: WorkloadPresetSelectorProps) {
   const { t } = useI18n()
   const [showWeightsModal, setShowWeightsModal] = useState(false)
+  const dialogRef = useModal({ enabled: showWeightsModal, onClose: () => setShowWeightsModal(false) })
 
   const presets = [
     {
@@ -144,7 +146,7 @@ export function WorkloadPresetSelector({ selectedPreset, onSelectPreset }: Workl
       </div>
 
       {showWeightsModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
+        <div ref={dialogRef} className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>

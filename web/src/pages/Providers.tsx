@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
+import { useModal } from '../lib/modal'
 import { useDialog } from '../components/Dialog'
 import { useI18n } from '../lib/i18n'
 
@@ -63,6 +64,8 @@ export default function Providers() {
   })
   const [submitting, setSubmitting] = useState(false)
   const { dialog, showAlert } = useDialog()
+  const providerDialogRef = useModal({ enabled: isProviderModalOpen, onClose: () => setIsProviderModalOpen(false) })
+  const endpointDialogRef = useModal({ enabled: isEndpointModalOpen, onClose: () => setIsEndpointModalOpen(false) })
 
   useEffect(() => {
     refresh()
@@ -280,7 +283,7 @@ export default function Providers() {
       </div>
 
       {isProviderModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={providerDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">{t('admin.add_provider')}</h3>
@@ -337,7 +340,7 @@ export default function Providers() {
       )}
 
       {isEndpointModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={endpointDialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md border border-zinc-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">{t('admin.add_endpoint')}</h3>

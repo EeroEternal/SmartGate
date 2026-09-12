@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useModal } from '../lib/modal'
 
 type DialogState = {
   title: string
@@ -10,8 +11,9 @@ type DialogState = {
 }
 
 export function Dialog({ state, onConfirm, onCancel }: { state: DialogState; onConfirm: () => void; onCancel: () => void }) {
+  const dialogRef = useModal({ onClose: onCancel })
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/40 p-4" role="presentation" onMouseDown={onCancel}>
+    <div ref={dialogRef} className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/40 p-4" role="presentation" onMouseDown={onCancel}>
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>

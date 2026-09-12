@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import Select from '../components/Select'
 import HealthBadge from '../components/HealthBadge'
 import { adminFetch } from '../lib/api'
+import { useModal } from '../lib/modal'
 import { useDialog } from '../components/Dialog'
 
 interface VirtualModel {
@@ -29,6 +30,7 @@ export default function VirtualModels() {
   const [selectedPool, setSelectedPool] = useState<{ id: string; name: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const { dialog, showAlert } = useDialog()
+  const dialogRef = useModal({ enabled: isModalOpen, onClose: () => setIsModalOpen(false) })
 
   useEffect(() => {
     refresh()
@@ -138,7 +140,7 @@ export default function VirtualModels() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div ref={dialogRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg w-full max-w-md border border-zinc-200">
             <div className="px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold">Create Virtual Model</h3>
