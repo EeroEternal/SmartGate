@@ -906,7 +906,10 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
     ? (selectedAccount?.provider_type || (openRouterModels.length ? 'openrouter' : 'custom'))
     : draft.provider_type
   const models = useMemo(() => {
-    return fullCatalog.filter((item) => item.provider_id === currentProviderType)
+    const scoped = fullCatalog.filter((item) => item.provider_id === currentProviderType)
+    // Accounts whose provider type has no catalog entry (e.g. custom OpenAI-compatible
+    // endpoints) still get the full offering list so models can be picked individually.
+    return scoped.length > 0 ? scoped : fullCatalog
   }, [fullCatalog, currentProviderType])
 
   // Automatically populate selectedModelIds if a smart bundle is active and selection is empty
@@ -1280,7 +1283,7 @@ function AddModelModal({ catalog: initialCatalog, providers: _, serviceId, onClo
                         {t('services.custom_or_additional_model')}
                       </button>
                     </div>
-                    <div className="h-44 overflow-y-auto divide-y divide-zinc-100 pr-1">
+                    <div className="h-48 overflow-y-auto divide-y divide-zinc-100 pr-1">
                       {selectedModels.map((m) => (
                         <div
                           key={m.model}
