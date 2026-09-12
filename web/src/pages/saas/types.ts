@@ -49,4 +49,14 @@ export type SavingsBaseline = {
   input_price_per_1m: number | null
   output_price_per_1m: number | null
 }
+export type SaasProvider = {
+  id: string
+  name: string
+  provider_type: string
+  protocol: string
+  base_url: string
+  status: string
+  endpoint_count: number
+  created_at: string
+}
 

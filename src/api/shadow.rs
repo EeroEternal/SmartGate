@@ -287,6 +287,71 @@ pub async fn store_shadow_evaluation(
     Ok(())
 }
 
+/// Inputs for a background shadow-flight request, grouped to keep the spawn site readable.
+pub struct ShadowJob {
+    pub state: Arc<AppState>,
+    pub auth: AuthContext,
+    pub headers: HeaderMap,
+    pub payload: serde_json::Value,
+    pub shadow_model_name: String,
+    pub request_preview: String,
+    pub main_preview: String,
+    pub is_openai: bool,
+}
+
+pub async fn run_shadow(job: ShadowJob) {
+    if let Some(result) = execute_shadow(
+        job.state.clone(),
+        job.auth.clone(),
+        job.headers,
+        job.payload,
+        job.shadow_model_name,
+        job.request_preview,
+        job.is_openai,
+    )
+    .await
+    {
+        let similarity = jaccard_similarity(&job.main_preview, &result.response_preview);
+        let agreement = similarity > 0.3;
+        if let Err(error) = store_shadow_evaluation(
+            &job.state.db,
+            &job.auth.project.org_id,
+            &job.auth.project.id,
+            &job.auth.api_key.id,
+            &result,
+            similarity,
+            agreement,
+        )
+        .await
+        {
+            tracing::warn!("Failed to store shadow evaluation: {}", error);
+        }
+    }
+}
+
+fn jaccard_similarity(a: &str, b: &str) -> f64 {
+    if a.is_empty() && b.is_empty() {
+        return 1.0;
+    }
+    let set_a: std::collections::HashSet<String> = a
+        .split_whitespace()
+        .map(|word| word.to_lowercase())
+        .collect();
+    let set_b: std::collections::HashSet<String> = b
+        .split_whitespace()
+        .map(|word| word.to_lowercase())
+        .collect();
+    if set_a.is_empty() && set_b.is_empty() {
+        return 1.0;
+    }
+    let intersection = set_a.intersection(&set_b).count();
+    let union = set_a.union(&set_b).count();
+    if union == 0 {
+        return 0.0;
+    }
+    intersection as f64 / union as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

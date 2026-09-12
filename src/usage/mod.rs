@@ -362,8 +362,11 @@ impl GatewayHooks for SmartGateHooks {
             .bind(usage_source)
             .bind(usage_confidence)
             .bind(pricing_source)
-            .bind(unit_price.input_per_1m)
-            .bind(unit_price.output_per_1m)
+            // Snapshots stay numeric: an unpriced endpoint records 0 with
+            // `pricing_source = "unpriced"`, which is what distinguishes it from a
+            // genuinely free model (`pricing_source = "configured_endpoint"`).
+            .bind(unit_price.input_price())
+            .bind(unit_price.output_price())
             .bind(if pricing_source == "configured_endpoint" {
                 Some(eero_llm_providers::registry_version())
             } else {

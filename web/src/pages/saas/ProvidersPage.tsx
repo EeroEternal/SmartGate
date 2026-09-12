@@ -5,17 +5,7 @@ import { useI18n } from '../../lib/i18n'
 import { useModal } from '../../lib/modal'
 import Select from '../../components/Select'
 import { useDialog } from '../../components/Dialog'
-
-export type SaasProvider = {
-  id: string
-  name: string
-  provider_type: string
-  protocol: string
-  base_url: string
-  status: string
-  endpoint_count: number
-  created_at: string
-}
+import type { SaasProvider } from './types'
 
 const PRESET_PROVIDERS = [
   { id: 'openrouter', name: 'OpenRouter', base_url: 'https://openrouter.ai/api/v1', protocol: 'openai' },

@@ -1,10 +1,10 @@
 //! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
 
-use crate::api::shadow::{execute_shadow, store_shadow_evaluation};
+use crate::api::shadow::{extract_json_preview, run_shadow, ShadowJob};
 use crate::api::warm::warm_error;
 use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
-use crate::models::ModelPool;
+use crate::models::{ModelPool, VirtualModel};
 use crate::policy::{
     effective_daily_limit, estimate_tokens_from_text, evaluate_budget, expected_output_tokens,
     extract_complexity_signals, extract_context_epoch, extract_openai_prompt_text,
@@ -35,6 +35,260 @@ use super::judge::{classify_with_judge, difficulty_tier, JudgeScope};
 enum ChatProtocol {
     OpenAi,
     Anthropic,
+}
+
+/// Unwraps a stage result, returning the prepared error response from the handler.
+macro_rules! or_return {
+    ($stage:expr) => {
+        match $stage {
+            Ok(value) => value,
+            Err(response) => return response,
+        }
+    };
+}
+
+/// What the shadow stage needs to mirror a sampled request in the background.
+struct ShadowRequest<'a> {
+    state: &'a Arc<AppState>,
+    auth: &'a AuthContext,
+    headers: &'a HeaderMap,
+    payload: &'a serde_json::Value,
+    request_preview: &'a str,
+    main_preview: &'a str,
+    is_openai: bool,
+}
+
+/// Mirror one sampled request to the shadow model, or count a drop when no permit is
+/// available. Best-effort by design: the user-facing response is never affected.
+fn spawn_shadow(request: ShadowRequest<'_>, shadow_model_name: String) {
+    match request.state.shadow_semaphore.clone().try_acquire_owned() {
+        Ok(permit) => {
+            let job = ShadowJob {
+                state: Arc::clone(request.state),
+                auth: request.auth.clone(),
+                headers: request.headers.clone(),
+                payload: request.payload.clone(),
+                shadow_model_name,
+                request_preview: request.request_preview.to_string(),
+                main_preview: request.main_preview.to_string(),
+                is_openai: request.is_openai,
+            };
+            tokio::spawn(async move {
+                let _permit = permit;
+                run_shadow(job).await;
+            });
+        }
+        Err(_) => {
+            metrics::counter!("shadow_dropped_total").increment(1);
+        }
+    }
+}
+
+/// Everything the data plane needs to know about the requested model service.
+struct PoolContext {
+    virtual_model: VirtualModel,
+    pool: Option<ModelPool>,
+    strategy: String,
+}
+
+/// Resolve the caller's model service, its pool and its canonical strategy.
+///
+/// Shared by every proxy surface so authorization and pool lookup cannot drift
+/// between the chat completions, messages and responses entry points.
+async fn resolve_pool_context(
+    state: &AppState,
+    auth: &AuthContext,
+    requested_model: &str,
+) -> Result<PoolContext, Response> {
+    let virtual_model = match resolve_authorized_virtual_model(
+        &state.db,
+        requested_model,
+        &auth.project.id,
+        &auth.api_key.id,
+    )
+    .await
+    {
+        Ok(Some(model)) => model,
+        Ok(None) => {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "Access to this model is not granted or model not found",
+            )
+                .into_response())
+        }
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
+            return Err(
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+            );
+        }
+    };
+
+    let pool = match sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
+        .bind(&virtual_model.pool_id)
+        .fetch_optional(&state.db)
+        .await
+    {
+        Ok(pool) => pool,
+        Err(error) => {
+            tracing::error!("Database error: {}", error);
+            return Err(
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+            );
+        }
+    };
+
+    let strategy = pool
+        .as_ref()
+        .map(|pool| canonicalize_strategy(&pool.strategy).to_string())
+        .unwrap_or_else(|| "round_robin".to_string());
+
+    Ok(PoolContext {
+        virtual_model,
+        pool,
+        strategy,
+    })
+}
+
+/// Result of the progressive spend-budget stage.
+struct BudgetGate {
+    outcome: BudgetOutcome,
+    spent: f64,
+    limit: Option<f64>,
+    downshift: bool,
+}
+
+/// Enforce the key/project daily spend budget, or answer 429 with the budget headers.
+///
+/// `include_detail` keeps the verbose body the chat proxy has always returned; the
+/// responses surface has always used the short form.
+async fn enforce_spend_budget(
+    state: &AppState,
+    auth: &AuthContext,
+    include_detail: bool,
+) -> Result<BudgetGate, Response> {
+    let limit = effective_daily_limit(
+        auth.api_key.daily_spend_limit,
+        auth.project.daily_spend_limit,
+    );
+    let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
+        Ok(spent) => spent,
+        Err(error) => {
+            // Fail closed: without spend data we cannot enforce budgets.
+            tracing::error!("Database error fetching spend for budget check: {}", error);
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Spend tracking temporarily unavailable",
+            )
+                .into_response());
+        }
+    };
+    let outcome = evaluate_budget(spent, limit);
+    if outcome.is_blocked() {
+        let headers = budget_headers(&outcome, spent, limit);
+        let message = if include_detail {
+            format!(
+                "Daily spend budget exceeded (spent≈{spent:.4}, limit={limit:?}). Increase limit or wait until reset."
+            )
+        } else {
+            "Daily spend budget exceeded".to_string()
+        };
+        return Err((StatusCode::TOO_MANY_REQUESTS, headers, message).into_response());
+    }
+    let downshift = outcome.should_downshift();
+    Ok(BudgetGate {
+        outcome,
+        spent,
+        limit,
+        downshift,
+    })
+}
+
+/// Reserve the request against the key and project rate/concurrency limits.
+///
+/// Called before any auxiliary dispatch so judge usage counts towards the same
+/// admission decision, and the returned permit is held until the final response.
+async fn acquire_quota(state: &AppState, auth: &AuthContext) -> Result<QuotaPermit, Response> {
+    let key_limits = QuotaLimits {
+        rpm_limit: auth.api_key.rpm_limit.map(|value| value as u32),
+        concurrency_limit: auth.api_key.concurrency_limit.map(|value| value as u32),
+    };
+    let project_limits = QuotaLimits {
+        rpm_limit: auth.project.rpm_limit.map(|value| value as u32),
+        concurrency_limit: auth.project.concurrency_limit.map(|value| value as u32),
+    };
+    if let Err(reason) = state.quotas.try_acquire(
+        &auth.api_key.id,
+        &auth.project.id,
+        &key_limits,
+        &project_limits,
+    ) {
+        let mut headers = HeaderMap::new();
+        if let Some(seconds) = reason.retry_after_secs() {
+            if let Ok(value) = HeaderValue::from_str(&seconds.to_string()) {
+                headers.insert("retry-after", value);
+            }
+        }
+        return Err((StatusCode::TOO_MANY_REQUESTS, headers, reason.message()).into_response());
+    }
+    Ok(QuotaPermit::new(
+        state.quotas.clone(),
+        auth.api_key.id.clone(),
+        auth.project.id.clone(),
+    ))
+}
+
+/// Prompt-derived inputs shared by the routing hints and the recorded decision.
+struct RequestSignals {
+    prompt_text: String,
+    input_tokens: u32,
+    output_tokens: u32,
+    difficulty: f64,
+    has_tools: bool,
+    signals: Vec<String>,
+}
+
+fn request_signals(payload: &serde_json::Value) -> RequestSignals {
+    let prompt_text = extract_openai_prompt_text(payload);
+    RequestSignals {
+        input_tokens: estimate_tokens_from_text(&prompt_text),
+        output_tokens: expected_output_tokens(payload, 512),
+        difficulty: heuristic_difficulty(payload),
+        has_tools: request_has_tools(payload),
+        signals: extract_complexity_signals(payload),
+        prompt_text,
+    }
+}
+
+/// Stamp the metadata keys every protocol must carry for usage attribution.
+///
+/// Chat, messages and responses requests expose the same metadata map, so all three
+/// surfaces record identical attribution keys.
+fn stamp_core_metadata(
+    metadata: &mut std::collections::HashMap<String, String>,
+    auth: &AuthContext,
+    virtual_model: &VirtualModel,
+    strategy: &str,
+    input_tokens: u32,
+    output_tokens: u32,
+) {
+    metadata.insert("org_id".to_string(), auth.project.org_id.clone());
+    metadata.insert("project_id".to_string(), auth.project.id.clone());
+    metadata.insert("key_id".to_string(), auth.api_key.id.clone());
+    metadata.insert("virtual_model_id".to_string(), virtual_model.id.clone());
+    metadata.insert("pool_id".to_string(), virtual_model.pool_id.clone());
+    metadata.insert("routing_strategy".to_string(), strategy.to_string());
+    metadata.insert("input_tokens_est".to_string(), input_tokens.to_string());
+    metadata.insert("output_tokens_est".to_string(), output_tokens.to_string());
+}
+
+/// Copy the budget headers onto a data-plane response.
+fn apply_budget_headers(response: &mut Response, gate: &BudgetGate) {
+    for (name, value) in budget_headers(&gate.outcome, gate.spent, gate.limit) {
+        if let Some(name) = name {
+            response.headers_mut().insert(name, value);
+        }
+    }
 }
 
 pub async fn chat_completions(
@@ -68,44 +322,11 @@ async fn chat_proxy(
         .unwrap_or("")
         .to_string();
 
-    let virtual_model = match resolve_authorized_virtual_model(
-        &state.db,
-        &requested_model,
-        &auth.project.id,
-        &auth.api_key.id,
-    )
-    .await
-    {
-        Ok(Some(vm)) => vm,
-        Ok(None) => {
-            return (
-                StatusCode::FORBIDDEN,
-                "Access to this model is not granted or model not found",
-            )
-                .into_response()
-        }
-        Err(error) => {
-            tracing::error!("Database error: {}", error);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
-        }
-    };
-
-    let pool = match sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
-        .bind(&virtual_model.pool_id)
-        .fetch_optional(&state.db)
-        .await
-    {
-        Ok(pool) => pool,
-        Err(error) => {
-            tracing::error!("Database error: {}", error);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
-        }
-    };
-
-    let strategy = pool
-        .as_ref()
-        .map(|p| canonicalize_strategy(&p.strategy).to_string())
-        .unwrap_or_else(|| "round_robin".to_string());
+    let PoolContext {
+        virtual_model,
+        pool,
+        strategy,
+    } = or_return!(resolve_pool_context(&state, &auth, &requested_model).await);
 
     let warm_context = match parse_context_with_headers(&payload, Some(&headers)) {
         Ok(context) => context,
@@ -120,35 +341,10 @@ async fn chat_proxy(
     }
 
     // --- Control: progressive spend budget ---
-    let limit = effective_daily_limit(
-        auth.api_key.daily_spend_limit,
-        auth.project.daily_spend_limit,
-    );
-    let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
-        Ok(spent) => spent,
-        Err(error) => {
-            // Fail closed: without spend data we cannot enforce budgets.
-            tracing::error!("Database error fetching spend for budget check: {}", error);
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Spend tracking temporarily unavailable",
-            )
-                .into_response();
-        }
-    };
-    let budget = evaluate_budget(spent, limit);
-    if budget.is_blocked() {
-        let headers = budget_headers(&budget, spent, limit);
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            headers,
-            format!(
-                "Daily spend budget exceeded (spent≈{spent:.4}, limit={limit:?}). Increase limit or wait until reset."
-            ),
-        )
-            .into_response();
-    }
-    let downshift = budget.should_downshift();
+    let gate = or_return!(enforce_spend_budget(&state, &auth, true).await);
+    let spent = gate.spent;
+    let limit = gate.limit;
+    let downshift = gate.downshift;
 
     // --- Cost: context slim (disabled for Zene Warm snapshots) ---
     let tool_chars_before = tool_message_chars(&payload);
@@ -184,45 +380,19 @@ async fn chat_proxy(
     }
 
     // Hints for Cost/Capability scoring (after slim so token est matches forwarded body)
-    let prompt_text = extract_openai_prompt_text(&payload);
-    let input_tokens = estimate_tokens_from_text(&prompt_text);
-    let output_tokens = expected_output_tokens(&payload, 512);
-    let mut difficulty = heuristic_difficulty(&payload);
+    let RequestSignals {
+        prompt_text,
+        input_tokens,
+        output_tokens,
+        difficulty: base_difficulty,
+        has_tools,
+        signals: mut signal_notes,
+    } = request_signals(&payload);
+    let mut difficulty = base_difficulty;
     let mut difficulty_source = "heuristic";
     let mut judge_used = false;
-    let mut signals = extract_complexity_signals(&payload);
-    let has_tools = request_has_tools(&payload);
 
-    let key_limits = QuotaLimits {
-        rpm_limit: auth.api_key.rpm_limit.map(|v| v as u32),
-        concurrency_limit: auth.api_key.concurrency_limit.map(|v| v as u32),
-    };
-    let project_limits = QuotaLimits {
-        rpm_limit: auth.project.rpm_limit.map(|v| v as u32),
-        concurrency_limit: auth.project.concurrency_limit.map(|v| v as u32),
-    };
-
-    // Reserve the outer request before Judge dispatch so Judge usage is part of the same
-    // request admission decision and the permit remains held until the final response.
-    if let Err(reason) = state.quotas.try_acquire(
-        &auth.api_key.id,
-        &auth.project.id,
-        &key_limits,
-        &project_limits,
-    ) {
-        let mut headers = HeaderMap::new();
-        if let Some(secs) = reason.retry_after_secs() {
-            if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
-                headers.insert("retry-after", v);
-            }
-        }
-        return (StatusCode::TOO_MANY_REQUESTS, headers, reason.message()).into_response();
-    }
-    let permit = QuotaPermit::new(
-        state.quotas.clone(),
-        auth.api_key.id.clone(),
-        auth.project.id.clone(),
-    );
+    let permit = or_return!(acquire_quota(&state, &auth).await);
 
     // If auxiliary judge model is enabled on this pool and complexity is in the ambiguous zone.
     if let Some(ref p) = pool {
@@ -242,7 +412,7 @@ async fn chat_proxy(
                         difficulty = judge_tier.score();
                         difficulty_source = "judge";
                         judge_used = true;
-                        signals.push(format!(
+                        signal_notes.push(format!(
                             "Auxiliary Judge: {}",
                             judge_tier.as_str().to_uppercase()
                         ));
@@ -343,7 +513,7 @@ async fn chat_proxy(
         "difficulty_source": difficulty_source,
         "judge_used": judge_used,
         "prompt_preview": prompt_preview,
-        "signals": signals,
+        "signals": signal_notes,
         "has_tools": has_tools,
         "downshift": downshift,
         "spent_today": spent,
@@ -385,24 +555,14 @@ async fn chat_proxy(
         }
     };
 
-    proxy_request
-        .metadata
-        .insert("org_id".to_string(), auth.project.org_id.clone());
-    proxy_request
-        .metadata
-        .insert("project_id".to_string(), auth.project.id.clone());
-    proxy_request
-        .metadata
-        .insert("key_id".to_string(), auth.api_key.id.clone());
-    proxy_request
-        .metadata
-        .insert("virtual_model_id".to_string(), virtual_model.id.clone());
-    proxy_request
-        .metadata
-        .insert("pool_id".to_string(), virtual_model.pool_id.clone());
-    proxy_request
-        .metadata
-        .insert("routing_strategy".to_string(), strategy);
+    stamp_core_metadata(
+        &mut proxy_request.metadata,
+        &auth,
+        &virtual_model,
+        &strategy,
+        input_tokens,
+        output_tokens,
+    );
     if let Some(context) = warm_context.as_ref() {
         proxy_request.metadata.insert(
             "zene_session_id".to_string(),
@@ -441,12 +601,6 @@ async fn chat_proxy(
     proxy_request
         .metadata
         .insert("trimmed_chars".to_string(), slimmed_chars.to_string());
-    proxy_request
-        .metadata
-        .insert("input_tokens_est".to_string(), input_tokens.to_string());
-    proxy_request
-        .metadata
-        .insert("output_tokens_est".to_string(), output_tokens.to_string());
     if let Some(ref sid) = session_id {
         proxy_request
             .metadata
@@ -565,7 +719,7 @@ async fn chat_proxy(
             let main_preview = if is_json {
                 match &body {
                     unigateway_sdk::protocol::ProtocolResponseBody::Json(json) => {
-                        crate::api::shadow::extract_json_preview(json)
+                        extract_json_preview(json)
                     }
                     _ => String::new(),
                 }
@@ -575,35 +729,18 @@ async fn chat_proxy(
 
             if should_shadow {
                 if let Some((shadow_model_name, _)) = shadow_config {
-                    // Shadow flighting is best-effort: if no permit is available the
-                    // shadow is dropped and the main response is unaffected.
-                    match state.shadow_semaphore.clone().try_acquire_owned() {
-                        Ok(permit) => {
-                            let state_clone = Arc::clone(&state);
-                            let auth_clone = auth.clone();
-                            let headers_clone = headers.clone();
-                            let payload_clone = payload.clone();
-                            let request_preview = prompt_preview.clone();
-                            let is_openai = protocol == ChatProtocol::OpenAi;
-                            tokio::spawn(async move {
-                                let _permit = permit;
-                                run_shadow(ShadowJob {
-                                    state: state_clone,
-                                    auth: auth_clone,
-                                    headers: headers_clone,
-                                    payload: payload_clone,
-                                    shadow_model_name,
-                                    request_preview,
-                                    main_preview,
-                                    is_openai,
-                                })
-                                .await;
-                            });
-                        }
-                        Err(_) => {
-                            metrics::counter!("shadow_dropped_total").increment(1);
-                        }
-                    }
+                    spawn_shadow(
+                        ShadowRequest {
+                            state: &state,
+                            auth: &auth,
+                            headers: &headers,
+                            payload: &payload,
+                            request_preview: &prompt_preview,
+                            main_preview: &main_preview,
+                            is_openai: protocol == ChatProtocol::OpenAi,
+                        },
+                        shadow_model_name,
+                    );
                 }
             }
 
@@ -616,11 +753,7 @@ async fn chat_proxy(
                 }
             };
             let mut resp = protocol_response_to_axum(response);
-            for (name, value) in budget_headers(&budget, spent, limit) {
-                if let Some(name) = name {
-                    resp.headers_mut().insert(name, value);
-                }
-            }
+            apply_budget_headers(&mut resp, &gate);
             if downshift {
                 if let Ok(v) = HeaderValue::from_str("soft") {
                     resp.headers_mut().insert("x-smartgate-budget", v);
@@ -650,71 +783,6 @@ async fn chat_proxy(
     }
 }
 
-/// Inputs for a background shadow-flight request, grouped to keep the spawn site readable.
-struct ShadowJob {
-    state: Arc<AppState>,
-    auth: AuthContext,
-    headers: HeaderMap,
-    payload: serde_json::Value,
-    shadow_model_name: String,
-    request_preview: String,
-    main_preview: String,
-    is_openai: bool,
-}
-
-async fn run_shadow(job: ShadowJob) {
-    if let Some(result) = execute_shadow(
-        job.state.clone(),
-        job.auth.clone(),
-        job.headers,
-        job.payload,
-        job.shadow_model_name,
-        job.request_preview,
-        job.is_openai,
-    )
-    .await
-    {
-        let similarity = jaccard_similarity(&job.main_preview, &result.response_preview);
-        let agreement = similarity > 0.3;
-        if let Err(error) = store_shadow_evaluation(
-            &job.state.db,
-            &job.auth.project.org_id,
-            &job.auth.project.id,
-            &job.auth.api_key.id,
-            &result,
-            similarity,
-            agreement,
-        )
-        .await
-        {
-            tracing::warn!("Failed to store shadow evaluation: {}", error);
-        }
-    }
-}
-
-fn jaccard_similarity(a: &str, b: &str) -> f64 {
-    if a.is_empty() && b.is_empty() {
-        return 1.0;
-    }
-    let set_a: std::collections::HashSet<String> = a
-        .split_whitespace()
-        .map(|word| word.to_lowercase())
-        .collect();
-    let set_b: std::collections::HashSet<String> = b
-        .split_whitespace()
-        .map(|word| word.to_lowercase())
-        .collect();
-    if set_a.is_empty() && set_b.is_empty() {
-        return 1.0;
-    }
-    let intersection = set_a.intersection(&set_b).count();
-    let union = set_a.union(&set_b).count();
-    if union == 0 {
-        return 0.0;
-    }
-    intersection as f64 / union as f64
-}
-
 pub async fn responses(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -726,78 +794,27 @@ pub async fn responses(
         .unwrap_or("")
         .to_string();
 
-    let virtual_model = match resolve_authorized_virtual_model(
-        &state.db,
-        &requested_model,
-        &auth.project.id,
-        &auth.api_key.id,
-    )
-    .await
-    {
-        Ok(Some(model)) => model,
-        Ok(None) => {
-            return (
-                StatusCode::FORBIDDEN,
-                "Access to this model is not granted or model not found",
-            )
-                .into_response();
-        }
-        Err(error) => {
-            tracing::error!("Database error: {}", error);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
-        }
-    };
+    let PoolContext {
+        virtual_model,
+        pool: _pool,
+        strategy,
+    } = or_return!(resolve_pool_context(&state, &auth, &requested_model).await);
 
-    let pool = match sqlx::query_as::<_, ModelPool>("SELECT * FROM model_pools WHERE id = $1")
-        .bind(&virtual_model.pool_id)
-        .fetch_optional(&state.db)
-        .await
-    {
-        Ok(pool) => pool,
-        Err(error) => {
-            tracing::error!("Database error: {}", error);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
-        }
-    };
-    let strategy = pool
-        .as_ref()
-        .map(|pool| canonicalize_strategy(&pool.strategy).to_string())
-        .unwrap_or_else(|| "round_robin".to_string());
+    let gate = or_return!(enforce_spend_budget(&state, &auth, false).await);
+    let spent = gate.spent;
+    let limit = gate.limit;
+    let downshift = gate.downshift;
 
-    let limit = effective_daily_limit(
-        auth.api_key.daily_spend_limit,
-        auth.project.daily_spend_limit,
-    );
-    let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
-        Ok(spent) => spent,
-        Err(error) => {
-            // Fail closed: without spend data we cannot enforce budgets.
-            tracing::error!("Database error fetching spend for budget check: {}", error);
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Spend tracking temporarily unavailable",
-            )
-                .into_response();
-        }
-    };
-    let budget = evaluate_budget(spent, limit);
-    if budget.is_blocked() {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            budget_headers(&budget, spent, limit),
-            "Daily spend budget exceeded",
-        )
-            .into_response();
-    }
-
-    let prompt_text = extract_openai_prompt_text(&payload);
-    let input_tokens = estimate_tokens_from_text(&prompt_text);
-    let output_tokens = expected_output_tokens(&payload, 512);
-    let difficulty = heuristic_difficulty(&payload);
+    let RequestSignals {
+        prompt_text,
+        input_tokens,
+        output_tokens,
+        difficulty,
+        has_tools,
+        signals,
+    } = request_signals(&payload);
     let difficulty_source = "heuristic";
     let judge_used = false;
-    let has_tools = request_has_tools(&payload);
-    let downshift = budget.should_downshift();
     set_hint(RouteHint {
         input_tokens,
         output_tokens,
@@ -810,33 +827,7 @@ pub async fn responses(
     });
     let _hint_guard = HintGuard;
 
-    let key_limits = QuotaLimits {
-        rpm_limit: auth.api_key.rpm_limit.map(|value| value as u32),
-        concurrency_limit: auth.api_key.concurrency_limit.map(|value| value as u32),
-    };
-    let project_limits = QuotaLimits {
-        rpm_limit: auth.project.rpm_limit.map(|value| value as u32),
-        concurrency_limit: auth.project.concurrency_limit.map(|value| value as u32),
-    };
-    if let Err(reason) = state.quotas.try_acquire(
-        &auth.api_key.id,
-        &auth.project.id,
-        &key_limits,
-        &project_limits,
-    ) {
-        let mut headers = HeaderMap::new();
-        if let Some(seconds) = reason.retry_after_secs() {
-            if let Ok(value) = HeaderValue::from_str(&seconds.to_string()) {
-                headers.insert("retry-after", value);
-            }
-        }
-        return (StatusCode::TOO_MANY_REQUESTS, headers, reason.message()).into_response();
-    }
-    let permit = QuotaPermit::new(
-        state.quotas.clone(),
-        auth.api_key.id.clone(),
-        auth.project.id.clone(),
-    );
+    let permit = or_return!(acquire_quota(&state, &auth).await);
 
     let mut proxy_request = match unigateway_sdk::protocol::openai_payload_to_responses_request(
         &payload,
@@ -851,31 +842,14 @@ pub async fn responses(
                 .into_response();
         }
     };
-    proxy_request
-        .metadata
-        .insert("org_id".to_string(), auth.project.org_id);
-    proxy_request
-        .metadata
-        .insert("project_id".to_string(), auth.project.id);
-    proxy_request
-        .metadata
-        .insert("key_id".to_string(), auth.api_key.id);
-    proxy_request
-        .metadata
-        .insert("virtual_model_id".to_string(), virtual_model.id);
-    proxy_request
-        .metadata
-        .insert("pool_id".to_string(), virtual_model.pool_id.clone());
-    proxy_request
-        .metadata
-        .insert("routing_strategy".to_string(), strategy);
-    proxy_request
-        .metadata
-        .insert("input_tokens_est".to_string(), input_tokens.to_string());
-    proxy_request
-        .metadata
-        .insert("output_tokens_est".to_string(), output_tokens.to_string());
-    let signals = extract_complexity_signals(&payload);
+    stamp_core_metadata(
+        &mut proxy_request.metadata,
+        &auth,
+        &virtual_model,
+        &strategy,
+        input_tokens,
+        output_tokens,
+    );
     let prompt_preview = prompt_text.chars().take(200).collect::<String>();
     let difficulty_tier = difficulty_tier(difficulty);
     proxy_request.metadata.insert(
@@ -907,11 +881,7 @@ pub async fn responses(
             permit.disarm();
             let response = unigateway_sdk::protocol::render_openai_responses_session(session);
             let mut response = protocol_response_to_axum(response);
-            for (name, value) in budget_headers(&budget, spent, limit) {
-                if let Some(name) = name {
-                    response.headers_mut().insert(name, value);
-                }
-            }
+            apply_budget_headers(&mut response, &gate);
             response
         }
         Err(error) => {

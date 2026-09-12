@@ -4,7 +4,7 @@ import { saasFetch } from '../../lib/saasApi'
 import { useI18n } from '../../lib/i18n'
 import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
-import { ModelProbeModal } from './ServiceDetailsPage'
+import { ModelProbeModal } from './ModelProbeModal'
 import type { CallApi, ModelDna, Service, ServiceDetails, ServiceEndpoint } from './types'
 
 const RADAR_PALETTES = [
