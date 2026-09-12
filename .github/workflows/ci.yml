@@ -88,10 +88,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # Node 22: the vitest/jsdom toolchain used by `npm test` needs APIs that Node 20
+      # does not provide (jsdom's webidl helper fails to load under 20.x).
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
 
