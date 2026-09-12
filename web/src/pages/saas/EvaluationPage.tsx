@@ -5,6 +5,7 @@ import { useI18n } from '../../lib/i18n'
 import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
 import { ModelProbeModal } from './ModelProbeModal'
+import { useModelServices } from './useModelServices'
 import type { CallApi, ModelDna, Service, ServiceDetails, ServiceEndpoint } from './types'
 
 const RADAR_PALETTES = [
@@ -24,34 +25,40 @@ function formatShortModel(rawModel: string): string {
 
 export function EvaluationPage() {
   const { t } = useI18n()
+  // The service list is shared with the rest of the shell; only the details are page-local.
+  const { services, loading: servicesLoading, error: servicesError, refresh } = useModelServices()
   const [endpoints, setEndpoints] = useState<(ServiceEndpoint & { serviceId: string; serviceName: string })[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const displayError = error || servicesError
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [hoveredPoint, setHoveredPoint] = useState<{ model: string; dim: string; score: number; x: number; y: number } | null>(null)
   const [probingEndpoint, setProbingEndpoint] = useState<{ endpoint: ServiceEndpoint; serviceId: string } | null>(null)
 
-  const loadData = async () => {
+  const loadData = async (serviceList: Service[]) => {
     try {
       setLoading(true)
-      const res = await saasFetch<Service[]>('/api/saas/model-services')
-      const services = res.data || []
+      // All service details are requested concurrently; a failing detail is skipped and
+      // the remaining endpoints still render (same tolerance as the old sequential loop).
+      const details = await Promise.all(serviceList.map(async (service) => {
+        try {
+          return { service, detail: (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data }
+        } catch {
+          return { service, detail: undefined }
+        }
+      }))
+
       const list: (ServiceEndpoint & { serviceId: string; serviceName: string })[] = []
       const seen = new Set<string>()
-
-      for (const s of services) {
-        try {
-          const detailRes = await saasFetch<ServiceDetails>(`/api/saas/model-services/${s.id}`)
-          if (detailRes.data?.endpoints) {
-            for (const ep of detailRes.data.endpoints) {
-              const key = `${ep.provider_name}::${ep.model}`
-              if (!seen.has(key)) {
-                seen.add(key)
-                list.push({ ...ep, serviceId: s.id, serviceName: s.name })
-              }
-            }
+      for (const { service, detail } of details) {
+        if (!detail?.endpoints) continue
+        for (const ep of detail.endpoints) {
+          const key = `${ep.provider_name}::${ep.model}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            list.push({ ...ep, serviceId: service.id, serviceName: service.name })
           }
-        } catch {}
+        }
       }
 
       setEndpoints(list)
@@ -64,8 +71,10 @@ export function EvaluationPage() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    // Wait for the shared list to settle so `loading` keeps its previous meaning.
+    if (servicesLoading) return
+    void loadData(services)
+  }, [services, servicesLoading])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [tierFilter, setTierFilter] = useState<'all' | 'pro' | 'flash'>('all')
@@ -144,7 +153,7 @@ export function EvaluationPage() {
         </div>
       </div>
 
-      {error && <ErrorMessage text={error} />}
+      {displayError && <ErrorMessage text={displayError} />}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -651,7 +660,9 @@ export function EvaluationPage() {
           onClose={() => setProbingEndpoint(null)}
           onSaved={() => {
             setProbingEndpoint(null)
-            loadData()
+            // Probe results change endpoint data; refreshing the shared list re-runs the
+            // detail load, matching the previous full reload.
+            void refresh()
           }}
         />
       )}

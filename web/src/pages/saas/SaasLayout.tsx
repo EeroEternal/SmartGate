@@ -7,6 +7,7 @@ import { useI18n } from '../../lib/i18n'
 import { useModal } from '../../lib/modal'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import { ErrorMessage, Field, errorText } from './components'
+import { ModelServicesProvider } from './useModelServices'
 
 export function SaasLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n()
@@ -109,7 +110,11 @@ export function SaasLayout({ children }: { children: ReactNode }) {
           </div>
         ))}
       </aside>
-      <main className="min-w-0">{children}</main>
+      {/* The shared model-service list lives here so every /app page under this layout
+          consumes one cached copy instead of fetching it again on navigation. */}
+      <main className="min-w-0">
+        <ModelServicesProvider>{children}</ModelServicesProvider>
+      </main>
     </div>
   </div>
 }

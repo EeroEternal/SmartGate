@@ -8,6 +8,7 @@ import { formatMoney } from '../../lib/format'
 import { useModal } from '../../lib/modal'
 import { Empty, ErrorMessage, Field, Page, errorText, formatMaskedKey } from './components'
 import { cleanServiceName } from './serviceUtils'
+import { useModelServices } from './useModelServices'
 import type { Service } from './types'
 
 type Key = { id: string; name: string; prefix: string; enabled: boolean; daily_spend_limit?: number; created_at: string; last_used_at?: string; model_services?: { id: string; name: string }[] }
@@ -28,7 +29,8 @@ type ApiKeyProfile = {
 export function KeysPage() {
   const { t } = useI18n()
   const [keys, setKeys] = useState<Key[]>([])
-  const [services, setServices] = useState<Service[]>([])
+  // Authorized-service names come from the shared list cache; only the keys are local.
+  const { services, error: servicesError } = useModelServices()
   const { dialog, showConfirm } = useDialog()
   const [raw, setRaw] = useState('')
   const [createdServiceNames, setCreatedServiceNames] = useState<string[]>([])
@@ -36,14 +38,11 @@ export function KeysPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<Key | null>(null)
   const [profileKey, setProfileKey] = useState<Key | null>(null)
+  const displayError = error || servicesError
   const load = () => {
-    Promise.all([
-      saasFetch<Key[]>('/api/saas/api-keys'),
-      saasFetch<Service[]>('/api/saas/model-services'),
-    ]).then(([keyResult, serviceResult]) => {
-      setKeys(keyResult.data || [])
-      setServices(serviceResult.data || [])
-    }).catch((e: unknown) => setError(errorText(e)))
+    saasFetch<Key[]>('/api/saas/api-keys')
+      .then((keyResult) => { setKeys(keyResult.data || []) })
+      .catch((e: unknown) => setError(errorText(e)))
   }
   useEffect(() => { load() }, [])
   async function create(name: string, modelServiceIds: string[]) {
@@ -93,7 +92,7 @@ export function KeysPage() {
           onClose={() => { setRaw(''); setCreatedServiceNames([]) }}
         />
       )}
-      {error && <ErrorMessage text={error} />}
+      {displayError && <ErrorMessage text={displayError} />}
       {!keys.length ? (
         services.length ? (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">

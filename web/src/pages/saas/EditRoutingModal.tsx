@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { saasFetch } from '../../lib/saasApi'
 import Select from '../../components/Select'
@@ -6,7 +6,8 @@ import { useI18n } from '../../lib/i18n'
 import { useModal } from '../../lib/modal'
 import { ErrorMessage, errorText } from './components'
 import { StrategyMatrixCardSelector, WorkloadPresetSelector } from './ServiceSelectors'
-import type { Service, ServiceDetails } from './types'
+import { useModelServices } from './useModelServices'
+import type { ServiceDetails } from './types'
 
 export function EditRoutingModal({ service, onClose, onSaved }: { service: ServiceDetails; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
@@ -19,20 +20,14 @@ export function EditRoutingModal({ service, onClose, onSaved }: { service: Servi
   const [shadowEnabled, setShadowEnabled] = useState(Boolean(service.shadow_enabled))
   const [shadowSampleRate, setShadowSampleRate] = useState(service.shadow_sample_rate != null ? Math.round(service.shadow_sample_rate * 100) : 5)
   const [shadowVirtualModelId, setShadowVirtualModelId] = useState(service.shadow_virtual_model_id || '')
-  const [serviceOptions, setServiceOptions] = useState<{ id: string; name: string }[]>([])
+  const { services, refresh } = useModelServices()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    saasFetch<Service[]>('/api/saas/model-services')
-      .then((res) => {
-        if (cancelled) return
-        setServiceOptions((res.data || []).filter((svc) => svc.id !== service.id).map((svc) => ({ id: svc.name, name: svc.name })))
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [service.id])
+  // Shadow-flight targets come from the shared list cache; no page-local request here.
+  const serviceOptions = services
+    .filter((svc) => svc.id !== service.id)
+    .map((svc) => ({ id: svc.name, name: svc.name }))
 
   const judgeOptions = service.endpoints.map((ep) => ({
     id: ep.id,
@@ -56,6 +51,9 @@ export function EditRoutingModal({ service, onClose, onSaved }: { service: Servi
           shadow_sample_rate: shadowEnabled ? (shadowSampleRate / 100) : 0,
         }),
       })
+      // Routing edits change fields the shared list renders (name, strategy), so keep the
+      // cache coherent for pages that read it later.
+      await refresh()
       onSaved()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }

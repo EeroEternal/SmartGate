@@ -5,6 +5,7 @@ import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
 import { SaasLayout } from './pages/saas/SaasLayout'
+import { ModelServicesProvider } from './pages/saas/useModelServices'
 import AdminTokenGate from './components/AdminTokenGate'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import HealthBadge from './components/HealthBadge'
@@ -292,7 +293,9 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<AuthPage mode="login" />} />
           <Route path="/register" element={<AuthPage mode="register" />} />
-          <Route path="/app" element={<SaasDashboard />} />
+          {/* /app renders SaasDashboard directly (without the SaasPage/SaasLayout wrapper
+              used by the other routes), so it needs its own provider mount. */}
+          <Route path="/app" element={<ModelServicesProvider><SaasDashboard /></ModelServicesProvider>} />
           <Route path="/app/services" element={<SaasPage><ServicesPage /></SaasPage>} />
           <Route path="/app/services/new" element={<SaasPage><NewServicePage /></SaasPage>} />
           <Route path="/app/services/:id" element={<SaasPage><ServiceDetailsPage /></SaasPage>} />

@@ -6,7 +6,8 @@ import { useI18n } from '../../lib/i18n'
 import { useModal } from '../../lib/modal'
 import { Coverage, ErrorMessage, Page, Stat, errorText } from './components'
 import { SavingsBaselineModal } from './SavingsBaselineModal'
-import type { SavingsBaseline, Service, ServiceDetails } from './types'
+import { useModelServices } from './useModelServices'
+import type { SavingsBaseline, ServiceDetails } from './types'
 
 type UsageBreakdown = {
   provider?: string
@@ -151,28 +152,36 @@ export function UsagePage() {
   const [baselineOpen, setBaselineOpen] = useState(false)
   const [missingTokensModalOpen, setMissingTokensModalOpen] = useState(false)
   const [error, setError] = useState('')
+  // Baseline options are derived from the shared model-service list.
+  const { services, error: servicesError } = useModelServices()
+  const displayError = error || servicesError
 
   useEffect(() => {
     Promise.all([
       saasFetch<UsageData>('/api/saas/usage?range=30d'),
       saasFetch<SavingsData>('/api/saas/savings?range=30d'),
       saasFetch<{ configured?: boolean } & Partial<SavingsBaseline>>('/api/saas/savings-baseline'),
-      saasFetch<Service[]>('/api/saas/model-services'),
     ])
-      .then(async ([usage, savingsResult, baselineResult, servicesResult]) => {
+      .then(([usage, savingsResult, baselineResult]) => {
         setData(usage.data || null)
         setSavings(savingsResult.data || null)
         const detectedBaseline = baselineResult.data?.configured
           ? baselineResult.data as SavingsBaseline
           : savingsResult.data?.baseline || null
         setBaseline(detectedBaseline)
-        const details = await Promise.all((servicesResult.data || []).map(async (service) => {
-          try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
-        }))
-        setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
       })
       .catch((e: unknown) => setError(errorText(e)))
   }, [])
+
+  useEffect(() => {
+    // Each service detail is fetched concurrently; one failing detail is skipped, exactly
+    // like the previous sequential loop.
+    Promise.all(services.map(async (service) => {
+      try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
+    })).then((details) => {
+      setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
+    }).catch(() => {})
+  }, [services])
 
   const coveragePercent = (value: number | undefined) => `${Math.round((value || 0) * 100)}%`
   const providers = data?.breakdowns?.providers || []
@@ -190,7 +199,7 @@ export function UsagePage() {
 
   return (
     <Page>
-      {error && <ErrorMessage text={error} />}
+      {displayError && <ErrorMessage text={displayError} />}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold tracking-tight">{t('usage.title')}</h1>

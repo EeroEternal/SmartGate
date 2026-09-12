@@ -12,12 +12,16 @@ import { EditProviderModal } from './EditProviderModal'
 import { EditRoutingModal } from './EditRoutingModal'
 import { ModelProbeModal } from './ModelProbeModal'
 import { useServiceDetails } from './useServiceDetails'
+import { useModelServices } from './useModelServices'
 import type { CallApi, ServiceEndpoint } from './types'
 
 export function ServiceDetailsPage() {
   const { t } = useI18n()
   const { id } = useParams()
   const { service, catalog, error, setError, load } = useServiceDetails(id)
+  // Endpoint changes also move the shared list's endpoint counts, so keep both in sync.
+  const { refresh: refreshServices } = useModelServices()
+  const reloadService = () => { load(); void refreshServices() }
   const [modalOpen, setModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState<ServiceEndpoint | null>(null)
@@ -31,7 +35,7 @@ export function ServiceDetailsPage() {
   const { dialog, showConfirm } = useDialog()
   async function removeEndpoint(endpointId: string) {
     if (!id || !await showConfirm(t('services.remove_provider_confirm'), t('services.remove_model'))) return
-    try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); load() } catch (e) { setError(errorText(e)) }
+    try { await saasFetch(`/api/saas/model-services/${id}/endpoints/${endpointId}`, { method: 'DELETE' }); reloadService() } catch (e) { setError(errorText(e)) }
   }
   async function copyServiceName() {
     if (!service?.name) return
@@ -222,9 +226,9 @@ export function ServiceDetailsPage() {
         )}
       </div>
     </div>}
-    {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); load() }} />}
-    {routingOpen && service && <EditRoutingModal service={service} onClose={() => setRoutingOpen(false)} onSaved={() => { setRoutingOpen(false); load() }} />}
-    {editingEndpoint && <EditProviderModal endpoint={editingEndpoint} serviceId={id || ''} onClose={() => setEditingEndpoint(null)} onSaved={() => { setEditingEndpoint(null); load() }} />}
-    {probingEndpoint && <ModelProbeModal endpoint={probingEndpoint} serviceId={id || ''} onClose={() => setProbingEndpoint(null)} onSaved={() => { setProbingEndpoint(null); load() }} />}
+    {modalOpen && <AddModelModal catalog={catalog} providers={providers} serviceId={id || ''} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); reloadService() }} />}
+    {routingOpen && service && <EditRoutingModal service={service} onClose={() => setRoutingOpen(false)} onSaved={() => { setRoutingOpen(false); reloadService() }} />}
+    {editingEndpoint && <EditProviderModal endpoint={editingEndpoint} serviceId={id || ''} onClose={() => setEditingEndpoint(null)} onSaved={() => { setEditingEndpoint(null); reloadService() }} />}
+    {probingEndpoint && <ModelProbeModal endpoint={probingEndpoint} serviceId={id || ''} onClose={() => setProbingEndpoint(null)} onSaved={() => { setProbingEndpoint(null); reloadService() }} />}
   </Page>
 }

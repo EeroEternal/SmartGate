@@ -6,7 +6,8 @@ import { useI18n } from '../../lib/i18n'
 import { formatMoney } from '../../lib/format'
 import { ErrorMessage, Page, errorText } from './components'
 import { SavingsBaselineModal } from './SavingsBaselineModal'
-import type { SavingsBaseline, Service, ServiceDetails } from './types'
+import { useModelServices } from './useModelServices'
+import type { SavingsBaseline, ServiceDetails } from './types'
 
 type QualityRecord = {
   id: string
@@ -88,6 +89,8 @@ export function QualityPage() {
   const [baselineModalOpen, setBaselineModalOpen] = useState(false)
   const [baselineOptions, setBaselineOptions] = useState<ServiceDetails[]>([])
   const [baselineData, setBaselineData] = useState<SavingsBaseline | null>(null)
+  // Baseline options are derived from the shared model-service list.
+  const { services } = useModelServices()
 
   const fetchQualityData = () => {
     setLoading(true)
@@ -105,15 +108,15 @@ export function QualityPage() {
   }, [range])
 
   useEffect(() => {
-    saasFetch<Service[]>('/api/saas/model-services')
-      .then(async (res) => {
-        const details = await Promise.all((res.data || []).map(async (service) => {
-          try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
-        }))
-        setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
-      })
-      .catch(() => {})
+    // Each service detail is fetched concurrently; one failing detail is skipped.
+    Promise.all(services.map(async (service) => {
+      try { return (await saasFetch<ServiceDetails>(`/api/saas/model-services/${service.id}`)).data || null } catch { return null }
+    })).then((details) => {
+      setBaselineOptions(details.filter((service): service is ServiceDetails => Boolean(service)))
+    }).catch(() => {})
+  }, [services])
 
+  useEffect(() => {
     saasFetch<{ configured?: boolean } & Partial<SavingsBaseline>>('/api/saas/savings-baseline')
       .then((res) => {
         if (res.data?.configured) {

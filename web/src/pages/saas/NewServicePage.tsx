@@ -4,11 +4,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
 import { useI18n } from '../../lib/i18n'
 import { ErrorMessage, Field, Page, errorText } from './components'
+import { useModelServices } from './useModelServices'
 import { StrategyMatrixCardSelector, WorkloadPresetSelector } from './ServiceSelectors'
 
 export function NewServicePage() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const { refresh } = useModelServices()
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState('cost_aware')
   const [preset, setPreset] = useState('coding')
@@ -22,6 +24,9 @@ export function NewServicePage() {
     try {
       const result = await saasFetch<{ id: string }>('/api/saas/model-services', { method: 'POST', body: JSON.stringify({ name: name.trim(), strategy }) })
       if (!result.data?.id) throw new Error('The model service was created without an id.')
+      // The list is shared and cached, so a create must invalidate it before the
+      // operator returns to a page that renders it.
+      await refresh()
       navigate(`/app/services/${result.data.id}`)
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }

@@ -5,8 +5,9 @@ import { Link } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
 import { SaasLayout } from './SaasLayout'
 import { useI18n } from '../../lib/i18n'
+import { useModelServices } from './useModelServices'
+import type { Service } from './types'
 
-interface Service { id: string; name: string; endpoint_count?: number; strategy: string; health_status: string }
 interface Provider { id: string }
 interface ApiKey { id: string }
 
@@ -21,11 +22,13 @@ const compactTokens = (value = 0) => {
 
 export default function SaasDashboard() {
   const { t } = useI18n()
-  const [services, setServices] = useState<Service[]>([])
+  // The overview list is shared with the other /app pages instead of being re-fetched.
+  const { services, error: servicesError } = useModelServices()
   const [providers, setProviders] = useState<Provider[]>([])
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [usage, setUsage] = useState<Usage | null>(null)
   const [error, setError] = useState('')
+  const displayError = error || servicesError
 
   const routingLabels: Record<string, string> = {
     cost_aware: t('services.routing_cost') || 'Cost-first routing',
@@ -38,13 +41,11 @@ export default function SaasDashboard() {
 
   useEffect(() => {
     Promise.all([
-      saasFetch<Service[]>('/api/saas/model-services'),
       saasFetch<Usage>('/api/saas/usage?range=30d'),
       saasFetch<Provider[]>('/api/saas/providers'),
       saasFetch<ApiKey[]>('/api/saas/api-keys'),
     ])
-      .then(([s, u, p, k]) => {
-        setServices(s.data || [])
+      .then(([u, p, k]) => {
         setUsage(u.data || null)
         setProviders(p.data || [])
         setKeys(k.data || [])
@@ -93,7 +94,7 @@ export default function SaasDashboard() {
   return (
     <SaasLayout>
       <div>
-        {error && <div className="mb-6 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+        {displayError && <div className="mb-6 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{displayError}</div>}
         {!setupDone && (
           <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-5">
             <div className="flex items-center justify-between gap-3">

@@ -1,28 +1,22 @@
-import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { saasFetch } from '../../lib/saasApi'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
-import { Empty, ErrorMessage, Page, errorText } from './components'
+import { Empty, ErrorMessage, Page } from './components'
 import { routingInfo } from './serviceUtils'
-import type { Service } from './types'
+import { useModelServices } from './useModelServices'
 
 export function ServicesPage() {
   const { t } = useI18n()
-  const [services, setServices] = useState<Service[]>([])
-  const [error, setError] = useState('')
+  const { services, error, refresh } = useModelServices()
   const { dialog, showConfirm } = useDialog()
-  const load = () => {
-    saasFetch<Service[]>('/api/saas/model-services')
-      .then((r) => setServices(r.data || []))
-      .catch((e: unknown) => setError(errorText(e)))
-  }
-  useEffect(() => { load() }, [])
   async function remove(id: string) {
     if (!await showConfirm(t('services.remove_confirm'), t('services.remove_title'))) return
     await saasFetch(`/api/saas/model-services/${id}`, { method: 'DELETE' })
-    load()
+    // Deleting a service invalidates the shared list, so refresh it instead of
+    // re-running a page-local fetch.
+    await refresh()
   }
   return (
     <Page action={<Link to="/app/services/new" className="inline-flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /> {t('services.create_button')}</Link>}>
