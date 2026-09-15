@@ -152,11 +152,21 @@ export function endpointLabel(endpoint: DraftEndpoint, catalog: CatalogOffering[
   const provider = catalog.find((item) => item.provider_id === endpoint.provider_type)?.provider_name
   return [provider || (endpoint.custom_provider_id || t('services.provider_not_selected')), endpoint.upstream_model_id || t('services.model_not_selected')]
 }
+function gatewayBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'smartgate.run' || window.location.hostname.endsWith('.pages.dev')) {
+      return 'https://api.smartgate.run'
+    }
+    return window.location.origin
+  }
+  return 'https://api.smartgate.run'
+}
+
 export function callExample(api: CallApi, model: string, t: (key: string, params?: Record<string, string | number>) => string) {
   if (api === 'openai-responses') {
     return {
       label: t('services.api_openai_responses'),
-      path: 'https://smartgate.run/v1/responses',
+      path: `${gatewayBaseUrl()}/v1/responses`,
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
       body: `{"model":"${model}","input":"Hello"}`,
     }
@@ -164,14 +174,14 @@ export function callExample(api: CallApi, model: string, t: (key: string, params
   if (api === 'anthropic-messages') {
     return {
       label: t('services.api_anthropic_messages'),
-      path: 'https://smartgate.run/v1/messages',
+      path: `${gatewayBaseUrl()}/v1/messages`,
       headers: ['Authorization: Bearer <YOUR_API_KEY>', 'anthropic-version: 2023-06-01', 'Content-Type: application/json'],
       body: `{"model":"${model}","max_tokens":128,"messages":[{"role":"user","content":"Hello"}]}`,
     }
   }
   return {
     label: t('services.api_openai_chat'),
-    path: 'https://smartgate.run/v1/chat/completions',
+    path: `${gatewayBaseUrl()}/v1/chat/completions`,
     headers: ['Authorization: Bearer <YOUR_API_KEY>', 'Content-Type: application/json'],
     body: `{"model":"${model}","messages":[{"role":"user","content":"Hello"}]}`,
   }

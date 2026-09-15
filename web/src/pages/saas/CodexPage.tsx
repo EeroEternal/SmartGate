@@ -5,6 +5,9 @@ import { Page } from './components'
 
 export function CodexPage() {
   const { t } = useI18n()
+  const baseUrl = (typeof window !== 'undefined' && (window.location.hostname === 'smartgate.run' || window.location.hostname.endsWith('.pages.dev')))
+    ? 'https://api.smartgate.run'
+    : (typeof window !== 'undefined' ? window.location.origin : 'https://api.smartgate.run')
   const profileConfig = `model = "fusion"
 model_provider = "smartgate"
 preferred_auth_method = "apikey"
@@ -13,7 +16,7 @@ model_catalog_json = "/Users/you/.codex/models.json"
 
 [model_providers.smartgate]
 name = "SmartGate"
-base_url = "https://smartgate.run/v1"
+base_url = "${baseUrl}/v1"
 wire_api = "chat_completions"
 experimental_bearer_token = "<project-api-key>"`
 
