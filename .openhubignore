@@ -1,0 +1,9 @@
+# Extra exclusions for the OpenHub sync snapshot (gitignore syntax).
+# .gitignore already keeps build output and secrets out; this file is
+# defense-in-depth so local-only or heavy files never reach the snapshot
+# even if they are ever force-added to git.
+target/
+web/dist/
+web/node_modules/
+*.log
+.env*
