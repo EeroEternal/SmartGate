@@ -88,25 +88,16 @@
 ## 部署纪律
 
 
-### 代码提交后必须监控部署状态
+### 推送前必须在本地通过完整 CI 检查
 
-任何代码推送到 main 分支后，必须立即监控 GitHub Actions 部署状态，直到确认成功或失败。
+任何代码推送到 main 分支前，必须在本地运行完整 CI 检查并确认通过（本地脚本与 CI 同等严格，已通过 `rust-toolchain.toml` 锁定与 CI 一致的 Rust 1.92.0）。
 
 **执行步骤**：
-1. 推送代码后立即获取最新 workflow run ID
-2. 使用 `gh run watch <run-id>` 实时监控
-3. 确认 deployment job 成功完成
-
-**命令示例**：
-```bash
-# 推送代码后获取 run ID
-gh run list -L 1 --json databaseId
-
-# 监控部署状态
-gh run watch <databaseId>
-```
+1. 提交前运行 `scripts/ci.sh`
+2. 确认后端（`cargo check` / `fmt` / `clippy` / `test`）与前端（`lint` / `test` / `build`）全部通过
+3. 需要数据库/Redis 集成测试时，先设置 `SMARTGATE_TEST_DATABASE_URL` 与 `REDIS_URL`
+4. 全部通过后再推送到 main
 
 **失败处理**：
-- 若部署失败，立即查看日志定位问题
-- 修复后重新提交并再次监控
-- 不要将监控任务留给用户
+- 若检查失败，立即修复并重新运行 `scripts/ci.sh`
+- 不要跳过检查、也不要将本地验证工作留给用户

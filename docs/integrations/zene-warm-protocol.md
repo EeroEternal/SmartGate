@@ -41,7 +41,8 @@ The Redis-backed Warm implementation was hardened in three priority groups:
   cleanup across expiry and deletion.
 - **P2 operability and protection:** add configurable idle/absolute TTLs, prefix/
   tail/assembled-size limits, Virtual Model ID validation, bounded Warm metrics,
-  an authenticated metrics endpoint, and a Redis integration test in CI.
+  an authenticated metrics endpoint, and a Redis integration test run locally via
+  `scripts/ci.sh` with `REDIS_URL` set.
 
 The implementation was verified locally with a real Redis server and in Railway
 with Virtual Model `fusion`: a publish succeeded, SmartGate was redeployed, a
@@ -582,7 +583,7 @@ The SmartGate implementation now provides the following baseline:
 - atomic Redis prefix and Virtual Model binding publication through Lua;
 - Redis cleanup using cursor-based `SCAN`, not blocking `KEYS`;
 - configurable TTL, size limits, key prefixes, and protected operational metrics;
-- CI coverage using a Redis 7 service and the cross-store-instance persistence test.
+- local CI coverage (`scripts/ci.sh`) using a Redis 7 service and the cross-store-instance persistence test.
 
 Remaining work is outside this SmartGate Warm MVP hardening scope: Zene client
 fallback state, Prometheus/OpenTelemetry export, capacity quotas per Project/API
