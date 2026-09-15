@@ -656,11 +656,16 @@ pub(crate) async fn delete_model_service(
             .execute(&mut *tx)
             .await
             .map_err(db_error)?;
-        sqlx::query("DELETE FROM provider_accounts WHERE id = $1")
-            .bind(account_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+        // A provider account may be shared by endpoints in other model services. Only
+        // remove it once no endpoint still references it, otherwise the account deletion
+        // would cascade and destroy those unrelated endpoints.
+        sqlx::query(
+            "DELETE FROM provider_accounts WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM endpoints WHERE account_id = $1)",
+        )
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
     }
     tx.commit().await.map_err(db_error)?;
     sync(&state).await;
