@@ -39,7 +39,7 @@ Agents / IDEs / Apps  →  SmartGate Control Plane (policies, auth, budgets, sma
 ## Quick Start
 
 ### Prerequisites
-- Rust 1.80+ (Backend)
+- Rust 1.92.0 (Backend)
 - Node.js 20+ (Admin UI)
 - PostgreSQL 14+
 
