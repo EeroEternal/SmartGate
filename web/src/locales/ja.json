@@ -972,7 +972,14 @@
     "models_subtitle": "現在プール内で正常に稼働している高性能モデル一覧。",
     "models_in_pool": "個のモデルが稼働中",
     "auto_model_desc": "自動ルーティングチャット。複数の健全な無料エンドポイントへリクエストを自動分散します。",
-    "footer_tagline": "Agent時代のためのオープンソース高機能AIゲートウェイ。"
+    "footer_tagline": "Agent時代のためのオープンソース高機能AIゲートウェイ。",
+    "subtitle": "エージェント用無料AI APIキー",
+    "tag_placeholder": "キー名（任意、例：cursor）",
+    "compatibility_hint": "OpenAI互換 • 完全無料 • ログイン不要",
+    "how_to_use": "使い方",
+    "api_key": "APIキー",
+    "base_url": "ベースURL",
+    "model_name": "モデル名"
   },
   "dialog": {
     "ok": "OK",

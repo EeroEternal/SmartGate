@@ -972,7 +972,14 @@
     "models_subtitle": "현재 풀에서 정상 동작 중인 고성능 무료 모델 목록입니다.",
     "models_in_pool": "개 모델 활성 중",
     "auto_model_desc": "지능형 자동 라우팅 서비스로, 여러 정상 무료 엔드포인트에 요청을 분산합니다.",
-    "footer_tagline": "에이전트 시대를 위한 고성능 오픈소스 AI 게이트웨이."
+    "footer_tagline": "에이전트 시대를 위한 고성능 오픈소스 AI 게이트웨이.",
+    "subtitle": "에이전트를 위한 무료 AI API 키",
+    "tag_placeholder": "키 이름(선택 사항, 예: cursor)",
+    "compatibility_hint": "OpenAI 호환 • 완전 무료 • 로그인 불필요",
+    "how_to_use": "사용 방법",
+    "api_key": "API 키",
+    "base_url": "기본 URL",
+    "model_name": "모델 이름"
   },
   "dialog": {
     "ok": "확인",

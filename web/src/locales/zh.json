@@ -972,7 +972,14 @@
     "models_subtitle": "免费池中当前处于健康活跃状态的高性能模型列表。",
     "models_in_pool": "个模型在池中",
     "auto_model_desc": "智能自动路由服务，在多个健康的免费上游端点之间智能分发请求。",
-    "footer_tagline": "面向 Agent 时代的高性能开源 AI 网关。"
+    "footer_tagline": "面向 Agent 时代的高性能开源 AI 网关。",
+    "subtitle": "免费 AI API Key 即刻获取",
+    "tag_placeholder": "Key 名称（可选，如 cursor）",
+    "compatibility_hint": "兼容 OpenAI • 完全免费 • 无需登录",
+    "how_to_use": "使用方法",
+    "api_key": "API Key",
+    "base_url": "Base URL",
+    "model_name": "模型名称"
   },
   "dialog": {
     "ok": "确定",

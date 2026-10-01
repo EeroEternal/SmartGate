@@ -972,7 +972,14 @@
     "models_subtitle": "High-performance models currently active and accessible in the pool.",
     "models_in_pool": "models in pool",
     "auto_model_desc": "Smart auto-routed chat service. Automatically routes requests across healthy free upstream endpoints.",
-    "footer_tagline": "Open-source high performance AI gateway for the agent era."
+    "footer_tagline": "Open-source high performance AI gateway for the agent era.",
+    "subtitle": "Free AI API Key for Agents",
+    "tag_placeholder": "Key name (optional, e.g. cursor)",
+    "compatibility_hint": "OpenAI-compatible • Free • No login required",
+    "how_to_use": "How to Use",
+    "api_key": "API Key",
+    "base_url": "Base URL",
+    "model_name": "Model Name"
   },
   "dialog": {
     "ok": "OK",
