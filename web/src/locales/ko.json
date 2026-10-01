@@ -979,7 +979,8 @@
     "how_to_use": "사용 방법",
     "api_key": "API 키",
     "base_url": "기본 URL",
-    "model_name": "모델 이름"
+    "model_name": "모델 이름",
+    "copy_all": "모두 복사"
   },
   "dialog": {
     "ok": "확인",

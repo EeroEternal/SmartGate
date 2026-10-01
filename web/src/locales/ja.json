@@ -979,7 +979,8 @@
     "how_to_use": "使い方",
     "api_key": "APIキー",
     "base_url": "ベースURL",
-    "model_name": "モデル名"
+    "model_name": "モデル名",
+    "copy_all": "すべてコピー"
   },
   "dialog": {
     "ok": "OK",
