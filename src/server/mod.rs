@@ -225,6 +225,18 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             crate::api::admin::admin_routes(app_state.clone()),
         )
         .nest("/api/saas", crate::saas::routes(app_state.clone()))
+        .route(
+            "/api/free-token/claim",
+            post(crate::free_token::claim_free_key),
+        )
+        .route(
+            "/api/free-token/info",
+            get(crate::free_token::get_free_pool_info),
+        )
+        .route(
+            "/api/free-token/check",
+            post(crate::free_token::check_free_key),
+        )
         .route("/v1/usage", get(crate::api::stats_handler::get_key_usage))
         .route("/v1/models", get(crate::api::models::list_models))
         .route(

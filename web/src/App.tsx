@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom'
-import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box } from 'lucide-react'
+import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box, Zap } from 'lucide-react'
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
@@ -39,6 +39,7 @@ const PoolDetails = lazy(() => import('./pages/PoolDetails'))
 const VirtualModels = lazy(() => import('./pages/VirtualModels'))
 const AccessControl = lazy(() => import('./pages/access/AccessControl'))
 const Statistics = lazy(() => import('./pages/stats/Statistics'))
+const FreePoolPage = lazy(() => import('./pages/FreePoolPage'))
 
 interface EndpointHealth {
   healthy: number
@@ -161,6 +162,10 @@ function Sidebar() {
           <LayoutDashboard className="w-4 h-4" />
           {t('nav.dashboard')}
         </Link>
+        <Link to="/admin/free-pool" className={navItemClass('/admin/free-pool')}>
+          <Zap className="w-4 h-4 text-emerald-500" />
+          {t('nav.free_pool')}
+        </Link>
         <Link to="/admin/providers" className={navItemClass('/admin/providers')}>
           <Database className="w-4 h-4" />
           {t('nav.providers')}
@@ -269,6 +274,7 @@ function AdminConsole() {
             <Suspense fallback={<PageLoading />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/free-pool" element={<FreePoolPage />} />
                 <Route path="/providers" element={<Providers />} />
                 <Route path="/pools" element={<Pools />} />
                 <Route path="/pools/:id" element={<PoolDetails />} />

@@ -94,6 +94,25 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Statistics
         .route("/stats", get(get_stats))
         .route("/stats/warming", get(get_warming_stats))
+        // Free Token Pool
+        .route("/free-pool", get(crate::free_token::get_admin_free_pool))
+        .route(
+            "/free-pool/settings",
+            post(crate::free_token::update_admin_free_pool_settings),
+        )
+        .route(
+            "/free-pool/sync-openrouter",
+            post(crate::free_token::sync_openrouter_free_models_handler),
+        )
+        .route(
+            "/free-pool/keys",
+            get(crate::free_token::list_admin_free_keys),
+        )
+        .route(
+            "/free-pool/keys/:id",
+            patch(crate::free_token::update_admin_free_key)
+                .delete(crate::free_token::delete_admin_free_key),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state,
             crate::auth::admin::admin_auth_middleware,

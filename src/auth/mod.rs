@@ -77,7 +77,7 @@ pub async fn resolve_authorized_virtual_model(
     project_id: &str,
     api_key_id: &str,
 ) -> Result<Option<VirtualModel>, sqlx::Error> {
-    sqlx::query_as::<_, VirtualModel>(
+    let exact = sqlx::query_as::<_, VirtualModel>(
         "SELECT vm.* FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
@@ -99,6 +99,34 @@ pub async fn resolve_authorized_virtual_model(
          LIMIT 1",
     )
     .bind(requested_model)
+    .bind(project_id)
+    .bind(api_key_id)
+    .fetch_optional(db)
+    .await?;
+
+    if exact.is_some() {
+        return Ok(exact);
+    }
+
+    // Fallback: If exact model was not found, check if the project has a default
+    // fallback model like 'free-chat' or 'auto' granted.
+    sqlx::query_as::<_, VirtualModel>(
+        "SELECT vm.* FROM virtual_models vm
+         JOIN model_pools mp ON mp.id = vm.pool_id
+         JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
+         WHERE vm.name IN ('free-chat', 'auto')
+           AND pmg.project_id = $1
+           AND vm.enabled = TRUE
+           AND (EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $2 AND akmg.virtual_model_id = vm.id
+           ) OR NOT EXISTS (
+                SELECT 1 FROM api_key_model_grants akmg
+                WHERE akmg.api_key_id = $2
+           ))
+         ORDER BY CASE WHEN vm.name = 'free-chat' THEN 0 WHEN vm.name = 'auto' THEN 1 ELSE 2 END
+         LIMIT 1",
+    )
     .bind(project_id)
     .bind(api_key_id)
     .fetch_optional(db)

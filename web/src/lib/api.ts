@@ -30,7 +30,7 @@ function getApiBaseUrl(): string {
 
 const API_BASE_URL = getApiBaseUrl()
 
-function apiUrl(path: string) {
+export function apiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 

@@ -6,6 +6,7 @@ pub mod api;
 pub mod auth;
 pub mod config;
 pub mod db;
+pub mod free_token;
 pub mod models;
 pub mod policy;
 pub mod pricing;
