@@ -2,13 +2,24 @@ import { useEffect, useState } from 'react'
 import { Copy, Check, Zap, RefreshCw } from 'lucide-react'
 import BrandMark from '../../components/BrandMark'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
+import Select, { type Option } from '../../components/Select'
 import { useI18n } from '../../lib/i18n'
 import { apiUrl } from '../../lib/api'
 
 interface ClaimResult {
   api_key: string
   default_model: string
+  models?: string[]
 }
+
+const DEFAULT_FREE_MODELS: Option[] = [
+  { id: 'deepseek/deepseek-r1:free', name: 'deepseek/deepseek-r1:free' },
+  { id: 'deepseek/deepseek-chat:free', name: 'deepseek/deepseek-chat:free' },
+  { id: 'thudm/glm-4-9b-chat:free', name: 'thudm/glm-4-9b-chat:free' },
+  { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'qwen/qwen-2.5-coder-32b-instruct:free' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'meta-llama/llama-3.3-70b-instruct:free' },
+  { id: 'google/gemini-2.0-flash-exp:free', name: 'google/gemini-2.0-flash-exp:free' },
+]
 
 export default function LandingPage() {
   const { t } = useI18n()
@@ -16,6 +27,10 @@ export default function LandingPage() {
   const [claiming, setClaiming] = useState(false)
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
+
+  // Available free models & selected model
+  const [modelOptions, setModelOptions] = useState<Option[]>(DEFAULT_FREE_MODELS)
+  const [selectedModel, setSelectedModel] = useState<string>('deepseek/deepseek-r1:free')
 
   // Copy feedback states
   const [copiedKey, setCopiedKey] = useState(false)
@@ -27,6 +42,27 @@ export default function LandingPage() {
     ? `${window.location.origin}/v1`
     : 'https://smartgate.run/v1'
 
+  // Fetch live free models from backend
+  useEffect(() => {
+    fetch(apiUrl('/api/free-token/info'))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.data?.available_models) {
+          const list: Option[] = data.data.available_models
+            .filter((m: { name: string }) => m.name !== 'free-chat' && m.name !== 'auto')
+            .map((m: { name: string }) => ({ id: m.name, name: m.name }))
+
+          if (list.length > 0) {
+            setModelOptions(list)
+            setSelectedModel((prev) => (list.some((opt) => opt.id === prev) ? prev : String(list[0].id)))
+          }
+        }
+      })
+      .catch(() => {
+        // Keep DEFAULT_FREE_MODELS fallback
+      })
+  }, [])
+
   // Restore saved key from local storage if available
   useEffect(() => {
     try {
@@ -35,6 +71,9 @@ export default function LandingPage() {
         const parsed = JSON.parse(saved)
         if (parsed?.api_key) {
           setClaimResult(parsed)
+          if (parsed.default_model && parsed.default_model !== 'free-chat' && parsed.default_model !== 'auto') {
+            setSelectedModel(parsed.default_model)
+          }
         }
       }
     } catch {
@@ -56,6 +95,17 @@ export default function LandingPage() {
 
       if (data.success && data.data) {
         setClaimResult(data.data)
+        if (data.data.default_model && data.data.default_model !== 'free-chat' && data.data.default_model !== 'auto') {
+          setSelectedModel(data.data.default_model)
+        }
+        if (Array.isArray(data.data.models)) {
+          const realModels = data.data.models
+            .filter((m: string) => m !== 'free-chat' && m !== 'auto')
+            .map((m: string) => ({ id: m, name: m }))
+          if (realModels.length > 0) {
+            setModelOptions(realModels)
+          }
+        }
         try {
           localStorage.setItem('sg_free_claimed', JSON.stringify(data.data))
         } catch {
@@ -98,15 +148,14 @@ export default function LandingPage() {
   }
 
   const apiKey = claimResult?.api_key || ''
-  const modelName = claimResult?.default_model || 'free-chat'
 
   const allConfigText = `Base URL: ${fullBaseUrl}
 API Key: ${apiKey}
-Model: ${modelName}`
+Model: ${selectedModel}`
 
   const curlSnippet = `curl ${fullBaseUrl}/chat/completions \\
   -H "Authorization: Bearer ${apiKey}" \\
-  -d '{"model":"${modelName}","messages":[{"role":"user","content":"Hi"}]}'`
+  -d '{"model":"${selectedModel}","messages":[{"role":"user","content":"Hi"}]}'`
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-sans flex flex-col justify-between selection:bg-zinc-900 selection:text-white">
@@ -151,7 +200,7 @@ Model: ${modelName}`
             </button>
           </div>
         ) : (
-          /* State 2: Clean 3-Item Credential Box */
+          /* State 2: Clean 3-Item Credential Box with Real Model Dropdown */
           <div className="w-full space-y-5 text-left">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 sm:p-6 space-y-3.5 shadow-sm">
               {/* API Key */}
@@ -190,20 +239,28 @@ Model: ${modelName}`
                 </div>
               </div>
 
-              {/* Model Name */}
+              {/* Model Dropdown (DeepSeek, GLM, etc.) */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
-                  {t('free_token.model_name')}
+                  {t('free_token.select_model_label')}
                 </div>
-                <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-zinc-200 px-3.5 py-2 font-mono text-xs sm:text-sm text-zinc-950">
-                  <span className="truncate select-all font-semibold text-emerald-700">{modelName}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select
+                      options={modelOptions}
+                      selected={{ id: selectedModel, name: selectedModel }}
+                      onChange={(opt) => setSelectedModel(String(opt.id))}
+                      size="sm"
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => copyText(modelName, 'model')}
-                    className="shrink-0 p-1 text-zinc-500 hover:text-zinc-950 transition-colors"
+                    onClick={() => copyText(selectedModel, 'model')}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md bg-white border border-zinc-300 px-3 py-1.5 text-xs font-mono text-zinc-700 hover:text-zinc-950 hover:border-zinc-400 transition-colors h-9"
                     title={t('common.copy')}
                   >
-                    {copiedModel ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedModel ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-zinc-500" />}
+                    <span>{copiedModel ? t('common.copied') : t('common.copy')}</span>
                   </button>
                 </div>
               </div>

@@ -980,7 +980,8 @@
     "api_key": "APIキー",
     "base_url": "ベースURL",
     "model_name": "モデル名",
-    "copy_all": "すべてコピー"
+    "copy_all": "すべてコピー",
+    "select_model_label": "モデル（OpenRouter無料モデル）"
   },
   "dialog": {
     "ok": "OK",

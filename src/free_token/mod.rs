@@ -322,21 +322,27 @@ pub async fn claim_free_key(
         "SELECT vm.name FROM virtual_models vm
          JOIN project_model_grants pmg ON pmg.virtual_model_id = vm.id
          WHERE pmg.project_id = $1 AND vm.enabled = TRUE
-         ORDER BY CASE WHEN vm.name = 'free-chat' THEN 0 WHEN vm.name = 'auto' THEN 1 ELSE 2 END, vm.name",
+         ORDER BY CASE
+             WHEN vm.name = 'deepseek/deepseek-r1:free' THEN 0
+             WHEN vm.name = 'deepseek/deepseek-chat:free' THEN 1
+             WHEN vm.name = 'thudm/glm-4-9b-chat:free' THEN 2
+             WHEN vm.name = 'qwen/qwen-2.5-coder-32b-instruct:free' THEN 3
+             WHEN vm.name = 'meta-llama/llama-3.3-70b-instruct:free' THEN 4
+             WHEN vm.name = 'google/gemini-2.0-flash-exp:free' THEN 5
+             WHEN vm.name = 'auto' THEN 8
+             WHEN vm.name = 'free-chat' THEN 9
+             ELSE 6 END, vm.name",
     )
     .bind(&config.project_id)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_else(|_| vec!["free-chat".to_string()]);
+    .unwrap_or_else(|_| vec!["deepseek/deepseek-r1:free".to_string()]);
 
-    let default_model = if models.contains(&"free-chat".to_string()) {
-        "free-chat".to_string()
-    } else {
-        models
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "free-chat".to_string())
-    };
+    let default_model = models
+        .iter()
+        .find(|m| m.as_str() != "free-chat" && m.as_str() != "auto")
+        .cloned()
+        .unwrap_or_else(|| "deepseek/deepseek-r1:free".to_string());
 
     let quota = FreeKeyQuota {
         rpm_limit: config.default_rpm_limit,
@@ -397,13 +403,20 @@ pub async fn get_free_pool_info(
     }
     let mut available_models: Vec<FreeModelSummary> = model_map.into_values().collect();
     available_models.sort_by(|a, b| {
-        if a.name == "free-chat" {
-            std::cmp::Ordering::Less
-        } else if b.name == "free-chat" {
-            std::cmp::Ordering::Greater
-        } else {
-            a.name.cmp(&b.name)
-        }
+        let rank = |name: &str| match name {
+            "deepseek/deepseek-r1:free" => 0,
+            "deepseek/deepseek-chat:free" => 1,
+            "thudm/glm-4-9b-chat:free" => 2,
+            "qwen/qwen-2.5-coder-32b-instruct:free" => 3,
+            "meta-llama/llama-3.3-70b-instruct:free" => 4,
+            "google/gemini-2.0-flash-exp:free" => 5,
+            "auto" => 8,
+            "free-chat" => 9,
+            _ => 6,
+        };
+        rank(&a.name)
+            .cmp(&rank(&b.name))
+            .then_with(|| a.name.cmp(&b.name))
     });
 
     let total_keys: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE project_id = $1")
@@ -953,21 +966,31 @@ pub async fn sync_openrouter_free_models(
     // If still 0 (e.g. offline/network restricted in test environment), seed well-known free models
     if free_market_count == 0 {
         let seed_models = [
+            ("deepseek/deepseek-r1:free", "DeepSeek: R1 (free)", 65536),
+            (
+                "deepseek/deepseek-chat:free",
+                "DeepSeek: DeepSeek V3 (free)",
+                65536,
+            ),
+            (
+                "thudm/glm-4-9b-chat:free",
+                "Zhipu AI: GLM-4 9B Chat (free)",
+                32768,
+            ),
             (
                 "meta-llama/llama-3.3-70b-instruct:free",
                 "Meta: Llama 3.3 70B Instruct (free)",
                 131072,
             ),
             (
-                "google/gemini-2.0-flash-exp:free",
-                "Google: Gemini 2.0 Flash Experimental (free)",
-                1048576,
-            ),
-            ("deepseek/deepseek-r1:free", "DeepSeek: R1 (free)", 65536),
-            (
                 "qwen/qwen-2.5-coder-32b-instruct:free",
                 "Qwen: Qwen 2.5 Coder 32B Instruct (free)",
                 32768,
+            ),
+            (
+                "google/gemini-2.0-flash-exp:free",
+                "Google: Gemini 2.0 Flash Experimental (free)",
+                1048576,
             ),
             (
                 "mistralai/mistral-7b-instruct:free",
@@ -1030,7 +1053,33 @@ pub async fn sync_openrouter_free_models(
         .execute(&state.db)
         .await?;
 
-        // Bind endpoint to pool
+        let dedicated_pool_id = format!("pool_or_{}", sanitize_id(model_id));
+
+        // Create dedicated pool for this specific model
+        sqlx::query(
+            "INSERT INTO model_pools (id, org_id, name, strategy, enabled)
+             VALUES ($1, $2, $3, 'priority', TRUE)
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(&dedicated_pool_id)
+        .bind(&config.org_id)
+        .bind(model_id)
+        .execute(&state.db)
+        .await?;
+
+        // Bind endpoint to dedicated pool
+        sqlx::query(
+            "INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight)
+             VALUES ($1, $2, 10, 10)
+             ON CONFLICT (pool_id, endpoint_id) DO UPDATE SET
+                 priority = 10, weight = 10",
+        )
+        .bind(&dedicated_pool_id)
+        .bind(&ep_id)
+        .execute(&state.db)
+        .await?;
+
+        // Also bind endpoint to global free pool
         sqlx::query(
             "INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight)
              VALUES ($1, $2, 10, 10)
@@ -1042,7 +1091,7 @@ pub async fn sync_openrouter_free_models(
         .execute(&state.db)
         .await?;
 
-        // Create or update virtual model
+        // Create or update virtual model pointing to its dedicated pool
         sqlx::query(
             "INSERT INTO virtual_models (id, pool_id, name, enabled)
              VALUES ($1, $2, $3, TRUE)
@@ -1053,7 +1102,7 @@ pub async fn sync_openrouter_free_models(
                  updated_at = CURRENT_TIMESTAMP",
         )
         .bind(&vm_id)
-        .bind(&config.pool_id)
+        .bind(&dedicated_pool_id)
         .bind(model_id)
         .execute(&state.db)
         .await?;
