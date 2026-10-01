@@ -981,7 +981,7 @@
     "base_url": "기본 URL",
     "model_name": "모델 이름",
     "copy_all": "모두 복사",
-    "select_model_label": "모델(OpenRouter 무료 모델)"
+    "select_model_label": "모델"
   },
   "dialog": {
     "ok": "확인",

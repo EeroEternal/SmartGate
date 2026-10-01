@@ -981,7 +981,7 @@
     "base_url": "Base URL",
     "model_name": "Model Name",
     "copy_all": "Copy All",
-    "select_model_label": "Model (OpenRouter Free)"
+    "select_model_label": "Model"
   },
   "dialog": {
     "ok": "OK",

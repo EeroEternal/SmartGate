@@ -981,7 +981,7 @@
     "base_url": "Base URL",
     "model_name": "模型名称",
     "copy_all": "复制全部",
-    "select_model_label": "模型（OpenRouter 免费模型）"
+    "select_model_label": "模型"
   },
   "dialog": {
     "ok": "确定",

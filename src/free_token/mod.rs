@@ -323,26 +323,27 @@ pub async fn claim_free_key(
          JOIN project_model_grants pmg ON pmg.virtual_model_id = vm.id
          WHERE pmg.project_id = $1 AND vm.enabled = TRUE
          ORDER BY CASE
-             WHEN vm.name = 'deepseek/deepseek-r1:free' THEN 0
-             WHEN vm.name = 'deepseek/deepseek-chat:free' THEN 1
-             WHEN vm.name = 'thudm/glm-4-9b-chat:free' THEN 2
-             WHEN vm.name = 'qwen/qwen-2.5-coder-32b-instruct:free' THEN 3
-             WHEN vm.name = 'meta-llama/llama-3.3-70b-instruct:free' THEN 4
-             WHEN vm.name = 'google/gemini-2.0-flash-exp:free' THEN 5
-             WHEN vm.name = 'auto' THEN 8
-             WHEN vm.name = 'free-chat' THEN 9
-             ELSE 6 END, vm.name",
+             WHEN vm.name = 'smartgate/deepseek-r1:1' THEN 0
+             WHEN vm.name = 'smartgate/deepseek-chat:1' THEN 1
+             WHEN vm.name = 'smartgate/glm-4:1' THEN 2
+             WHEN vm.name = 'smartgate/qwen-coder:1' THEN 3
+             WHEN vm.name = 'smartgate/llama-70b:1' THEN 4
+             WHEN vm.name = 'smartgate/gemini-flash:1' THEN 5
+             WHEN vm.name LIKE 'smartgate/%' THEN 6
+             WHEN vm.name = 'auto' THEN 18
+             WHEN vm.name = 'free-chat' THEN 19
+             ELSE 10 END, vm.name",
     )
     .bind(&config.project_id)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_else(|_| vec!["deepseek/deepseek-r1:free".to_string()]);
+    .unwrap_or_else(|_| vec!["smartgate/deepseek-r1:1".to_string()]);
 
     let default_model = models
         .iter()
-        .find(|m| m.as_str() != "free-chat" && m.as_str() != "auto")
+        .find(|m| m.starts_with("smartgate/"))
         .cloned()
-        .unwrap_or_else(|| "deepseek/deepseek-r1:free".to_string());
+        .unwrap_or_else(|| "smartgate/deepseek-r1:1".to_string());
 
     let quota = FreeKeyQuota {
         rpm_limit: config.default_rpm_limit,
@@ -404,15 +405,16 @@ pub async fn get_free_pool_info(
     let mut available_models: Vec<FreeModelSummary> = model_map.into_values().collect();
     available_models.sort_by(|a, b| {
         let rank = |name: &str| match name {
-            "deepseek/deepseek-r1:free" => 0,
-            "deepseek/deepseek-chat:free" => 1,
-            "thudm/glm-4-9b-chat:free" => 2,
-            "qwen/qwen-2.5-coder-32b-instruct:free" => 3,
-            "meta-llama/llama-3.3-70b-instruct:free" => 4,
-            "google/gemini-2.0-flash-exp:free" => 5,
-            "auto" => 8,
-            "free-chat" => 9,
-            _ => 6,
+            "smartgate/deepseek-r1:1" => 0,
+            "smartgate/deepseek-chat:1" => 1,
+            "smartgate/glm-4:1" => 2,
+            "smartgate/qwen-coder:1" => 3,
+            "smartgate/llama-70b:1" => 4,
+            "smartgate/gemini-flash:1" => 5,
+            _ if name.starts_with("smartgate/") => 6,
+            "auto" => 18,
+            "free-chat" => 19,
+            _ => 10,
         };
         rank(&a.name)
             .cmp(&rank(&b.name))

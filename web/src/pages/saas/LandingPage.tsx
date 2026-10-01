@@ -13,12 +13,12 @@ interface ClaimResult {
 }
 
 const DEFAULT_FREE_MODELS: Option[] = [
-  { id: 'deepseek/deepseek-r1:free', name: 'deepseek/deepseek-r1:free' },
-  { id: 'deepseek/deepseek-chat:free', name: 'deepseek/deepseek-chat:free' },
-  { id: 'thudm/glm-4-9b-chat:free', name: 'thudm/glm-4-9b-chat:free' },
-  { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'qwen/qwen-2.5-coder-32b-instruct:free' },
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'meta-llama/llama-3.3-70b-instruct:free' },
-  { id: 'google/gemini-2.0-flash-exp:free', name: 'google/gemini-2.0-flash-exp:free' },
+  { id: 'smartgate/deepseek-r1:1', name: 'smartgate/deepseek-r1:1' },
+  { id: 'smartgate/deepseek-chat:1', name: 'smartgate/deepseek-chat:1' },
+  { id: 'smartgate/glm-4:1', name: 'smartgate/glm-4:1' },
+  { id: 'smartgate/qwen-coder:1', name: 'smartgate/qwen-coder:1' },
+  { id: 'smartgate/llama-70b:1', name: 'smartgate/llama-70b:1' },
+  { id: 'smartgate/gemini-flash:1', name: 'smartgate/gemini-flash:1' },
 ]
 
 export default function LandingPage() {
@@ -30,7 +30,7 @@ export default function LandingPage() {
 
   // Available free models & selected model
   const [modelOptions, setModelOptions] = useState<Option[]>(DEFAULT_FREE_MODELS)
-  const [selectedModel, setSelectedModel] = useState<string>('deepseek/deepseek-r1:free')
+  const [selectedModel, setSelectedModel] = useState<string>('smartgate/deepseek-r1:1')
 
   // Copy feedback states
   const [copiedKey, setCopiedKey] = useState(false)
@@ -42,14 +42,14 @@ export default function LandingPage() {
     ? `${window.location.origin}/v1`
     : 'https://smartgate.run/v1'
 
-  // Fetch live free models from backend
+  // Fetch live free models from backend (filter for clean smartgate/* names)
   useEffect(() => {
     fetch(apiUrl('/api/free-token/info'))
       .then((res) => res.json())
       .then((data) => {
         if (data?.success && data?.data?.available_models) {
           const list: Option[] = data.data.available_models
-            .filter((m: { name: string }) => m.name !== 'free-chat' && m.name !== 'auto')
+            .filter((m: { name: string }) => m.name.startsWith('smartgate/'))
             .map((m: { name: string }) => ({ id: m.name, name: m.name }))
 
           if (list.length > 0) {
@@ -71,7 +71,7 @@ export default function LandingPage() {
         const parsed = JSON.parse(saved)
         if (parsed?.api_key) {
           setClaimResult(parsed)
-          if (parsed.default_model && parsed.default_model !== 'free-chat' && parsed.default_model !== 'auto') {
+          if (parsed.default_model && parsed.default_model.startsWith('smartgate/')) {
             setSelectedModel(parsed.default_model)
           }
         }
@@ -95,15 +95,15 @@ export default function LandingPage() {
 
       if (data.success && data.data) {
         setClaimResult(data.data)
-        if (data.data.default_model && data.data.default_model !== 'free-chat' && data.data.default_model !== 'auto') {
+        if (data.data.default_model && data.data.default_model.startsWith('smartgate/')) {
           setSelectedModel(data.data.default_model)
         }
         if (Array.isArray(data.data.models)) {
-          const realModels = data.data.models
-            .filter((m: string) => m !== 'free-chat' && m !== 'auto')
+          const sgModels = data.data.models
+            .filter((m: string) => m.startsWith('smartgate/'))
             .map((m: string) => ({ id: m, name: m }))
-          if (realModels.length > 0) {
-            setModelOptions(realModels)
+          if (sgModels.length > 0) {
+            setModelOptions(sgModels)
           }
         }
         try {
@@ -153,10 +153,6 @@ export default function LandingPage() {
 API Key: ${apiKey}
 Model: ${selectedModel}`
 
-  const curlSnippet = `curl ${fullBaseUrl}/chat/completions \\
-  -H "Authorization: Bearer ${apiKey}" \\
-  -d '{"model":"${selectedModel}","messages":[{"role":"user","content":"Hi"}]}'`
-
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-sans flex flex-col justify-between selection:bg-zinc-900 selection:text-white">
       {/* Top Bar with Language Switcher */}
@@ -200,7 +196,7 @@ Model: ${selectedModel}`
             </button>
           </div>
         ) : (
-          /* State 2: Clean 3-Item Credential Box with Real Model Dropdown */
+          /* State 2: Clean 3-Item Credential Box: API Key, Base URL, Model Name */
           <div className="w-full space-y-5 text-left">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 sm:p-6 space-y-3.5 shadow-sm">
               {/* API Key */}
@@ -239,7 +235,7 @@ Model: ${selectedModel}`
                 </div>
               </div>
 
-              {/* Model Dropdown (DeepSeek, GLM, etc.) */}
+              {/* Model Dropdown (smartgate/... models) */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                   {t('free_token.select_model_label')}
@@ -285,16 +281,6 @@ Model: ${selectedModel}`
                   <span>{t('free_token.claim_another')}</span>
                 </button>
               </div>
-            </div>
-
-            {/* Compact How to Use */}
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4 space-y-2">
-              <div className="text-xs font-bold text-zinc-800">
-                {t('free_token.how_to_use')} (Cursor / Cline / SDK)
-              </div>
-              <pre className="font-mono text-xs text-zinc-700 bg-white p-2.5 rounded-lg border border-zinc-200 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                <code>{curlSnippet}</code>
-              </pre>
             </div>
           </div>
         )}
