@@ -10,10 +10,13 @@ import {
   Trash2,
   ExternalLink,
   Copy,
+  Pencil,
+  X,
 } from 'lucide-react'
 import { adminFetch } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { useDialog } from '../components/Dialog'
+import { useModal } from '../lib/modal'
 import HealthBadge from '../components/HealthBadge'
 
 interface FreePoolConfigView {
@@ -98,12 +101,35 @@ export default function FreePoolPage() {
   const [maxKeysIp, setMaxKeysIp] = useState(10)
   const [openRouterKey, setOpenRouterKey] = useState('')
 
+  // Edit Quota Modal
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false)
+  const quotaModalRef = useModal({
+    enabled: isQuotaModalOpen,
+    onClose: () => setIsQuotaModalOpen(false),
+  })
+
   // Edit Key Modal
   const [editingKey, setEditingKey] = useState<AdminFreeKeyRow | null>(null)
   const [editRpm, setEditRpm] = useState(20)
   const [editConcurrency, setEditConcurrency] = useState(2)
   const [editDailySpend, setEditDailySpend] = useState(5.0)
   const [editEnabled, setEditEnabled] = useState(true)
+  const keyModalRef = useModal({
+    enabled: Boolean(editingKey),
+    onClose: () => setEditingKey(null),
+  })
+
+  function openQuotaModal() {
+    if (data?.config) {
+      setPoolEnabled(data.config.enabled)
+      setDefaultRpm(data.config.default_rpm_limit)
+      setDefaultConcurrency(data.config.default_concurrency_limit)
+      setDefaultDailySpend(data.config.default_daily_spend_limit)
+      setMaxKeysIp(data.config.max_keys_per_ip_per_hour)
+    }
+    setOpenRouterKey('')
+    setIsQuotaModalOpen(true)
+  }
 
   async function loadData() {
     try {
@@ -158,6 +184,7 @@ export default function FreePoolPage() {
       if (res.success) {
         setOpenRouterKey('')
         await loadData()
+        setIsQuotaModalOpen(false)
         await showAlert(t('free_pool.settings_saved_success'), t('common.save'))
       }
     } catch (err: unknown) {
@@ -352,133 +379,115 @@ export default function FreePoolPage() {
                   {t('free_pool.quota_governance_title')}
                 </h2>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-xs text-zinc-500">
-                  {poolEnabled ? t('free_pool.claiming_enabled') : t('free_pool.claiming_disabled')}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={poolEnabled}
-                  onChange={(e) => setPoolEnabled(e.target.checked)}
-                  className="rounded border-zinc-300 text-zinc-900 focus:ring-black h-4 w-4"
-                />
-              </label>
+              <div className="flex items-center gap-2.5">
+                {data?.config.enabled ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    {t('free_pool.claiming_enabled')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 border border-zinc-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                    {t('free_pool.claiming_disabled')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={openQuotaModal}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 hover:text-black transition-colors shadow-sm"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-zinc-500" />
+                  {t('free_pool.edit_quota_btn')}
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveSettings} className="mt-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700">
+            <div className="mt-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-zinc-100 bg-zinc-50/70 p-3.5">
+                  <div className="text-xs font-medium text-zinc-500">
                     {t('free_pool.default_rpm_limit')}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10000"
-                    value={defaultRpm}
-                    onChange={(e) => setDefaultRpm(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
-                    required
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-xl font-bold font-mono text-zinc-900">
+                      {data?.config.default_rpm_limit ?? 20}
+                    </span>
+                    <span className="text-xs text-zinc-500">req/min</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 line-clamp-1">
                     {t('free_pool.default_rpm_hint')}
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700">
+                <div className="rounded-lg border border-zinc-100 bg-zinc-50/70 p-3.5">
+                  <div className="text-xs font-medium text-zinc-500">
                     {t('free_pool.default_concurrency_limit')}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={defaultConcurrency}
-                    onChange={(e) => setDefaultConcurrency(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
-                    required
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-xl font-bold font-mono text-zinc-900">
+                      {data?.config.default_concurrency_limit ?? 2}
+                    </span>
+                    <span className="text-xs text-zinc-500">{t('free_pool.unit_concurrent')}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 line-clamp-1">
                     {t('free_pool.default_concurrency_hint')}
                   </p>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700">
+                <div className="rounded-lg border border-zinc-100 bg-zinc-50/70 p-3.5">
+                  <div className="text-xs font-medium text-zinc-500">
                     {t('free_pool.default_daily_spend_limit')}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={defaultDailySpend}
-                    onChange={(e) => setDefaultDailySpend(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
-                    required
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-xl font-bold font-mono text-zinc-900">
+                      ${(data?.config.default_daily_spend_limit ?? 5.0).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-zinc-500">/ day</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 line-clamp-1">
                     {t('free_pool.default_daily_spend_hint')}
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700">
+                <div className="rounded-lg border border-zinc-100 bg-zinc-50/70 p-3.5">
+                  <div className="text-xs font-medium text-zinc-500">
                     {t('free_pool.max_keys_per_ip')}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={maxKeysIp}
-                    onChange={(e) => setMaxKeysIp(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
-                    required
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-xl font-bold font-mono text-zinc-900">
+                      {data?.config.max_keys_per_ip_per_hour ?? 10}
+                    </span>
+                    <span className="text-xs text-zinc-500">{t('free_pool.unit_keys_per_hour')}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 line-clamp-1">
                     {t('free_pool.max_keys_per_ip_hint')}
                   </p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-zinc-700">
-                  {t('free_pool.openrouter_api_key')}
-                </label>
-                <div className="relative mt-1">
-                  <input
-                    type="password"
-                    value={openRouterKey}
-                    onChange={(e) => setOpenRouterKey(e.target.value)}
-                    placeholder={
-                      data?.openrouter_configured
-                        ? t('free_pool.openrouter_key_configured')
-                        : t('free_pool.openrouter_key_placeholder')
-                    }
-                    className="w-full rounded-md border border-zinc-300 bg-white pl-3 pr-10 py-1.5 text-sm h-9 focus:border-black focus:outline-none font-mono text-xs"
-                  />
-                  {data?.openrouter_configured && (
-                    <span className="absolute right-3 top-2.5 flex items-center text-xs text-emerald-600 font-medium gap-1">
-                      <CheckCircle2 className="h-4 w-4" />
-                    </span>
-                  )}
+              <div className="rounded-lg border border-zinc-100 bg-zinc-50/70 p-3.5 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium text-zinc-700">
+                    {t('free_pool.openrouter_api_key')}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-zinc-400">
+                    {data?.openrouter_configured
+                      ? t('free_pool.openrouter_key_configured_summary')
+                      : t('free_pool.openrouter_key_not_configured_summary')}
+                  </div>
                 </div>
-                <p className="mt-1 text-[11px] text-zinc-400">
-                  {t('free_pool.openrouter_key_hint')}
-                </p>
+                {data?.openrouter_configured ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {t('free_pool.key_configured_badge')}
+                  </span>
+                ) : (
+                  <span className="text-xs text-zinc-400 font-mono">
+                    {t('free_pool.key_none_badge')}
+                  </span>
+                )}
               </div>
-
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={savingSettings}
-                  className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-                >
-                  {savingSettings ? t('common.saving') : t('common.save')}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
 
@@ -707,9 +716,183 @@ export default function FreePoolPage() {
         </div>
       </div>
 
-      {/* Edit Quota Modal */}
+      {/* Edit Default Quota Governance Modal */}
+      {isQuotaModalOpen && (
+        <div
+          ref={quotaModalRef}
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-5 w-5 text-zinc-800" />
+                <h3 className="text-base font-semibold text-zinc-900">
+                  {t('free_pool.edit_quota_modal_title')}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuotaModalOpen(false)}
+                className="text-zinc-400 hover:text-black p-1 rounded-md hover:bg-zinc-100 transition-colors"
+                aria-label={t('common.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900">
+                    {t('free_pool.public_claiming_toggle_label')}
+                  </div>
+                  <div className="text-[11px] text-zinc-500">
+                    {poolEnabled ? t('free_pool.claiming_enabled') : t('free_pool.claiming_disabled')}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  id="pool-enabled-toggle"
+                  checked={poolEnabled}
+                  onChange={(e) => setPoolEnabled(e.target.checked)}
+                  className="rounded border-zinc-300 text-zinc-900 focus:ring-black h-4 w-4"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700">
+                    {t('free_pool.default_rpm_limit')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={defaultRpm}
+                    onChange={(e) => setDefaultRpm(Number(e.target.value))}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    {t('free_pool.default_rpm_hint')}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700">
+                    {t('free_pool.default_concurrency_limit')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={defaultConcurrency}
+                    onChange={(e) => setDefaultConcurrency(Number(e.target.value))}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    {t('free_pool.default_concurrency_hint')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700">
+                    {t('free_pool.default_daily_spend_limit')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={defaultDailySpend}
+                    onChange={(e) => setDefaultDailySpend(Number(e.target.value))}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    {t('free_pool.default_daily_spend_hint')}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700">
+                    {t('free_pool.max_keys_per_ip')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={maxKeysIp}
+                    onChange={(e) => setMaxKeysIp(Number(e.target.value))}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm h-9 focus:border-black focus:outline-none"
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    {t('free_pool.max_keys_per_ip_hint')}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700">
+                  {t('free_pool.openrouter_api_key')}
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    type="password"
+                    value={openRouterKey}
+                    onChange={(e) => setOpenRouterKey(e.target.value)}
+                    placeholder={
+                      data?.openrouter_configured
+                        ? t('free_pool.openrouter_key_configured')
+                        : t('free_pool.openrouter_key_placeholder')
+                    }
+                    className="w-full rounded-md border border-zinc-300 bg-white pl-3 pr-10 py-1.5 text-sm h-9 focus:border-black focus:outline-none font-mono text-xs"
+                  />
+                  {data?.openrouter_configured && (
+                    <span className="absolute right-3 top-2.5 flex items-center text-xs text-emerald-600 font-medium gap-1">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  {t('free_pool.openrouter_key_hint')}
+                </p>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setIsQuotaModalOpen(false)}
+                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+                >
+                  {savingSettings ? t('common.saving') : t('common.save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Free Key Quota Modal */}
       {editingKey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          ref={keyModalRef}
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
           <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-base font-semibold text-zinc-900">
@@ -718,9 +901,10 @@ export default function FreePoolPage() {
               <button
                 type="button"
                 onClick={() => setEditingKey(null)}
-                className="text-zinc-400 hover:text-black text-sm"
+                className="text-zinc-400 hover:text-black p-1 rounded-md hover:bg-zinc-100 transition-colors"
+                aria-label={t('common.close')}
               >
-                ✕
+                <X className="h-4 w-4" />
               </button>
             </div>
 
