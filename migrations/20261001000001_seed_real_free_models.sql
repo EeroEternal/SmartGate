@@ -5,7 +5,10 @@ INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_u
 VALUES ('pa_openrouter_free', 'org_free_tokens', 'SmartGate Free Pool', 'openrouter', 'openai', 'https://openrouter.ai/api/v1', '', 'active')
 ON CONFLICT (id) DO NOTHING;
 
--- 2. Seed dedicated model pools for each model
+-- 2. Update default free pool strategy to fallback for automatic failover
+UPDATE model_pools SET strategy = 'fallback' WHERE id = 'pool_free_tokens';
+
+-- 3. Seed dedicated model pools for each model
 INSERT INTO model_pools (id, org_id, name, strategy, enabled)
 VALUES
   ('pool_deepseek_r1', 'org_free_tokens', 'smartgate/deepseek-r1:1', 'priority', TRUE),
@@ -16,7 +19,7 @@ VALUES
   ('pool_gemini_2_flash', 'org_free_tokens', 'smartgate/gemini-flash:1', 'priority', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
--- 3. Seed physical endpoints pointing to upstream free models
+-- 4. Seed physical endpoints pointing to upstream free models
 INSERT INTO endpoints (
     id, account_id, name, upstream_model_id, enabled, priority, weight,
     health_status, input_price_per_1m, output_price_per_1m, capability_score, supports_tools, context_length
@@ -29,7 +32,7 @@ INSERT INTO endpoints (
   ('ep_or_google_gemini_2_0_flash_exp_free', 'pa_openrouter_free', 'SmartGate Gemini 2.0 Flash', 'google/gemini-2.0-flash-exp:free', TRUE, 10, 10, 'healthy', 0.0, 0.0, 0.89, 1, 1048576)
 ON CONFLICT (id) DO NOTHING;
 
--- 4. Bind endpoints to dedicated pools AND to pool_free_tokens
+-- 5. Bind endpoints to dedicated pools AND to pool_free_tokens (with priority for auto-failover)
 INSERT INTO model_pool_endpoints (pool_id, endpoint_id, priority, weight)
 VALUES
   ('pool_deepseek_r1', 'ep_or_deepseek_deepseek_r1_free', 10, 10),
@@ -38,18 +41,24 @@ VALUES
   ('pool_llama_3_3_70b', 'ep_or_meta_llama_llama_3_3_70b_instruct_free', 10, 10),
   ('pool_qwen_2_5_coder', 'ep_or_qwen_qwen_2_5_coder_32b_instruct_free', 10, 10),
   ('pool_gemini_2_flash', 'ep_or_google_gemini_2_0_flash_exp_free', 10, 10),
-  -- Also in the general pool
-  ('pool_free_tokens', 'ep_or_deepseek_deepseek_r1_free', 10, 10),
-  ('pool_free_tokens', 'ep_or_deepseek_deepseek_chat_free', 10, 10),
-  ('pool_free_tokens', 'ep_or_thudm_glm_4_9b_chat_free', 10, 10),
-  ('pool_free_tokens', 'ep_or_meta_llama_llama_3_3_70b_instruct_free', 10, 10),
-  ('pool_free_tokens', 'ep_or_qwen_qwen_2_5_coder_32b_instruct_free', 10, 10),
-  ('pool_free_tokens', 'ep_or_google_gemini_2_0_flash_exp_free', 10, 10)
-ON CONFLICT (pool_id, endpoint_id) DO NOTHING;
+  -- In pool_free_tokens ordered by capability priority for smartgate/auto failover
+  ('pool_free_tokens', 'ep_or_deepseek_deepseek_r1_free', 100, 10),
+  ('pool_free_tokens', 'ep_or_deepseek_deepseek_chat_free', 90, 10),
+  ('pool_free_tokens', 'ep_or_thudm_glm_4_9b_chat_free', 80, 10),
+  ('pool_free_tokens', 'ep_or_qwen_qwen_2_5_coder_32b_instruct_free', 70, 10),
+  ('pool_free_tokens', 'ep_or_meta_llama_llama_3_3_70b_instruct_free', 60, 10),
+  ('pool_free_tokens', 'ep_or_google_gemini_2_0_flash_exp_free', 50, 10)
+ON CONFLICT (pool_id, endpoint_id) DO UPDATE SET
+  priority = EXCLUDED.priority,
+  weight = EXCLUDED.weight;
 
--- 5. Seed SmartGate-branded Virtual Models
+-- 6. Seed SmartGate-branded Virtual Models including smartgate/auto
 INSERT INTO virtual_models (id, pool_id, name, enabled)
 VALUES
+  -- Auto-failover model pointing to fallback pool
+  ('vm_sg_auto', 'pool_free_tokens', 'smartgate/auto', TRUE),
+  ('vm_free_auto', 'pool_free_tokens', 'auto', TRUE),
+  -- Specific models
   ('vm_sg_deepseek_r1_1', 'pool_deepseek_r1', 'smartgate/deepseek-r1:1', TRUE),
   ('vm_sg_deepseek_chat_1', 'pool_deepseek_chat', 'smartgate/deepseek-chat:1', TRUE),
   ('vm_sg_glm_4_1', 'pool_glm_4', 'smartgate/glm-4:1', TRUE),
@@ -70,11 +79,13 @@ VALUES
   ('vm_or_llama_3_3_70b', 'pool_llama_3_3_70b', 'meta-llama/llama-3.3-70b-instruct:free', TRUE),
   ('vm_or_qwen_2_5_coder', 'pool_qwen_2_5_coder', 'qwen/qwen-2.5-coder-32b-instruct:free', TRUE),
   ('vm_or_gemini_2_flash', 'pool_gemini_2_flash', 'google/gemini-2.0-flash-exp:free', TRUE)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET pool_id = EXCLUDED.pool_id, enabled = TRUE;
 
--- 6. Grant all virtual models to proj_free_tokens
+-- 7. Grant all virtual models to proj_free_tokens
 INSERT INTO project_model_grants (project_id, virtual_model_id)
 VALUES
+  ('proj_free_tokens', 'vm_sg_auto'),
+  ('proj_free_tokens', 'vm_free_auto'),
   ('proj_free_tokens', 'vm_sg_deepseek_r1_1'),
   ('proj_free_tokens', 'vm_sg_deepseek_chat_1'),
   ('proj_free_tokens', 'vm_sg_glm_4_1'),

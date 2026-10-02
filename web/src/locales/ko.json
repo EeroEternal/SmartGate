@@ -981,7 +981,8 @@
     "base_url": "기본 URL",
     "model_name": "모델 이름",
     "copy_all": "모두 복사",
-    "select_model_label": "모델"
+    "select_model_label": "모델",
+    "auto_failover_badge": "자동 장애 조치"
   },
   "dialog": {
     "ok": "확인",

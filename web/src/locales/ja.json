@@ -981,7 +981,8 @@
     "base_url": "ベースURL",
     "model_name": "モデル名",
     "copy_all": "すべてコピー",
-    "select_model_label": "モデル"
+    "select_model_label": "モデル",
+    "auto_failover_badge": "自動フェイルオーバー"
   },
   "dialog": {
     "ok": "OK",

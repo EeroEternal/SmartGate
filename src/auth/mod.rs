@@ -109,12 +109,12 @@ pub async fn resolve_authorized_virtual_model(
     }
 
     // Fallback: If exact model was not found, check if the project has a default
-    // fallback model like 'free-chat' or 'auto' granted.
+    // fallback model like 'smartgate/auto', 'auto', or 'free-chat' granted.
     sqlx::query_as::<_, VirtualModel>(
         "SELECT vm.* FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id
          JOIN project_model_grants pmg ON vm.id = pmg.virtual_model_id
-         WHERE vm.name IN ('free-chat', 'auto')
+         WHERE vm.name IN ('smartgate/auto', 'auto', 'free-chat')
            AND pmg.project_id = $1
            AND vm.enabled = TRUE
            AND (EXISTS (
@@ -124,7 +124,10 @@ pub async fn resolve_authorized_virtual_model(
                 SELECT 1 FROM api_key_model_grants akmg
                 WHERE akmg.api_key_id = $2
            ))
-         ORDER BY CASE WHEN vm.name = 'free-chat' THEN 0 WHEN vm.name = 'auto' THEN 1 ELSE 2 END
+         ORDER BY CASE
+             WHEN vm.name = 'smartgate/auto' THEN 0
+             WHEN vm.name = 'auto' THEN 1
+             ELSE 2 END
          LIMIT 1",
     )
     .bind(project_id)

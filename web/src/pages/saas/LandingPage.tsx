@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Copy, Check, Zap, RefreshCw } from 'lucide-react'
 import BrandMark from '../../components/BrandMark'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
@@ -12,25 +12,31 @@ interface ClaimResult {
   models?: string[]
 }
 
-const DEFAULT_FREE_MODELS: Option[] = [
-  { id: 'smartgate/deepseek-r1:1', name: 'smartgate/deepseek-r1:1' },
-  { id: 'smartgate/deepseek-chat:1', name: 'smartgate/deepseek-chat:1' },
-  { id: 'smartgate/glm-4:1', name: 'smartgate/glm-4:1' },
-  { id: 'smartgate/qwen-coder:1', name: 'smartgate/qwen-coder:1' },
-  { id: 'smartgate/llama-70b:1', name: 'smartgate/llama-70b:1' },
-  { id: 'smartgate/gemini-flash:1', name: 'smartgate/gemini-flash:1' },
-]
-
 export default function LandingPage() {
   const { t } = useI18n()
+
+  const autoModelLabel = `smartgate/auto (${t('free_token.auto_failover_badge')})`
+
+  const defaultModels: Option[] = useMemo(
+    () => [
+      { id: 'smartgate/auto', name: `smartgate/auto (${t('free_token.auto_failover_badge')})` },
+      { id: 'smartgate/deepseek-r1:1', name: 'smartgate/deepseek-r1:1' },
+      { id: 'smartgate/deepseek-chat:1', name: 'smartgate/deepseek-chat:1' },
+      { id: 'smartgate/glm-4:1', name: 'smartgate/glm-4:1' },
+      { id: 'smartgate/qwen-coder:1', name: 'smartgate/qwen-coder:1' },
+      { id: 'smartgate/llama-70b:1', name: 'smartgate/llama-70b:1' },
+      { id: 'smartgate/gemini-flash:1', name: 'smartgate/gemini-flash:1' },
+    ],
+    [t]
+  )
 
   const [claiming, setClaiming] = useState(false)
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
 
-  // Available free models & selected model
-  const [modelOptions, setModelOptions] = useState<Option[]>(DEFAULT_FREE_MODELS)
-  const [selectedModel, setSelectedModel] = useState<string>('smartgate/deepseek-r1:1')
+  // Available free models & selected model (defaults to smartgate/auto)
+  const [modelOptions, setModelOptions] = useState<Option[]>(defaultModels)
+  const [selectedModel, setSelectedModel] = useState<string>('smartgate/auto')
 
   // Copy feedback states
   const [copiedKey, setCopiedKey] = useState(false)
@@ -42,7 +48,14 @@ export default function LandingPage() {
     ? `${window.location.origin}/v1`
     : 'https://smartgate.run/v1'
 
-  // Fetch live free models from backend (filter for clean smartgate/* names)
+  // Update default models when language changes
+  useEffect(() => {
+    setModelOptions((prev) =>
+      prev.map((opt) => (opt.id === 'smartgate/auto' ? { ...opt, name: autoModelLabel } : opt))
+    )
+  }, [autoModelLabel])
+
+  // Fetch live free models from backend
   useEffect(() => {
     fetch(apiUrl('/api/free-token/info'))
       .then((res) => res.json())
@@ -50,18 +63,25 @@ export default function LandingPage() {
         if (data?.success && data?.data?.available_models) {
           const list: Option[] = data.data.available_models
             .filter((m: { name: string }) => m.name.startsWith('smartgate/'))
-            .map((m: { name: string }) => ({ id: m.name, name: m.name }))
+            .map((m: { name: string }) => ({
+              id: m.name,
+              name: m.name === 'smartgate/auto' ? autoModelLabel : m.name,
+            }))
 
           if (list.length > 0) {
+            list.sort((a, b) => {
+              if (a.id === 'smartgate/auto') return -1
+              if (b.id === 'smartgate/auto') return 1
+              return 0
+            })
             setModelOptions(list)
-            setSelectedModel((prev) => (list.some((opt) => opt.id === prev) ? prev : String(list[0].id)))
           }
         }
       })
       .catch(() => {
-        // Keep DEFAULT_FREE_MODELS fallback
+        // Keep defaultModels fallback
       })
-  }, [])
+  }, [autoModelLabel])
 
   // Restore saved key from local storage if available
   useEffect(() => {
@@ -99,10 +119,18 @@ export default function LandingPage() {
           setSelectedModel(data.data.default_model)
         }
         if (Array.isArray(data.data.models)) {
-          const sgModels = data.data.models
+          const sgModels: Option[] = data.data.models
             .filter((m: string) => m.startsWith('smartgate/'))
-            .map((m: string) => ({ id: m, name: m }))
+            .map((m: string) => ({
+              id: m,
+              name: m === 'smartgate/auto' ? autoModelLabel : m,
+            }))
           if (sgModels.length > 0) {
+            sgModels.sort((a, b) => {
+              if (a.id === 'smartgate/auto') return -1
+              if (b.id === 'smartgate/auto') return 1
+              return 0
+            })
             setModelOptions(sgModels)
           }
         }
@@ -152,6 +180,11 @@ export default function LandingPage() {
   const allConfigText = `Base URL: ${fullBaseUrl}
 API Key: ${apiKey}
 Model: ${selectedModel}`
+
+  const currentOption = modelOptions.find((opt) => opt.id === selectedModel) || {
+    id: selectedModel,
+    name: selectedModel === 'smartgate/auto' ? autoModelLabel : selectedModel,
+  }
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-sans flex flex-col justify-between selection:bg-zinc-900 selection:text-white">
@@ -235,7 +268,7 @@ Model: ${selectedModel}`
                 </div>
               </div>
 
-              {/* Model Dropdown (smartgate/... models) */}
+              {/* Model Dropdown (smartgate/auto, smartgate/deepseek-r1:1, etc.) */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                   {t('free_token.select_model_label')}
@@ -244,7 +277,7 @@ Model: ${selectedModel}`
                   <div className="flex-1">
                     <Select
                       options={modelOptions}
-                      selected={{ id: selectedModel, name: selectedModel }}
+                      selected={currentOption}
                       onChange={(opt) => setSelectedModel(String(opt.id))}
                       size="sm"
                     />
@@ -255,7 +288,7 @@ Model: ${selectedModel}`
                     className="shrink-0 inline-flex items-center gap-1 rounded-md bg-white border border-zinc-300 px-3 py-1.5 text-xs font-mono text-zinc-700 hover:text-zinc-950 hover:border-zinc-400 transition-colors h-9"
                     title={t('common.copy')}
                   >
-                    {copiedModel ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-zinc-500" />}
+                    {copiedModel ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                     <span>{copiedModel ? t('common.copied') : t('common.copy')}</span>
                   </button>
                 </div>

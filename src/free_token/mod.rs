@@ -323,13 +323,14 @@ pub async fn claim_free_key(
          JOIN project_model_grants pmg ON pmg.virtual_model_id = vm.id
          WHERE pmg.project_id = $1 AND vm.enabled = TRUE
          ORDER BY CASE
-             WHEN vm.name = 'smartgate/deepseek-r1:1' THEN 0
-             WHEN vm.name = 'smartgate/deepseek-chat:1' THEN 1
-             WHEN vm.name = 'smartgate/glm-4:1' THEN 2
-             WHEN vm.name = 'smartgate/qwen-coder:1' THEN 3
-             WHEN vm.name = 'smartgate/llama-70b:1' THEN 4
-             WHEN vm.name = 'smartgate/gemini-flash:1' THEN 5
-             WHEN vm.name LIKE 'smartgate/%' THEN 6
+             WHEN vm.name = 'smartgate/auto' THEN 0
+             WHEN vm.name = 'smartgate/deepseek-r1:1' THEN 1
+             WHEN vm.name = 'smartgate/deepseek-chat:1' THEN 2
+             WHEN vm.name = 'smartgate/glm-4:1' THEN 3
+             WHEN vm.name = 'smartgate/qwen-coder:1' THEN 4
+             WHEN vm.name = 'smartgate/llama-70b:1' THEN 5
+             WHEN vm.name = 'smartgate/gemini-flash:1' THEN 6
+             WHEN vm.name LIKE 'smartgate/%' THEN 7
              WHEN vm.name = 'auto' THEN 18
              WHEN vm.name = 'free-chat' THEN 19
              ELSE 10 END, vm.name",
@@ -337,13 +338,17 @@ pub async fn claim_free_key(
     .bind(&config.project_id)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_else(|_| vec!["smartgate/deepseek-r1:1".to_string()]);
+    .unwrap_or_else(|_| vec!["smartgate/auto".to_string()]);
 
-    let default_model = models
-        .iter()
-        .find(|m| m.starts_with("smartgate/"))
-        .cloned()
-        .unwrap_or_else(|| "smartgate/deepseek-r1:1".to_string());
+    let default_model = if models.contains(&"smartgate/auto".to_string()) {
+        "smartgate/auto".to_string()
+    } else {
+        models
+            .iter()
+            .find(|m| m.starts_with("smartgate/"))
+            .cloned()
+            .unwrap_or_else(|| "smartgate/auto".to_string())
+    };
 
     let quota = FreeKeyQuota {
         rpm_limit: config.default_rpm_limit,
