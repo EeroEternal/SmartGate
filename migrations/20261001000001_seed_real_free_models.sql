@@ -52,7 +52,27 @@ ON CONFLICT (pool_id, endpoint_id) DO UPDATE SET
   priority = EXCLUDED.priority,
   weight = EXCLUDED.weight;
 
--- 6. Seed SmartGate-branded Virtual Models including smartgate/auto
+-- 6. Clean up any conflicting virtual models with different IDs, then seed SmartGate-branded Virtual Models
+DELETE FROM virtual_models
+WHERE name IN (
+  'smartgate/auto', 'auto',
+  'smartgate/deepseek-r1:1', 'smartgate/deepseek-chat:1', 'smartgate/glm-4:1',
+  'smartgate/qwen-coder:1', 'smartgate/llama-70b:1', 'smartgate/gemini-flash:1',
+  'smartgate/deepseek-r1', 'smartgate/deepseek-chat', 'smartgate/glm-4',
+  'smartgate/qwen-coder', 'smartgate/llama-70b', 'smartgate/gemini-flash',
+  'deepseek/deepseek-r1:free', 'deepseek/deepseek-chat:free', 'thudm/glm-4-9b-chat:free',
+  'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-coder-32b-instruct:free',
+  'google/gemini-2.0-flash-exp:free'
+) AND id NOT IN (
+  'vm_sg_auto', 'vm_free_auto',
+  'vm_sg_deepseek_r1_1', 'vm_sg_deepseek_chat_1', 'vm_sg_glm_4_1',
+  'vm_sg_qwen_coder_1', 'vm_sg_llama_70b_1', 'vm_sg_gemini_flash_1',
+  'vm_sg_deepseek_r1', 'vm_sg_deepseek_chat', 'vm_sg_glm_4',
+  'vm_sg_qwen_coder', 'vm_sg_llama_70b', 'vm_sg_gemini_flash',
+  'vm_or_deepseek_r1', 'vm_or_deepseek_chat', 'vm_or_glm_4',
+  'vm_or_llama_3_3_70b', 'vm_or_qwen_2_5_coder', 'vm_or_gemini_2_flash'
+);
+
 INSERT INTO virtual_models (id, pool_id, name, enabled)
 VALUES
   -- Auto-failover model pointing to fallback pool
