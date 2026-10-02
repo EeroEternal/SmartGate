@@ -1,6 +1,7 @@
 //! Cross-module regression tests for control-plane routing decisions.
 
 mod capability_routing;
+mod e2e_models_tools_thinking;
 mod proxy_pipeline;
 
 use serde::Deserialize;

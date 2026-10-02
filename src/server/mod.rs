@@ -106,6 +106,28 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Response {
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let db = init_db(&config.database_url).await?;
 
+    // If OPENROUTER_API_KEY is supplied via environment, sync it to the free token pool provider account
+    if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
+        let trimmed = key.trim();
+        if !trimmed.is_empty() {
+            tracing::info!(
+                "Syncing OPENROUTER_API_KEY from environment to free token provider account"
+            );
+            let _ = sqlx::query(
+                "UPDATE provider_accounts SET api_key = $1, updated_at = CURRENT_TIMESTAMP WHERE id = 'pa_openrouter_free'",
+            )
+            .bind(trimmed)
+            .execute(&db)
+            .await;
+            let _ = sqlx::query(
+                "UPDATE free_token_pool_config SET openrouter_api_key = $1, updated_at = CURRENT_TIMESTAMP WHERE id = 'default'",
+            )
+            .bind(trimmed)
+            .execute(&db)
+            .await;
+        }
+    }
+
     if let Some(handle) = init_metrics() {
         METRICS_HANDLE.set(handle).ok();
     }

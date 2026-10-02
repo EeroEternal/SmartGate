@@ -8,8 +8,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use unigateway_sdk::core::{
-    Endpoint, EndpointCapabilities, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool,
-    RetryPolicy, SecretString, UniGatewayEngine,
+    BackoffPolicy, Endpoint, EndpointCapabilities, LoadBalancingStrategy, ModelPolicy,
+    ProviderKind, ProviderPool, RetryCondition, RetryPolicy, SecretString, UniGatewayEngine,
 };
 
 #[derive(Debug, FromRow)]
@@ -193,11 +193,47 @@ pub async fn sync_all_pools(
 
         let load_balancing = map_strategy(&pool.strategy, pool.session_affinity_enabled != 0);
 
+        let retry_policy = match pool.strategy.as_str() {
+            "fallback" => RetryPolicy {
+                max_attempts: unigateway_endpoints.len().max(1),
+                per_attempt_timeout: None,
+                retry_on: vec![
+                    RetryCondition::HttpStatus(429),
+                    RetryCondition::HttpStatus(500),
+                    RetryCondition::HttpStatus(502),
+                    RetryCondition::HttpStatus(503),
+                    RetryCondition::HttpStatus(504),
+                    RetryCondition::Timeout,
+                    RetryCondition::TransportError,
+                ],
+                backoff: BackoffPolicy::None,
+                stop_after_stream_started: true,
+            },
+            _ => {
+                let attempts = if unigateway_endpoints.len() > 1 { 2 } else { 1 };
+                RetryPolicy {
+                    max_attempts: attempts,
+                    per_attempt_timeout: None,
+                    retry_on: vec![
+                        RetryCondition::HttpStatus(429),
+                        RetryCondition::HttpStatus(500),
+                        RetryCondition::HttpStatus(502),
+                        RetryCondition::HttpStatus(503),
+                        RetryCondition::HttpStatus(504),
+                        RetryCondition::Timeout,
+                        RetryCondition::TransportError,
+                    ],
+                    backoff: BackoffPolicy::None,
+                    stop_after_stream_started: true,
+                }
+            }
+        };
+
         let provider_pool = ProviderPool {
             pool_id: pool.id.clone(),
             endpoints: unigateway_endpoints,
             load_balancing,
-            retry_policy: RetryPolicy::default(),
+            retry_policy,
             forward_metadata_as_headers: None,
             metadata: HashMap::from([("strategy".to_string(), pool.strategy.clone())]),
         };
