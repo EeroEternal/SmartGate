@@ -64,7 +64,8 @@
     "signed_in_as": "Signed in as",
     "something_went_wrong": "Something went wrong",
     "not_applicable": "N/A",
-    "open_account_menu": "Open account menu"
+    "open_account_menu": "Open account menu",
+    "open_menu": "Open menu"
   },
   "pagination": {
     "showing": "Showing {start}–{end} of {total} records",

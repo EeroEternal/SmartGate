@@ -64,7 +64,8 @@
     "signed_in_as": "로그인 계정",
     "something_went_wrong": "문제가 발생했습니다",
     "not_applicable": "해당 없음",
-    "open_account_menu": "계정 메뉴 열기"
+    "open_account_menu": "계정 메뉴 열기",
+    "open_menu": "메뉴 열기"
   },
   "pagination": {
     "showing": "{total}개 중 {start}–{end}개 표시",

@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
-import { ChevronDown, LogOut, Pencil, UserCircle, X } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, Pencil, UserCircle, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { saasFetch, saasLogout, saasUpdateProfile } from '../../lib/saasApi'
 import BrandMark from '../../components/BrandMark'
@@ -15,7 +15,11 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState('')
   const [accountOpen, setAccountOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
+
+  // Collapse the mobile nav panel as soon as a link navigates to a new page.
+  useEffect(() => setNavOpen(false), [location.pathname])
 
   useEffect(() => {
     saasFetch<{ email: string }>('/api/saas/auth/me')
@@ -68,13 +72,18 @@ export function SaasLayout({ children }: { children: ReactNode }) {
   const isActive = (href: string) => href === '/app' ? location.pathname === href : location.pathname.startsWith(href)
 
   return <div className="min-h-screen bg-zinc-50 text-zinc-950">
-    <header className="h-16 border-b border-zinc-200 bg-white px-6 md:px-10 flex items-center justify-between">
-      <Link to="/app" className="flex items-center gap-3 font-semibold tracking-tight">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
-        SmartGate
-      </Link>
-      <div className="flex items-center gap-4">
-        <LanguageSwitcher size="sm" />
+    <header className="h-16 border-b border-zinc-200 bg-white px-4 md:px-10 flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-1">
+        <button type="button" onClick={() => setNavOpen((open) => !open)} aria-label={t('common.open_menu')} aria-expanded={navOpen} className="rounded-md p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden">
+          <Menu className="h-5 w-5" />
+        </button>
+        <Link to="/app" className="flex items-center gap-3 font-semibold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white"><BrandMark className="h-5 w-5" /></span>
+          SmartGate
+        </Link>
+      </div>
+      <div className="flex items-center gap-3 md:gap-4">
+        <div className="hidden sm:block"><LanguageSwitcher size="sm" /></div>
         <div ref={accountRef} className="relative">
           <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label={t('common.open_account_menu')} aria-expanded={accountOpen} aria-haspopup="menu" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
             <UserCircle className="h-6 w-6" />
@@ -90,7 +99,8 @@ export function SaasLayout({ children }: { children: ReactNode }) {
       </div>
     </header>
     <div className="mx-auto grid max-w-[1440px] min-w-0 gap-8 px-6 py-8 md:px-10 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="min-w-0 space-y-5 lg:sticky lg:top-8 lg:self-start">
+      <aside className={`min-w-0 space-y-5 lg:sticky lg:top-8 lg:self-start ${navOpen ? 'block' : 'hidden'} lg:block`}>
+        <div className="space-y-5">
         {navGroups.map((group, groupIndex) => (
           <div key={group.label || `group-${groupIndex}`} className="space-y-1">
             {group.label && (
@@ -109,6 +119,9 @@ export function SaasLayout({ children }: { children: ReactNode }) {
             ))}
           </div>
         ))}
+        </div>
+        {/* On small screens the header hides the switcher to save room, so it lives here. */}
+        <div className="sm:hidden"><LanguageSwitcher size="sm" /></div>
       </aside>
       {/* The shared model-service list lives here so every /app page under this layout
           consumes one cached copy instead of fetching it again on navigation. */}

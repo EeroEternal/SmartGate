@@ -64,7 +64,8 @@
     "signed_in_as": "当前登录",
     "something_went_wrong": "出现问题",
     "not_applicable": "不适用",
-    "open_account_menu": "打开账户菜单"
+    "open_account_menu": "打开账户菜单",
+    "open_menu": "打开菜单"
   },
   "pagination": {
     "showing": "显示第 {start}–{end} 条，共 {total} 条记录",

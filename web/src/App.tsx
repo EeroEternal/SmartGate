@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom'
-import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box, Zap } from 'lucide-react'
+import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box, Zap, Menu, X } from 'lucide-react'
 import LandingPage from './pages/saas/LandingPage'
 import AuthPage from './pages/saas/AuthPage'
 import SaasDashboard from './pages/saas/SaasDashboard'
@@ -257,18 +257,52 @@ function LegacyAdminRedirect({ to }: { to: string }) {
 
 function AdminConsole() {
   const { t } = useI18n()
+  const location = useLocation()
+  const [navOpen, setNavOpen] = useState(false)
+  // Close the mobile nav drawer as soon as a link navigates to a new page.
+  useEffect(() => setNavOpen(false), [location.pathname])
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden font-sans">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-auto">
-        <header className="h-16 border-b border-zinc-200 bg-white flex items-center justify-between px-8">
-          <h2 className="text-sm font-medium text-zinc-500">{t('nav.admin_console')}</h2>
+      <div className="hidden lg:flex">
+        <Sidebar />
+      </div>
+      {navOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-zinc-950/30" onClick={() => setNavOpen(false)} />
+          <div className="absolute inset-y-0 left-0 flex h-full">
+            <Sidebar />
+            <button
+              type="button"
+              onClick={() => setNavOpen(false)}
+              aria-label={t('common.close')}
+              className="absolute right-3 top-3 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 min-w-0 flex flex-col overflow-auto">
+        <header className="h-16 border-b border-zinc-200 bg-white flex items-center justify-between gap-3 px-4 lg:px-8">
+          <div className="flex min-w-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setNavOpen(true)}
+              aria-label={t('common.open_menu')}
+              className="rounded-md p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h2 className="truncate text-sm font-medium text-zinc-500">{t('nav.admin_console')}</h2>
+          </div>
           <div className="flex items-center gap-4">
             <LanguageSwitcher size="sm" />
-            <HeaderHealth />
+            <div className="hidden sm:block">
+              <HeaderHealth />
+            </div>
           </div>
         </header>
-        <main className="p-8">
+        <main className="p-4 lg:p-8">
           {/* Paths below are relative to the /admin mount point. */}
           <ErrorBoundary>
             <Suspense fallback={<PageLoading />}>

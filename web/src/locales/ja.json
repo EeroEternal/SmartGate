@@ -64,7 +64,8 @@
     "signed_in_as": "ログイン中",
     "something_went_wrong": "問題が発生しました",
     "not_applicable": "該当なし",
-    "open_account_menu": "アカウントメニューを開く"
+    "open_account_menu": "アカウントメニューを開く",
+    "open_menu": "メニューを開く"
   },
   "pagination": {
     "showing": "{total} 件中 {start}–{end} 件を表示",
