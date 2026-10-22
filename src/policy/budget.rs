@@ -1,7 +1,7 @@
 //! Progressive spend budgets (visibility → soft gate → hard block).
 
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 #[derive(Debug, Clone)]
 pub enum BudgetOutcome {
@@ -38,7 +38,7 @@ pub fn effective_daily_limit(key_limit: Option<f64>, project_limit: Option<f64>)
     }
 }
 
-pub async fn spent_today_for_key(db: &PgPool, key_id: &str) -> Result<f64, sqlx::Error> {
+pub async fn spent_today_for_key(db: &SqlitePool, key_id: &str) -> Result<f64, sqlx::Error> {
     let start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap();
     let start = start.and_utc();
     let row: (Option<f64>,) = sqlx::query_as(

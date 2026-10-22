@@ -4,12 +4,11 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use dashmap::DashMap;
-use unigateway_sdk::core::feedback::RoutingFeedbackProvider;
 
 use crate::models::{EndpointMetric, ModelPool, PoolEndpointMember};
 use crate::policy::RouteHint;
 use crate::pricing::{EndpointProfile, UnitPrice};
-use crate::routing::SmartGateFeedbackProvider;
+use crate::routing::{RoutingFeedbackProvider, SmartGateFeedbackProvider};
 
 const POOL: &str = "pool-fusion";
 const FLASH: &str = "ep-flash";

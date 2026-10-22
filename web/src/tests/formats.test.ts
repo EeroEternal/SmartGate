@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatMoney } from '../lib/format'
-import { formatPriceInput } from '../pages/saas/serviceUtils'
+import { formatMoney, formatPriceInput } from '../lib/format'
 
 describe('formatMoney', () => {
   it('renders two decimals for normal amounts', () => {

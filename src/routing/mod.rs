@@ -1,6 +1,6 @@
-//! SmartGate control-plane routing feedback for UniGateway data plane.
+//! SmartGate control-plane routing feedback for intelligent Auto / Pro / Flash routing.
 //!
-//! Strategies implement Cost / Control / Choice (see `docs/scope.md`):
+//! Strategies implement Cost / Control / Choice:
 //! - Cost: `cost_aware`, `capability_aware`
 //! - Control: health exclusion, budget downshift, tools hard-filter
 //! - Choice: multi-endpoint pools ordered by score
@@ -17,17 +17,34 @@ use crate::policy::{get_hint, get_task_hint};
 use crate::pricing::EndpointProfile;
 use chrono::Utc;
 use dashmap::DashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 use strategy::{expected_cost, score as score_endpoint, ScoreInput};
-use unigateway_sdk::core::feedback::{EndpointSignal, RoutingFeedback, RoutingFeedbackProvider};
+
+#[derive(Debug, Clone, Default)]
+pub struct EndpointSignal {
+    pub score: Option<f64>,
+    pub excluded: bool,
+    pub cooldown_until: Option<SystemTime>,
+    pub recent_error_rate: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RoutingFeedback {
+    pub endpoint_signals: HashMap<String, EndpointSignal>,
+}
+
+pub trait RoutingFeedbackProvider: Send + Sync {
+    fn feedback(&self, pool_id: &str) -> RoutingFeedback;
+}
 
 /// Failure streak before an endpoint is marked unavailable and cooled down.
 pub const FAILURE_THRESHOLD: i32 = 3;
 /// Cooldown window after consecutive failures.
 pub const COOLDOWN_SECS: i64 = 30;
 
-/// Control-plane routing scores consumed by the UniGateway data plane.
+/// Control-plane routing scores consumed by the data plane.
 pub struct SmartGateFeedbackProvider {
     pub metrics: Arc<DashMap<String, EndpointMetric>>,
     pub pools: Arc<DashMap<String, ModelPool>>,
@@ -68,6 +85,17 @@ impl SmartGateFeedbackProvider {
             .collect()
     }
 
+    /// Return ordered non-excluded endpoint IDs (followed by excluded ones as last-resort fallbacks)
+    /// for a given pool and request hint.
+    pub fn rank_endpoints(
+        &self,
+        pool_id: &str,
+        hint: Option<crate::policy::RouteHint>,
+    ) -> Vec<String> {
+        let (_, trace) = self.evaluate(pool_id, hint);
+        trace.into_iter().map(|c| c.endpoint_id).collect()
+    }
+
     fn evaluate(
         &self,
         pool_id: &str,
@@ -87,9 +115,6 @@ impl SmartGateFeedbackProvider {
         };
 
         let now = Utc::now();
-        // The task-local hint belongs to the request being dispatched. The shared
-        // maps are only a fallback: they are written by every concurrent request,
-        // so reading them first lets an easy request decide a hard request's route.
         let hint = request_hint
             .or_else(get_task_hint)
             .or_else(|| self.hints.get(pool_id).map(|h| h.clone()))
@@ -122,9 +147,6 @@ impl SmartGateFeedbackProvider {
             1.0
         };
 
-        // A hard task must keep its capability-qualified endpoints even when the
-        // budget soft gate wants cheaper ones, otherwise the pool silently
-        // downgrades complex requests to a weaker model.
         let budget_protected: std::collections::HashSet<String> =
             if strategy == "capability_aware" && difficulty >= HARD_TASK_DIFFICULTY {
                 members
@@ -208,12 +230,10 @@ impl SmartGateFeedbackProvider {
 
             let mut excluded = excluded_health;
             let mut exclusion_reason = if excluded_health { "health" } else { "" };
-            // Control: tools required but endpoint declares no support.
             if has_tools && profile.supports_tools == Some(false) {
                 excluded = true;
                 exclusion_reason = "tools_unsupported";
             }
-            // Control: budget soft gate → drop clearly expensive endpoints.
             if downshift
                 && profile.price.is_priced()
                 && base_cost > median_cost * 1.05
@@ -277,10 +297,6 @@ impl SmartGateFeedbackProvider {
                     true
                 };
 
-                // Cache-collapse migration: if the sticky endpoint's observed
-                // prefix-cache hit ratio has collapsed while another candidate
-                // is clearly retaining cache, stop boosting stickiness so the
-                // session can migrate to whichever endpoint actually caches.
                 let sticky_cache_collapsed = {
                     let sticky_ratio = self.metrics.get(&sticky).and_then(|m| {
                         (m.cache_samples >= CACHE_MIN_SAMPLES).then_some(m.cache_hit_ratio_ema)
@@ -298,7 +314,11 @@ impl SmartGateFeedbackProvider {
                 if sticky_is_capable && !sticky_cache_collapsed {
                     if let Some(signal) = feedback.endpoint_signals.get_mut(&sticky) {
                         if !signal.excluded {
-                            signal.score = Some(signal.score.unwrap_or(0.0) + AFFINITY_BOOST);
+                            let boosted = signal.score.unwrap_or(0.0) + AFFINITY_BOOST;
+                            signal.score = Some(boosted);
+                            if let Some(t) = trace.iter_mut().find(|t| t.endpoint_id == sticky) {
+                                t.score = Some(boosted);
+                            }
                         }
                     }
                 }
@@ -370,8 +390,6 @@ impl RoutingFeedbackProvider for SmartGateFeedbackProvider {
     }
 }
 
-/// Per-candidate routing explanation, ordered the way the data plane will try them.
-/// Fields are consumed through `Debug` in the routing log.
 #[derive(Debug)]
 #[allow(dead_code)]
 struct CandidateTrace {

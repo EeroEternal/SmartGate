@@ -1,6 +1,4 @@
-//! SmartGate — open-source AI gateway (control plane host + UniGateway data plane).
-//!
-//! Product scope: `docs/scope.md`. Roadmap: `docs/roadmap.md`.
+//! SmartGate — lightweight AI gateway (control plane + intelligent Auto/Pro/Flash routing + xlite data plane).
 
 pub mod api;
 pub mod auth;
@@ -12,12 +10,10 @@ pub mod policy;
 pub mod pricing;
 pub mod quota;
 pub mod routing;
-pub mod saas;
 pub mod server;
 pub mod sync;
 #[cfg(test)]
 mod tests;
 pub mod usage;
-pub mod warm;
 
 pub use config::Config;

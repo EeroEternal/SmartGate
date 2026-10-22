@@ -5,7 +5,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::{header::AUTHORIZATION, request::Parts, StatusCode},
 };
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use std::sync::Arc;
 
 pub mod admin;
@@ -72,7 +72,7 @@ where
 }
 
 pub async fn resolve_authorized_virtual_model(
-    db: &PgPool,
+    db: &SqlitePool,
     requested_model: &str,
     project_id: &str,
     api_key_id: &str,
@@ -108,8 +108,6 @@ pub async fn resolve_authorized_virtual_model(
         return Ok(exact);
     }
 
-    // Fallback: If exact model was not found, check if the project has a default
-    // fallback model like 'smartgate/auto', 'auto', or 'free-chat' granted.
     sqlx::query_as::<_, VirtualModel>(
         "SELECT vm.* FROM virtual_models vm
          JOIN model_pools mp ON mp.id = vm.pool_id

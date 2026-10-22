@@ -1,48 +1,85 @@
 pub mod openrouter;
 
+use crate::config::AppState;
 use crate::models::{EndpointMetric, ModelPool as DbModelPool, PoolEndpointMember};
 use crate::pricing::{EndpointProfile, UnitPrice};
 use dashmap::DashMap;
-use sqlx::FromRow;
-use sqlx::PgPool;
+use serde::Serialize;
+use sqlx::{FromRow, SqlitePool};
 use std::collections::HashMap;
-use std::sync::Arc;
-use unigateway_sdk::core::{
-    BackoffPolicy, Endpoint, EndpointCapabilities, LoadBalancingStrategy, ModelPolicy,
-    ProviderKind, ProviderPool, RetryCondition, RetryPolicy, SecretString, UniGatewayEngine,
-};
 
-#[derive(Debug, FromRow)]
-struct SyncEndpointRow {
-    id: String,
-    account_id: String,
-    upstream_model_id: String,
-    enabled: bool,
-    pool_priority: i32,
-    pool_weight: i32,
-    provider_type: String,
-    protocol: String,
-    base_url: String,
-    api_key: String,
-    account_name: String,
+#[derive(Debug, Clone, FromRow)]
+pub struct SyncEndpointRow {
+    pub id: String,
+    pub account_id: String,
+    pub upstream_model_id: String,
+    pub enabled: bool,
+    pub pool_priority: i32,
+    pub pool_weight: i32,
+    pub provider_type: String,
+    pub protocol: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub account_name: String,
     /// `None` when the endpoint has no configured price (unpriced, never "free").
-    input_price_per_1m: Option<f64>,
-    output_price_per_1m: Option<f64>,
-    capability_score: f64,
-    supports_tools: Option<i32>,
-    context_length: Option<i32>,
-    health_status: String,
-    cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
+    pub input_price_per_1m: Option<f64>,
+    pub output_price_per_1m: Option<f64>,
+    pub capability_score: f64,
+    pub supports_tools: Option<i32>,
+    pub context_length: Option<i32>,
+    pub health_status: String,
+    pub cooldown_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Push DB pool config into UniGateway and refresh in-memory routing caches.
+/// Declarative catalog payload pushed to `xlite` via `POST /api/catalog/import`.
+#[derive(Debug, Clone, Serialize)]
+pub struct XliteCatalog {
+    pub providers: Vec<XliteProvider>,
+    pub models: Vec<XliteModel>,
+    pub api_keys: Vec<XliteApiKey>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct XliteProvider {
+    pub name: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct XliteModel {
+    pub name: String,
+    pub enabled: bool,
+    pub channels: Vec<XliteChannel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct XliteChannel {
+    pub provider: String,
+    pub upstream_model: String,
+    /// In `xlite`, priority is ascending (`0` = primary tier, `1, 2, ...` = backup failover tiers).
+    pub priority: i32,
+    pub weight: i32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct XliteApiKey {
+    pub name: String,
+    pub key: String,
+    pub models: Vec<String>,
+    pub enabled: bool,
+}
+
+/// Refresh in-memory routing caches from SQLite and push the declarative catalog to `xlite` if configured.
 pub async fn sync_all_pools(
-    engine: &UniGatewayEngine,
-    db: &PgPool,
+    db: &SqlitePool,
     pools: &DashMap<String, DbModelPool>,
     pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
     profiles: &DashMap<String, EndpointProfile>,
     metrics: &DashMap<String, EndpointMetric>,
+    endpoints: &DashMap<String, SyncEndpointRow>,
 ) -> anyhow::Result<()> {
     let db_pools =
         sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
@@ -52,6 +89,7 @@ pub async fn sync_all_pools(
     pools.clear();
     pool_members.clear();
     profiles.clear();
+    endpoints.clear();
 
     for pool in db_pools {
         let rows = sqlx::query_as::<_, SyncEndpointRow>(
@@ -71,9 +109,8 @@ pub async fn sync_all_pools(
         .fetch_all(db)
         .await?;
 
-        // Seed health from the database so a restart does not lose a degraded state,
-        // and so the first successful request can clear it again.
         for row in &rows {
+            endpoints.insert(row.id.clone(), row.clone());
             if metrics.contains_key(&row.id) {
                 continue;
             }
@@ -103,22 +140,6 @@ pub async fn sync_all_pools(
             .iter()
             .zip(capabilities.iter())
             .map(|(r, &capability)| {
-                let configured = configured_capabilities
-                    .iter()
-                    .position(|(model, _)| model == &r.upstream_model_id)
-                    .map(|index| configured_capabilities[index].1)
-                    .unwrap_or(capability);
-                if (capability - configured).abs() > 1e-6 {
-                    tracing::warn!(
-                        target: "smartgate.sync",
-                        pool_id = %pool.id,
-                        endpoint_id = %r.id,
-                        model = %r.upstream_model_id,
-                        configured,
-                        applied = capability,
-                        "pool capability scores had no usable spread; using model family defaults so hard requests can reach the strongest endpoint"
-                    );
-                }
                 profiles.insert(
                     r.id.clone(),
                     EndpointProfile {
@@ -152,92 +173,6 @@ pub async fn sync_all_pools(
                 .await
                 .unwrap_or_default();
 
-        let unigateway_endpoints: Vec<Endpoint> = rows
-            .iter()
-            .map(|r| {
-                let (provider_kind, driver_id, family) =
-                    map_provider(&r.protocol, &r.provider_type);
-                let mut model_mapping = HashMap::new();
-                model_mapping.insert("*".to_string(), r.upstream_model_id.clone());
-                model_mapping.insert(pool.name.clone(), r.upstream_model_id.clone());
-                model_mapping.insert(r.upstream_model_id.clone(), r.upstream_model_id.clone());
-                for (_vm_id, vm_name) in &vm_records {
-                    model_mapping.insert(vm_name.clone(), r.upstream_model_id.clone());
-                }
-                Endpoint {
-                    endpoint_id: r.id.clone(),
-                    provider_name: Some(r.account_name.clone()),
-                    source_endpoint_id: Some(r.upstream_model_id.clone()),
-                    provider_family: family,
-                    provider_kind,
-                    driver_id: driver_id.to_string(),
-                    base_url: normalize_base_url(&r.base_url),
-                    api_key: SecretString::new(r.api_key.clone()),
-                    model_policy: ModelPolicy {
-                        default_model: Some(r.upstream_model_id.clone()),
-                        model_mapping,
-                    },
-                    enabled: r.enabled,
-                    max_concurrency: None,
-                    forward_metadata_as_headers: None,
-                    capabilities: EndpointCapabilities::default(),
-                    metadata: HashMap::from([
-                        ("account_id".to_string(), r.account_id.clone()),
-                        ("account_name".to_string(), r.account_name.clone()),
-                        ("provider_type".to_string(), r.provider_type.clone()),
-                        ("protocol".to_string(), r.protocol.clone()),
-                    ]),
-                }
-            })
-            .collect();
-
-        let load_balancing = map_strategy(&pool.strategy, pool.session_affinity_enabled != 0);
-
-        let retry_policy = match pool.strategy.as_str() {
-            "fallback" => RetryPolicy {
-                max_attempts: unigateway_endpoints.len().max(1),
-                per_attempt_timeout: None,
-                retry_on: vec![
-                    RetryCondition::HttpStatus(429),
-                    RetryCondition::HttpStatus(500),
-                    RetryCondition::HttpStatus(502),
-                    RetryCondition::HttpStatus(503),
-                    RetryCondition::HttpStatus(504),
-                    RetryCondition::Timeout,
-                    RetryCondition::TransportError,
-                ],
-                backoff: BackoffPolicy::None,
-                stop_after_stream_started: true,
-            },
-            _ => {
-                let attempts = if unigateway_endpoints.len() > 1 { 2 } else { 1 };
-                RetryPolicy {
-                    max_attempts: attempts,
-                    per_attempt_timeout: None,
-                    retry_on: vec![
-                        RetryCondition::HttpStatus(429),
-                        RetryCondition::HttpStatus(500),
-                        RetryCondition::HttpStatus(502),
-                        RetryCondition::HttpStatus(503),
-                        RetryCondition::HttpStatus(504),
-                        RetryCondition::Timeout,
-                        RetryCondition::TransportError,
-                    ],
-                    backoff: BackoffPolicy::None,
-                    stop_after_stream_started: true,
-                }
-            }
-        };
-
-        let provider_pool = ProviderPool {
-            pool_id: pool.id.clone(),
-            endpoints: unigateway_endpoints,
-            load_balancing,
-            retry_policy,
-            forward_metadata_as_headers: None,
-            metadata: HashMap::from([("strategy".to_string(), pool.strategy.clone())]),
-        };
-
         pools.insert(pool.id.clone(), pool.clone());
         pools.insert(pool.name.clone(), pool.clone());
         pool_members.insert(pool.id.clone(), members.clone());
@@ -248,123 +183,323 @@ pub async fn sync_all_pools(
             pool_members.insert(vm_id.clone(), members.clone());
             pool_members.insert(vm_name.clone(), members.clone());
         }
+    }
 
-        let mut pool_keys = vec![pool.id.clone(), pool.name.clone()];
-        for (vm_id, vm_name) in &vm_records {
-            pool_keys.push(vm_id.clone());
-            pool_keys.push(vm_name.clone());
-        }
-        for pkey in pool_keys {
-            let mut pp = provider_pool.clone();
-            pp.pool_id = pkey;
-            let _ = engine.upsert_pool(pp).await;
+    Ok(())
+}
+
+/// Sync all pools and push declarative catalog to `xlite` if `config.xlite_url` is set.
+pub async fn sync_state_and_xlite(state: &AppState) -> anyhow::Result<()> {
+    sync_all_pools(
+        &state.db,
+        &state.pools,
+        &state.pool_members,
+        &state.profiles,
+        &state.metrics,
+        &state.endpoints,
+    )
+    .await?;
+
+    if let Some(xlite_url) = state.config.xlite_url.as_deref() {
+        let catalog = build_xlite_catalog(state).await?;
+        if let Err(err) = push_xlite_catalog(
+            &state.http_client,
+            xlite_url,
+            &state.config.xlite_admin_password,
+            &catalog,
+        )
+        .await
+        {
+            tracing::warn!(
+                target: "smartgate.xlite",
+                error = %err,
+                xlite_url,
+                "failed to push catalog to xlite container (will retry on next sync or use direct fallback)"
+            );
         }
     }
 
     Ok(())
 }
 
-pub async fn sync_all_pools_from_state(
-    engine: &Arc<UniGatewayEngine>,
-    db: &PgPool,
-    pools: &DashMap<String, DbModelPool>,
-    pool_members: &DashMap<String, Vec<PoolEndpointMember>>,
-    profiles: &DashMap<String, EndpointProfile>,
-    metrics: &DashMap<String, EndpointMetric>,
-) -> anyhow::Result<()> {
-    sync_all_pools(engine.as_ref(), db, pools, pool_members, profiles, metrics).await
-}
-
-fn map_strategy(strategy: &str, session_affinity_enabled: bool) -> LoadBalancingStrategy {
-    use crate::routing::{canonicalize_strategy, uses_score_order};
-    let s = canonicalize_strategy(strategy);
-    if session_affinity_enabled || uses_score_order(s) {
-        return LoadBalancingStrategy::ScoreOrdered;
-    }
-    match s {
-        "fallback" => LoadBalancingStrategy::Fallback,
-        "random" => LoadBalancingStrategy::Random,
-        _ => LoadBalancingStrategy::RoundRobin,
-    }
-}
-
-fn map_provider(
-    protocol: &str,
-    _provider_type: &str,
-) -> (ProviderKind, &'static str, Option<String>) {
-    match protocol.to_ascii_lowercase().as_str() {
-        "anthropic" => (
-            ProviderKind::Anthropic,
-            "anthropic",
-            Some("anthropic".to_string()),
-        ),
-        other => (
-            ProviderKind::OpenAiCompatible,
-            "openai-compatible",
-            Some(other.to_string()),
-        ),
-    }
-}
-
-/// Load one enabled endpoint in the same UniGateway representation used by pool sync.
-///
-/// This is a control-plane lookup only. Request execution, protocol rendering, credentials,
-/// retries, timeout handling, and provider health reporting remain inside UniGateway.
-pub async fn load_endpoint_for_dispatch(
-    db: &PgPool,
-    endpoint_id: &str,
-) -> anyhow::Result<Option<Endpoint>> {
-    let row = sqlx::query_as::<_, SyncEndpointRow>(
-        "SELECT e.id, e.account_id, e.upstream_model_id, e.enabled,
-                0 AS pool_priority, 0 AS pool_weight,
-                pa.provider_type, pa.protocol, pa.base_url, pa.api_key, pa.name AS account_name,
-                e.input_price_per_1m, e.output_price_per_1m,
-                e.capability_score, e.supports_tools, e.context_length,
-                e.health_status, e.cooldown_until
-         FROM endpoints e
-         JOIN provider_accounts pa ON pa.id = e.account_id
-         WHERE e.id = $1 AND e.enabled = TRUE AND pa.status = 'active'",
+/// Build the declarative `XliteCatalog` from SmartGate's SQLite state, including:
+/// - All active `provider_accounts`
+/// - Every `virtual_model` and `model_pool`
+/// - Tiered routing targets `<pool_id>:pro` (capability-first) and `<pool_id>:flash` (cost-first)
+/// - Endpoint-specific targets `ep:<endpoint_id>` (with pool backups for pre-first-byte failover)
+pub async fn build_xlite_catalog(state: &AppState) -> anyhow::Result<XliteCatalog> {
+    let accounts: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT id, name, base_url, api_key FROM provider_accounts WHERE status = 'active'",
     )
-    .bind(endpoint_id)
-    .fetch_optional(db)
+    .fetch_all(&state.db)
     .await?;
 
-    let Some(row) = row else {
-        return Ok(None);
-    };
+    let mut providers = Vec::with_capacity(accounts.len());
+    let mut provider_name_by_id = HashMap::new();
+    for (id, name, base_url, api_key) in accounts {
+        let provider_key = format!("{} ({})", name, id);
+        provider_name_by_id.insert(id, provider_key.clone());
+        providers.push(XliteProvider {
+            name: provider_key,
+            base_url: normalize_base_url(&base_url)
+                .trim_end_matches('/')
+                .to_string(),
+            api_key,
+            enabled: true,
+        });
+    }
 
-    let (provider_kind, driver_id, family) = map_provider(&row.protocol, &row.provider_type);
-    let mut model_mapping = HashMap::new();
-    model_mapping.insert("*".to_string(), row.upstream_model_id.clone());
-    model_mapping.insert(row.upstream_model_id.clone(), row.upstream_model_id.clone());
+    let db_pools =
+        sqlx::query_as::<_, DbModelPool>("SELECT * FROM model_pools WHERE enabled = TRUE")
+            .fetch_all(&state.db)
+            .await?;
 
-    Ok(Some(Endpoint {
-        endpoint_id: row.id,
-        provider_name: Some(row.account_name.clone()),
-        source_endpoint_id: Some(row.upstream_model_id.clone()),
-        provider_family: family,
-        provider_kind,
-        driver_id: driver_id.to_string(),
-        base_url: normalize_base_url(&row.base_url),
-        api_key: SecretString::new(row.api_key),
-        model_policy: ModelPolicy {
-            default_model: Some(row.upstream_model_id),
-            model_mapping,
-        },
-        enabled: row.enabled,
-        max_concurrency: None,
-        forward_metadata_as_headers: None,
-        capabilities: EndpointCapabilities::default(),
-        metadata: HashMap::from([
-            ("account_id".to_string(), row.account_id),
-            ("account_name".to_string(), row.account_name),
-            ("provider_type".to_string(), row.provider_type),
-            ("protocol".to_string(), row.protocol),
-        ]),
-    }))
+    let mut models = Vec::new();
+    let mut seen_model_names = std::collections::HashSet::new();
+
+    for pool in db_pools {
+        let Some(members) = state.pool_members.get(&pool.id) else {
+            continue;
+        };
+        if members.is_empty() {
+            continue;
+        }
+
+        // Default priority order (SmartGate priority DESC -> xlite priority ASC 0, 1, 2...)
+        let default_channels: Vec<XliteChannel> = members
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, m)| {
+                let ep = state.endpoints.get(&m.endpoint_id)?;
+                let provider = provider_name_by_id.get(&ep.account_id)?.clone();
+                Some(XliteChannel {
+                    provider,
+                    upstream_model: ep.upstream_model_id.clone(),
+                    priority: idx as i32,
+                    weight: m.weight.max(1),
+                    enabled: ep.enabled,
+                })
+            })
+            .collect();
+
+        if default_channels.is_empty() {
+            continue;
+        }
+
+        // Pro tier ordering: capability_score DESC
+        let mut pro_members = members.clone();
+        pro_members.sort_by(|a, b| {
+            let cap_a = state
+                .profiles
+                .get(&a.endpoint_id)
+                .map(|p| p.capability_score)
+                .unwrap_or(0.5);
+            let cap_b = state
+                .profiles
+                .get(&b.endpoint_id)
+                .map(|p| p.capability_score)
+                .unwrap_or(0.5);
+            cap_b
+                .total_cmp(&cap_a)
+                .then_with(|| b.priority.cmp(&a.priority))
+        });
+        let pro_channels: Vec<XliteChannel> = pro_members
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, m)| {
+                let ep = state.endpoints.get(&m.endpoint_id)?;
+                let provider = provider_name_by_id.get(&ep.account_id)?.clone();
+                Some(XliteChannel {
+                    provider,
+                    upstream_model: ep.upstream_model_id.clone(),
+                    priority: idx as i32,
+                    weight: m.weight.max(1),
+                    enabled: ep.enabled,
+                })
+            })
+            .collect();
+
+        // Flash tier ordering: cost ASC, then capability DESC
+        let mut flash_members = members.clone();
+        flash_members.sort_by(|a, b| {
+            let cost_a = state
+                .profiles
+                .get(&a.endpoint_id)
+                .map(|p| p.price.estimate_cost(1000, 500))
+                .unwrap_or(0.0);
+            let cost_b = state
+                .profiles
+                .get(&b.endpoint_id)
+                .map(|p| p.price.estimate_cost(1000, 500))
+                .unwrap_or(0.0);
+            cost_a.total_cmp(&cost_b).then_with(|| {
+                let cap_a = state
+                    .profiles
+                    .get(&a.endpoint_id)
+                    .map(|p| p.capability_score)
+                    .unwrap_or(0.5);
+                let cap_b = state
+                    .profiles
+                    .get(&b.endpoint_id)
+                    .map(|p| p.capability_score)
+                    .unwrap_or(0.5);
+                cap_b.total_cmp(&cap_a)
+            })
+        });
+        let flash_channels: Vec<XliteChannel> = flash_members
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, m)| {
+                let ep = state.endpoints.get(&m.endpoint_id)?;
+                let provider = provider_name_by_id.get(&ep.account_id)?.clone();
+                Some(XliteChannel {
+                    provider,
+                    upstream_model: ep.upstream_model_id.clone(),
+                    priority: idx as i32,
+                    weight: m.weight.max(1),
+                    enabled: ep.enabled,
+                })
+            })
+            .collect();
+
+        let pro_name = format!("{}:pro", pool.id);
+        if seen_model_names.insert(pro_name.clone()) {
+            models.push(XliteModel {
+                name: pro_name,
+                enabled: true,
+                channels: pro_channels,
+            });
+        }
+
+        let flash_name = format!("{}:flash", pool.id);
+        if seen_model_names.insert(flash_name.clone()) {
+            models.push(XliteModel {
+                name: flash_name,
+                enabled: true,
+                channels: flash_channels,
+            });
+        }
+
+        for name in [&pool.id, &pool.name] {
+            if seen_model_names.insert(name.clone()) {
+                models.push(XliteModel {
+                    name: name.clone(),
+                    enabled: true,
+                    channels: default_channels.clone(),
+                });
+            }
+        }
+
+        let vm_names: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM virtual_models WHERE pool_id = $1 AND enabled = TRUE")
+                .bind(&pool.id)
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default();
+
+        for (vm_name,) in vm_names {
+            if seen_model_names.insert(vm_name.clone()) {
+                models.push(XliteModel {
+                    name: vm_name,
+                    enabled: true,
+                    channels: default_channels.clone(),
+                });
+            }
+        }
+
+        // Also register endpoint-specific models `ep:<endpoint_id>` with primary priority=0
+        // and the remaining pool endpoints as automatic failover backups!
+        for member in members.iter() {
+            let ep_model_name = format!("ep:{}", member.endpoint_id);
+            if !seen_model_names.insert(ep_model_name.clone()) {
+                continue;
+            }
+            let Some(primary_ep) = state.endpoints.get(&member.endpoint_id) else {
+                continue;
+            };
+            let Some(primary_provider) = provider_name_by_id.get(&primary_ep.account_id) else {
+                continue;
+            };
+            let mut ep_channels = vec![XliteChannel {
+                provider: primary_provider.clone(),
+                upstream_model: primary_ep.upstream_model_id.clone(),
+                priority: 0,
+                weight: member.weight.max(1),
+                enabled: primary_ep.enabled,
+            }];
+            for (idx, backup) in members
+                .iter()
+                .filter(|m| m.endpoint_id != member.endpoint_id)
+                .enumerate()
+            {
+                if let Some(b_ep) = state.endpoints.get(&backup.endpoint_id) {
+                    if let Some(b_prov) = provider_name_by_id.get(&b_ep.account_id) {
+                        ep_channels.push(XliteChannel {
+                            provider: b_prov.clone(),
+                            upstream_model: b_ep.upstream_model_id.clone(),
+                            priority: (idx + 1) as i32,
+                            weight: backup.weight.max(1),
+                            enabled: b_ep.enabled,
+                        });
+                    }
+                }
+            }
+            models.push(XliteModel {
+                name: ep_model_name,
+                enabled: true,
+                channels: ep_channels,
+            });
+        }
+    }
+
+    let api_keys = vec![XliteApiKey {
+        name: "smartgate-control-plane".to_string(),
+        key: state.config.xlite_internal_key.clone(),
+        models: Vec::new(),
+        enabled: true,
+    }];
+
+    Ok(XliteCatalog {
+        providers,
+        models,
+        api_keys,
+    })
 }
 
-fn normalize_base_url(url: &str) -> String {
+pub async fn push_xlite_catalog(
+    client: &reqwest::Client,
+    xlite_url: &str,
+    admin_password: &str,
+    catalog: &XliteCatalog,
+) -> anyhow::Result<()> {
+    let yaml_str = serde_json::to_string(catalog)?;
+    let url = format!("{}/api/catalog/import", xlite_url.trim_end_matches('/'));
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", admin_password))
+        .json(&serde_json::json!({
+            "yaml": yaml_str,
+            "replace": true,
+        }))
+        .send()
+        .await?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("xlite catalog import failed ({}): {}", status, body);
+    }
+
+    tracing::info!(
+        target: "smartgate.xlite",
+        providers = catalog.providers.len(),
+        models = catalog.models.len(),
+        "pushed declarative routing catalog to xlite"
+    );
+    Ok(())
+}
+
+pub fn normalize_base_url(url: &str) -> String {
     let trimmed = url.trim().trim_end_matches('/');
     if trimmed.is_empty() {
         return String::new();

@@ -5,7 +5,7 @@ import { adminFetch } from '../../lib/api'
 import { useModal } from '../../lib/modal'
 import { useDialog } from '../../components/Dialog'
 import { useI18n } from '../../lib/i18n'
-import { formatMaskedKey } from '../saas/components'
+import { formatMaskedKey } from '../../lib/format'
 
 interface Project {
   id: string

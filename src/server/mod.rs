@@ -2,13 +2,12 @@ use crate::config::{AppState, Config};
 use crate::db::init_db;
 use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
-use crate::usage::SmartGateHooks;
 use axum::{
     extract::State,
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
     Router,
 };
 use dashmap::DashMap;
@@ -18,9 +17,7 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
-use unigateway_sdk::core::UniGatewayEngine;
 
-/// Global handle to the Prometheus recorder, installed when METRICS_ENABLED is on (default).
 static METRICS_HANDLE: once_cell::sync::OnceCell<metrics_exporter_prometheus::PrometheusHandle> =
     once_cell::sync::OnceCell::new();
 
@@ -58,7 +55,6 @@ async fn metrics_handler() -> Response {
     }
 }
 
-/// Records request count and latency histogram per method and matched path pattern.
 async fn track_http_metrics(req: axum::extract::Request, next: Next) -> Response {
     let method = req.method().clone();
     let path = req
@@ -83,7 +79,6 @@ async fn track_http_metrics(req: axum::extract::Request, next: Next) -> Response
 }
 
 async fn health_check(State(state): State<Arc<AppState>>) -> Response {
-    // Cheap liveness probe that also verifies DB connectivity.
     let db_ok = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         sqlx::query("SELECT 1").execute(&state.db),
@@ -93,7 +88,15 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Response {
     .unwrap_or(false);
 
     if db_ok {
-        (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))).into_response()
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "ok",
+                "database": "sqlite",
+                "xlite_configured": state.config.xlite_url.is_some()
+            })),
+        )
+            .into_response()
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -106,7 +109,6 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Response {
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let db = init_db(&config.database_url).await?;
 
-    // If OPENROUTER_API_KEY is supplied via environment, sync it to the free token pool provider account
     if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
         let trimmed = key.trim();
         if !trimmed.is_empty() {
@@ -136,15 +138,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let pools = Arc::new(DashMap::new());
     let pool_members = Arc::new(DashMap::new());
     let profiles = Arc::new(DashMap::new());
+    let endpoints = Arc::new(DashMap::new());
     let quotas = Arc::new(QuotaLimiter::new());
     let hints = Arc::new(DashMap::new());
-
-    let hooks = Arc::new(SmartGateHooks {
-        db: db.clone(),
-        metrics: metrics.clone(),
-        quotas: quotas.clone(),
-        profiles: profiles.clone(),
-    });
 
     let feedback_provider = Arc::new(SmartGateFeedbackProvider {
         metrics: metrics.clone(),
@@ -154,16 +150,21 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         hints: hints.clone(),
     });
 
-    let engine = Arc::new(
-        UniGatewayEngine::builder()
-            .with_builtin_http_drivers()
-            .with_hooks(hooks)
-            .with_routing_feedback_provider(feedback_provider.clone())
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to build UniGateway engine: {}", e))?,
-    );
+    let app_state = Arc::new(AppState {
+        config: config.clone(),
+        db: db.clone(),
+        metrics,
+        pools,
+        pool_members,
+        profiles,
+        endpoints,
+        quotas,
+        hints,
+        feedback: feedback_provider,
+        http_client: AppState::build_http_client(),
+    });
 
-    crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles, &metrics).await?;
+    crate::sync::sync_state_and_xlite(&app_state).await?;
 
     // Spawn background sync worker for OpenRouter market catalog (every 6 hours)
     crate::sync::openrouter::spawn_openrouter_sync_worker(
@@ -171,82 +172,39 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         std::time::Duration::from_secs(6 * 3600),
     );
 
-    let warm_store = Arc::new(
-        crate::warm::WarmStore::try_with_config(&config.warm)
-            .map_err(|error| anyhow::anyhow!("failed to initialize Warm store: {error}"))?,
-    );
-    if let Some(interval) = config.warm.cleanup_interval() {
-        let cleanup_store = warm_store.clone();
-        tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
-            loop {
-                ticker.tick().await;
-                match cleanup_store.purge_expired().await {
-                    Ok(removed) if removed > 0 => {
-                        tracing::debug!(removed, "purged expired Warm sessions");
-                    }
-                    Ok(_) => {}
-                    Err(error) => {
-                        tracing::warn!(error = %error.message(), "failed to purge expired Warm sessions");
-                    }
-                }
-            }
-        });
-    }
-
-    // Periodic retention cleanup for shadow flighting evaluations (hourly).
-    {
-        let db = db.clone();
-        let retention_days = config.shadow.retention_days;
-        tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(3600));
-            loop {
-                ticker.tick().await;
-                let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days);
-                match sqlx::query("DELETE FROM shadow_evaluations WHERE timestamp < $1")
-                    .bind(cutoff)
-                    .execute(&db)
-                    .await
-                {
-                    Ok(result) => {
-                        let removed = result.rows_affected();
-                        if removed > 0 {
-                            tracing::info!(removed, "deleted expired shadow evaluations");
-                        }
-                    }
-                    Err(error) => {
-                        tracing::warn!(error = %error, "failed to delete expired shadow evaluations");
-                    }
-                }
-            }
-        });
-    }
-
-    let app_state = Arc::new(AppState {
-        config: config.clone(),
-        db,
-        metrics,
-        pools,
-        pool_members,
-        profiles,
-        quotas,
-        hints,
-        feedback: feedback_provider,
-        engine,
-        warm_store,
-        shadow_semaphore: Arc::new(tokio::sync::Semaphore::new(config.shadow.max_concurrent)),
+    // Keep the public free pool pointed at models the market still offers (needs the catalog above).
+    let heal_state = app_state.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        crate::free_token::heal_free_pool_from_market(&heal_state).await;
     });
+
+    // Periodic xlite catalog heartbeat (every 60s) if xlite_url is configured
+    if app_state.config.xlite_url.is_some() {
+        let sync_state = app_state.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                ticker.tick().await;
+                let _ = crate::sync::sync_state_and_xlite(&sync_state).await;
+            }
+        });
+    }
 
     let allowed_origins = config.cors_allowed_origins.clone();
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/api/health", get(health_check))
         .route("/metrics", get(metrics_handler))
+        .route(
+            "/api/gateway/usage",
+            post(crate::usage::xlite_usage_webhook),
+        )
         .nest(
             "/api/admin",
             crate::api::admin::admin_routes(app_state.clone()),
         )
-        .nest("/api/saas", crate::saas::routes(app_state.clone()))
         .route(
             "/api/free-token/claim",
             post(crate::free_token::claim_free_key),
@@ -265,15 +223,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             "/v1/chat/completions",
             post(crate::api::proxy::chat_completions),
         )
-        .route(
-            "/v1/zene/sessions/:session_id/publish",
-            post(crate::api::warm::publish),
-        )
-        .route(
-            "/v1/zene/sessions/:session_id",
-            delete(crate::api::warm::delete_session),
-        )
-        .route("/v1/zene/metrics", get(crate::api::warm::metrics))
         .route("/v1/messages", post(crate::api::proxy::anthropic_messages))
         .route("/v1/responses", post(crate::api::proxy::responses))
         .layer(
@@ -302,12 +251,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     axum::http::header::AUTHORIZATION,
                     axum::http::header::CONTENT_TYPE,
                     axum::http::header::ORIGIN,
-                    "X-Zene-Session-Id".parse().unwrap(),
-                    "X-Zene-Context-Epoch".parse().unwrap(),
-                    "X-Zene-Context-Delivery".parse().unwrap(),
-                    "X-Zene-Prefix-Hash".parse().unwrap(),
-                    "X-Zene-Tail-Start".parse().unwrap(),
-                    "X-Zene-Request-Id".parse().unwrap(),
                 ]),
         )
         .layer(middleware::from_fn(track_http_metrics))

@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
+use sqlx::{FromRow, SqlitePool};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -224,7 +224,7 @@ pub struct UpdateAdminFreeKeyReq {
     pub daily_spend_limit: Option<f64>,
 }
 
-pub async fn get_pool_config(db: &PgPool) -> Result<FreeTokenPoolConfig, sqlx::Error> {
+pub async fn get_pool_config(db: &SqlitePool) -> Result<FreeTokenPoolConfig, sqlx::Error> {
     sqlx::query_as::<_, FreeTokenPoolConfig>(
         "SELECT * FROM free_token_pool_config WHERE id = 'default'",
     )
@@ -322,6 +322,11 @@ pub async fn claim_free_key(
         "SELECT vm.name FROM virtual_models vm
          JOIN project_model_grants pmg ON pmg.virtual_model_id = vm.id
          WHERE pmg.project_id = $1 AND vm.enabled = TRUE
+           AND EXISTS (
+             SELECT 1 FROM model_pool_endpoints mpe2
+             JOIN endpoints e2 ON e2.id = mpe2.endpoint_id
+             WHERE mpe2.pool_id = vm.pool_id AND e2.enabled = TRUE
+           )
          ORDER BY CASE
              WHEN vm.name = 'smartgate/auto' THEN 0
              WHEN vm.name = 'smartgate/deepseek-r1:1' THEN 1
@@ -386,6 +391,11 @@ pub async fn get_free_pool_info(
          LEFT JOIN model_pool_endpoints mpe ON mpe.pool_id = vm.pool_id
          LEFT JOIN endpoints e ON e.id = mpe.endpoint_id
          WHERE pmg.project_id = $1 AND vm.enabled = TRUE
+           AND EXISTS (
+             SELECT 1 FROM model_pool_endpoints mpe2
+             JOIN endpoints e2 ON e2.id = mpe2.endpoint_id
+             WHERE mpe2.pool_id = vm.pool_id AND e2.enabled = TRUE
+           )
          ORDER BY CASE WHEN vm.name = 'free-chat' THEN 0 WHEN vm.name = 'auto' THEN 1 ELSE 2 END, vm.name",
     )
     .bind(&config.project_id)
@@ -496,12 +506,18 @@ pub async fn check_free_key(
             last_used_at,
             created_at,
         )) => {
+            let start_of_day = Utc::now()
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc();
             let usage: (i64, i64) = sqlx::query_as(
-                "SELECT COUNT(*)::bigint, COALESCE(SUM(total_tokens), 0)::bigint
+                "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)
                  FROM usage_logs
-                 WHERE key_id = $1 AND timestamp >= date_trunc('day', CURRENT_TIMESTAMP)",
+                 WHERE key_id = $1 AND timestamp >= $2",
             )
             .bind(&id)
+            .bind(start_of_day)
             .fetch_one(&state.db)
             .await
             .unwrap_or((0, 0));
@@ -544,7 +560,7 @@ pub async fn get_admin_free_pool(
     })?;
 
     let keys_stat: (i64, i64) = sqlx::query_as(
-        "SELECT COUNT(*)::bigint, COUNT(CASE WHEN enabled = TRUE THEN 1 END)::bigint
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN enabled = TRUE THEN 1 ELSE 0 END), 0)
          FROM api_keys WHERE project_id = $1",
     )
     .bind(&config.project_id)
@@ -552,19 +568,25 @@ pub async fn get_admin_free_pool(
     .await
     .unwrap_or((0, 0));
 
+    let start_of_day = Utc::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc();
     let usage_stat: (i64, i64) = sqlx::query_as(
-        "SELECT COUNT(*)::bigint, COALESCE(SUM(u.total_tokens), 0)::bigint
+        "SELECT COUNT(*), COALESCE(SUM(u.total_tokens), 0)
          FROM usage_logs u
          JOIN api_keys k ON k.id = u.key_id
-         WHERE k.project_id = $1 AND u.timestamp >= date_trunc('day', CURRENT_TIMESTAMP)",
+         WHERE k.project_id = $1 AND u.timestamp >= $2",
     )
     .bind(&config.project_id)
+    .bind(start_of_day)
     .fetch_one(&state.db)
     .await
     .unwrap_or((0, 0));
 
     let active_ep_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint
+        "SELECT COUNT(*)
          FROM model_pool_endpoints mpe
          JOIN endpoints e ON e.id = mpe.endpoint_id
          WHERE mpe.pool_id = $1 AND e.enabled = TRUE",
@@ -709,6 +731,7 @@ pub async fn update_admin_free_pool_settings(
         .bind(key)
         .execute(&state.db)
         .await;
+        let _ = crate::sync::sync_state_and_xlite(&state).await;
     }
 
     Ok(Json(ApiResponse::success(FreeTokenPoolConfigView::from(
@@ -789,12 +812,18 @@ pub async fn list_admin_free_keys(
         created_at,
     ) in keys
     {
+        let start_of_day = Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc();
         let usage: (i64, i64) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint, COALESCE(SUM(total_tokens), 0)::bigint
+            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)
              FROM usage_logs
-             WHERE key_id = $1 AND timestamp >= date_trunc('day', CURRENT_TIMESTAMP)",
+             WHERE key_id = $1 AND timestamp >= $2",
         )
         .bind(&id)
+        .bind(start_of_day)
         .fetch_one(&state.db)
         .await
         .unwrap_or((0, 0));
@@ -929,7 +958,7 @@ pub async fn sync_openrouter_free_models(
         "INSERT INTO provider_accounts (id, org_id, name, provider_type, protocol, base_url, api_key, status)
          VALUES ('pa_openrouter_free', $1, 'OpenRouter Free Pool', 'openrouter', 'openai', 'https://openrouter.ai/api/v1', $2, 'active')
          ON CONFLICT (id) DO UPDATE SET
-             api_key = EXCLUDED.api_key,
+             api_key = CASE WHEN EXCLUDED.api_key <> '' THEN EXCLUDED.api_key ELSE provider_accounts.api_key END,
              status = 'active',
              updated_at = CURRENT_TIMESTAMP",
     )
@@ -1020,17 +1049,31 @@ pub async fn sync_openrouter_free_models(
         }
     }
 
-    // 4. Fetch all free models from catalog
+    // 4. Fetch all free, text-out models from catalog (audio/image routers cannot serve chat completions)
     let free_models: Vec<(String, String, i32)> = sqlx::query_as(
         "SELECT id, name, context_length
          FROM openrouter_market_models
-         WHERE is_free = 1 OR id LIKE '%:free'
+         WHERE (is_free = 1 OR id LIKE '%:free')
+           AND id NOT LIKE 'openrouter/%'
+           AND id NOT LIKE '%content-safety%'
+           AND (architecture_json IS NULL OR architecture_json LIKE '%\"output_modalities\":[\"text\"]%')
          ORDER BY id ASC",
     )
     .fetch_all(&state.db)
     .await?;
 
     let mut synced_count = 0;
+
+    // Disable every previously synced free endpoint first; the loop below re-enables the ones
+    // that are still offered as free upstreams, so retired models stop being routed to.
+    if !free_models.is_empty() {
+        sqlx::query(
+            "UPDATE endpoints SET enabled = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE account_id = 'pa_openrouter_free'",
+        )
+        .execute(&state.db)
+        .await?;
+    }
 
     for (model_id, model_name, context_len) in &free_models {
         let ep_id = format!("ep_or_{}", sanitize_id(model_id));
@@ -1153,16 +1196,8 @@ pub async fn sync_openrouter_free_models(
         .await?;
     }
 
-    // 6. Push updated pool state into UniGateway and reload in-memory structures
-    crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await?;
+    // 6. Push updated pool state into xlite and reload in-memory structures
+    crate::sync::sync_state_and_xlite(state).await?;
 
     tracing::info!(
         target: "smartgate.free_token",
@@ -1171,6 +1206,22 @@ pub async fn sync_openrouter_free_models(
     );
 
     Ok(synced_count)
+}
+
+/// Startup self-heal: the seeded free upstream models get retired by OpenRouter over time, which
+/// leaves the public free pool with nothing routable until an admin re-syncs by hand.
+pub async fn heal_free_pool_from_market(state: &AppState) {
+    match sync_openrouter_free_models(state, None).await {
+        Ok(count) => tracing::info!(
+            target: "smartgate.free_token",
+            count, "synced free pool against the live OpenRouter free catalog"
+        ),
+        Err(err) => tracing::warn!(
+            target: "smartgate.free_token",
+            error = %err,
+            "free pool startup sync failed; keeping the stored configuration"
+        ),
+    }
 }
 
 #[cfg(test)]

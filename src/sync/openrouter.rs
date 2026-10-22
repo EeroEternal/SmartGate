@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
@@ -40,15 +40,14 @@ fn parse_price_per_1m(s: Option<&String>) -> f64 {
     match s {
         Some(val) => {
             let raw = val.parse::<f64>().unwrap_or(0.0) * 1_000_000.0;
-            // Round to 4 decimal places to eliminate floating point precision artifacts (e.g. 3.5999999999999996)
             (raw * 10_000.0).round() / 10_000.0
         }
         None => 0.0,
     }
 }
 
-/// Syncs the public OpenRouter models catalog and saves it into the database.
-pub async fn sync_openrouter_market(db: &PgPool) -> anyhow::Result<usize> {
+/// Syncs the public OpenRouter models catalog and saves it into the SQLite database.
+pub async fn sync_openrouter_market(db: &SqlitePool) -> anyhow::Result<usize> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()?;
@@ -173,7 +172,7 @@ pub async fn sync_openrouter_market(db: &PgPool) -> anyhow::Result<usize> {
 }
 
 /// Spawns a background task that periodically syncs OpenRouter market models (e.g. every 6 hours).
-pub fn spawn_openrouter_sync_worker(db: PgPool, interval: Duration) {
+pub fn spawn_openrouter_sync_worker(db: SqlitePool, interval: Duration) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(interval);
         loop {

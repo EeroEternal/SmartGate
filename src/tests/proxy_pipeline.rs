@@ -1,16 +1,6 @@
-//! End-to-end regression coverage for the hot proxy request path.
-//!
-//! `chat_completions` is the entry point every client request takes, but exercising
-//! it needs a real PostgreSQL database and a reachable upstream. This test builds the
-//! same `AppState` the server builds, points one seeded endpoint at an in-process mock
-//! upstream, and verifies the observable contract: the upstream call, the usage row,
-//! priced/unpriced cost accounting, and model authorization.
-//!
-//! When `SMARTGATE_TEST_DATABASE_URL` is unset the test prints a one-line note and
-//! returns, so `cargo test --lib` keeps working for developers without a database.
+//! End-to-end regression coverage for the hot proxy request path using SQLite.
 
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -19,18 +9,14 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use dashmap::DashMap;
 use serde_json::{json, Value};
-use sqlx::PgPool;
-use unigateway_sdk::core::UniGatewayEngine;
+use sqlx::SqlitePool;
 
 use crate::auth::{hash_token, AuthContext};
-use crate::config::{AppState, Config, ShadowConfig};
+use crate::config::{AppState, Config};
 use crate::models::{ApiKey, Project};
 use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
-use crate::usage::SmartGateHooks;
-use crate::warm::{WarmConfig, WarmStore};
 
-const TEST_DATABASE_URL_ENV: &str = "SMARTGATE_TEST_DATABASE_URL";
 const MOCK_REPLY: &str = "pong from mock upstream";
 const PROVIDER_KEY: &str = "sk-mock-provider-key";
 const STRATEGY: &str = "capability_aware";
@@ -46,7 +32,6 @@ const VIRTUAL_MODEL_ID: &str = "vm-proxy-test";
 const VIRTUAL_MODEL_NAME: &str = "mock-virtual-model";
 const UPSTREAM_MODEL_ID: &str = "mock-model";
 
-/// One request observed by the mock upstream.
 #[derive(Debug, Clone)]
 struct RecordedRequest {
     authorization: Option<String>,
@@ -79,7 +64,6 @@ impl MockUpstream {
     }
 }
 
-/// Record the inbound request, then answer with a fixed OpenAI chat completion.
 async fn mock_upstream_handler(
     State(state): State<MockUpstreamState>,
     headers: HeaderMap,
@@ -106,7 +90,6 @@ async fn mock_upstream_handler(
     .into_response()
 }
 
-/// Bind the mock upstream to an OS-assigned port and start serving in the background.
 async fn start_mock_upstream() -> MockUpstream {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let app = Router::new()
@@ -130,21 +113,15 @@ async fn start_mock_upstream() -> MockUpstream {
     }
 }
 
-/// Build `AppState` the way `server::run` does, then sync the seeded pool config.
-async fn build_app_state(database_url: String, db: PgPool) -> Arc<AppState> {
+async fn build_app_state(database_url: String, db: SqlitePool) -> Arc<AppState> {
     let metrics = Arc::new(DashMap::new());
     let pools = Arc::new(DashMap::new());
     let pool_members = Arc::new(DashMap::new());
     let profiles = Arc::new(DashMap::new());
+    let endpoints = Arc::new(DashMap::new());
     let quotas = Arc::new(QuotaLimiter::new());
     let hints = Arc::new(DashMap::new());
 
-    let hooks = Arc::new(SmartGateHooks {
-        db: db.clone(),
-        metrics: metrics.clone(),
-        quotas: quotas.clone(),
-        profiles: profiles.clone(),
-    });
     let feedback = Arc::new(SmartGateFeedbackProvider {
         metrics: metrics.clone(),
         pools: pools.clone(),
@@ -152,48 +129,37 @@ async fn build_app_state(database_url: String, db: PgPool) -> Arc<AppState> {
         profiles: profiles.clone(),
         hints: hints.clone(),
     });
-    let engine = Arc::new(
-        UniGatewayEngine::builder()
-            .with_builtin_http_drivers()
-            .with_hooks(hooks)
-            .with_routing_feedback_provider(feedback.clone())
-            .build()
-            .expect("build UniGateway engine"),
-    );
-    crate::sync::sync_all_pools(&engine, &db, &pools, &pool_members, &profiles, &metrics)
-        .await
-        .expect("sync pools from the seeded database");
-    let warm_store = Arc::new(
-        WarmStore::try_with_config(&WarmConfig::default()).expect("initialize Warm store"),
-    );
 
-    Arc::new(AppState {
+    let state = Arc::new(AppState {
         config: Config {
             addr: "127.0.0.1:0".parse().expect("test listen address"),
             database_url,
             admin_token: "test-admin-token".to_string(),
             cors_allowed_origins: Vec::new(),
-            resend_api_key: None,
-            resend_from_email: None,
-            warm: WarmConfig::default(),
-            shadow: ShadowConfig::default(),
+            xlite_url: None,
+            xlite_admin_password: "test-admin-token".to_string(),
+            xlite_internal_key: "sk-smartgate-xlite-internal".to_string(),
         },
         db,
         metrics,
         pools,
         pool_members,
         profiles,
+        endpoints,
         quotas,
         hints,
         feedback,
-        engine,
-        warm_store,
-        shadow_semaphore: Arc::new(tokio::sync::Semaphore::new(3)),
-    })
+        http_client: AppState::build_http_client(),
+    });
+
+    crate::sync::sync_state_and_xlite(&state)
+        .await
+        .expect("sync pools from the seeded database");
+
+    state
 }
 
-/// Seed one org/project/key/account/endpoint/pool/model/grants chain.
-async fn seed(db: &PgPool, upstream_base_url: &str) {
+async fn seed(db: &SqlitePool, upstream_base_url: &str) {
     sqlx::query("INSERT INTO orgs (id, name) VALUES ($1, $2)")
         .bind(ORG_ID)
         .bind("Proxy test org")
@@ -291,7 +257,7 @@ async fn seed(db: &PgPool, upstream_base_url: &str) {
         .expect("insert project model grant");
 }
 
-async fn auth_context(db: &PgPool) -> AuthContext {
+async fn auth_context(db: &SqlitePool) -> AuthContext {
     let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = $1")
         .bind(PROJECT_ID)
         .fetch_one(db)
@@ -305,7 +271,6 @@ async fn auth_context(db: &PgPool) -> AuthContext {
     AuthContext { project, api_key }
 }
 
-/// Invoke the proxy handler exactly the way the router does, then read the body.
 async fn call_chat_completions(
     state: &Arc<AppState>,
     auth: AuthContext,
@@ -338,7 +303,7 @@ struct UsageRow {
     output_price_snapshot: f64,
 }
 
-async fn latest_usage_row(db: &PgPool, pricing_source: &str) -> UsageRow {
+async fn latest_usage_row(db: &SqlitePool, pricing_source: &str) -> UsageRow {
     sqlx::query_as::<_, UsageRow>(
         "SELECT metadata, estimated_cost, input_price_snapshot, output_price_snapshot
          FROM usage_logs
@@ -357,60 +322,18 @@ fn usage_metadata(row: &UsageRow) -> Value {
     serde_json::from_str(row.metadata.as_deref().expect("usage_logs metadata")).expect("metadata")
 }
 
-/// A unique schema name so a shared test database cannot be clobbered by another run.
-fn unique_schema_name() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock after the Unix epoch")
-        .as_nanos();
-    format!("sg_proxy_test_{}_{}", std::process::id(), nanos)
-}
-
-/// Point the connection's `search_path` at the isolated schema so `init_db` migrates there.
-fn with_search_path(database_url: &str, schema: &str) -> String {
-    let separator = if database_url.contains('?') { '&' } else { '?' };
-    format!("{database_url}{separator}options=-c%20search_path%3D{schema}")
-}
-
-async fn drop_schema(db: &PgPool, schema: &str) {
-    sqlx::query(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
-        .execute(db)
-        .await
-        .expect("drop isolated test schema");
-}
-
 #[tokio::test]
 async fn chat_completions_proxies_to_the_pool_and_records_usage() {
-    let database_url = match std::env::var(TEST_DATABASE_URL_ENV) {
-        Ok(url) if !url.trim().is_empty() => url,
-        _ => {
-            eprintln!(
-                "skipping proxy pipeline test: set {TEST_DATABASE_URL_ENV} to a disposable PostgreSQL URL to run it"
-            );
-            return;
-        }
-    };
-
-    let schema = unique_schema_name();
-    let admin = PgPool::connect(&database_url)
+    let db_url = "sqlite::memory:";
+    let db = crate::db::init_db(db_url)
         .await
-        .expect("connect to the test database");
-    sqlx::query(&format!("CREATE SCHEMA \"{schema}\""))
-        .execute(&admin)
-        .await
-        .expect("create the isolated test schema");
-    admin.close().await;
-
-    let scoped_url = with_search_path(&database_url, &schema);
-    let db = crate::db::init_db(&scoped_url)
-        .await
-        .expect("run migrations in the isolated schema");
+        .expect("run migrations in in-memory SQLite");
 
     let upstream = start_mock_upstream().await;
     seed(&db, &upstream.base_url).await;
 
     // --- Priced endpoint: happy path, upstream fan-out and usage attribution ---
-    let state = build_app_state(scoped_url.clone(), db.clone()).await;
+    let state = build_app_state(db_url.to_string(), db.clone()).await;
     let (status, body) =
         call_chat_completions(&state, auth_context(&db).await, VIRTUAL_MODEL_NAME).await;
     assert_eq!(status, StatusCode::OK, "proxy response body: {body}");
@@ -473,7 +396,7 @@ async fn chat_completions_proxies_to_the_pool_and_records_usage() {
     .expect("clear endpoint prices");
 
     upstream.clear();
-    let unpriced_state = build_app_state(scoped_url, db.clone()).await;
+    let unpriced_state = build_app_state(db_url.to_string(), db.clone()).await;
     let (status, body) =
         call_chat_completions(&unpriced_state, auth_context(&db).await, VIRTUAL_MODEL_NAME).await;
     assert_eq!(
@@ -501,6 +424,5 @@ async fn chat_completions_proxies_to_the_pool_and_records_usage() {
     assert_eq!(unpriced.input_price_snapshot, 0.0);
     assert_eq!(unpriced.output_price_snapshot, 0.0);
 
-    drop_schema(&db, &schema).await;
     db.close().await;
 }

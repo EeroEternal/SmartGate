@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Copy, Check, Zap, RefreshCw } from 'lucide-react'
-import BrandMark from '../../components/BrandMark'
-import { LanguageSwitcher } from '../../components/LanguageSwitcher'
-import Select, { type Option } from '../../components/Select'
-import { useI18n } from '../../lib/i18n'
-import { apiUrl } from '../../lib/api'
+import BrandMark from '../components/BrandMark'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import Select, { type Option } from '../components/Select'
+import { useI18n } from '../lib/i18n'
+import { apiUrl } from '../lib/api'
 
 interface ClaimResult {
   api_key: string
@@ -34,11 +34,9 @@ export default function LandingPage() {
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
 
-  // Available free models & selected model (defaults to smartgate/auto)
   const [modelOptions, setModelOptions] = useState<Option[]>(defaultModels)
   const [selectedModel, setSelectedModel] = useState<string>('smartgate/auto')
 
-  // Copy feedback states
   const [copiedKey, setCopiedKey] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
   const [copiedModel, setCopiedModel] = useState(false)
@@ -48,14 +46,12 @@ export default function LandingPage() {
     ? `${window.location.origin}/v1`
     : 'https://smartgate.run/v1'
 
-  // Update default models when language changes
   useEffect(() => {
     setModelOptions((prev) =>
       prev.map((opt) => (opt.id === 'smartgate/auto' ? { ...opt, name: autoModelLabel } : opt))
     )
   }, [autoModelLabel])
 
-  // Fetch live free models from backend
   useEffect(() => {
     fetch(apiUrl('/api/free-token/info'))
       .then((res) => res.json())
@@ -78,12 +74,9 @@ export default function LandingPage() {
           }
         }
       })
-      .catch(() => {
-        // Keep defaultModels fallback
-      })
+      .catch(() => {})
   }, [autoModelLabel])
 
-  // Restore saved key from local storage if available
   useEffect(() => {
     try {
       const saved = localStorage.getItem('sg_free_claimed')
@@ -188,7 +181,6 @@ Model: ${selectedModel}`
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-sans flex flex-col justify-between selection:bg-zinc-900 selection:text-white">
-      {/* Top Bar with Language Switcher */}
       <header className="w-full max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2 font-bold text-zinc-900">
           <BrandMark className="h-5 w-5" />
@@ -197,9 +189,7 @@ Model: ${selectedModel}`
         <LanguageSwitcher size="sm" />
       </header>
 
-      {/* Center Body */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 w-full max-w-xl mx-auto text-center">
-        {/* Logo & Brand */}
         <div className="space-y-2 mb-8">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-zinc-950">
             SmartGate
@@ -209,7 +199,6 @@ Model: ${selectedModel}`
           </p>
         </div>
 
-        {/* State 1: Single Button to Get API Key */}
         {!claimResult ? (
           <div className="space-y-4 w-full flex flex-col items-center">
             {claimError && (
@@ -229,10 +218,8 @@ Model: ${selectedModel}`
             </button>
           </div>
         ) : (
-          /* State 2: Clean 3-Item Credential Box: API Key, Base URL, Model Name */
           <div className="w-full space-y-5 text-left">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 sm:p-6 space-y-3.5 shadow-sm">
-              {/* API Key */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                   {t('free_token.api_key')}
@@ -250,7 +237,6 @@ Model: ${selectedModel}`
                 </div>
               </div>
 
-              {/* Base URL */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                   {t('free_token.base_url')}
@@ -268,7 +254,6 @@ Model: ${selectedModel}`
                 </div>
               </div>
 
-              {/* Model Dropdown (smartgate/auto, smartgate/deepseek-r1:1, etc.) */}
               <div>
                 <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                   {t('free_token.select_model_label')}
@@ -294,7 +279,6 @@ Model: ${selectedModel}`
                 </div>
               </div>
 
-              {/* Action buttons: Copy All & New Key */}
               <div className="pt-2 flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -319,7 +303,6 @@ Model: ${selectedModel}`
         )}
       </main>
 
-      {/* Footer */}
       <footer className="w-full text-center py-6 text-xs text-zinc-400">
         © SmartGate
       </footer>

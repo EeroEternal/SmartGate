@@ -1,11 +1,7 @@
-import { lazy, Suspense, useState, useEffect, type ComponentType, type ReactNode } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { LayoutDashboard, Database, ShieldCheck, Activity, Layers, Box, Zap, Menu, X } from 'lucide-react'
-import LandingPage from './pages/saas/LandingPage'
-import AuthPage from './pages/saas/AuthPage'
-import SaasDashboard from './pages/saas/SaasDashboard'
-import { SaasLayout } from './pages/saas/SaasLayout'
-import { ModelServicesProvider } from './pages/saas/useModelServices'
+import LandingPage from './pages/LandingPage'
 import AdminTokenGate from './components/AdminTokenGate'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import HealthBadge from './components/HealthBadge'
@@ -15,24 +11,6 @@ import BrandMark from './components/BrandMark'
 import { I18nProvider, useI18n } from './lib/i18n'
 import { LanguageSwitcher } from './components/LanguageSwitcher'
 
-/**
- * Page-level code splitting. The console and dashboard only ship on first visit, which
- * keeps the initial bundle to the shell plus the landing/auth pages.
- */
-const lazyNamed = <T extends Record<string, ComponentType>>(loader: () => Promise<T>, name: keyof T) =>
-  lazy(() => loader().then((module) => ({ default: module[name] })))
-
-const AnalyticsPage = lazyNamed(() => import('./pages/saas/AnalyticsPage'), 'AnalyticsPage')
-const CodexPage = lazyNamed(() => import('./pages/saas/CodexPage'), 'CodexPage')
-const EvaluationPage = lazyNamed(() => import('./pages/saas/EvaluationPage'), 'EvaluationPage')
-const KeysPage = lazyNamed(() => import('./pages/saas/KeysPage'), 'KeysPage')
-const NewServicePage = lazyNamed(() => import('./pages/saas/NewServicePage'), 'NewServicePage')
-const QualityPage = lazyNamed(() => import('./pages/saas/QualityPage'), 'QualityPage')
-const ServiceDetailsPage = lazyNamed(() => import('./pages/saas/ServiceDetailsPage'), 'ServiceDetailsPage')
-const ServicesPage = lazyNamed(() => import('./pages/saas/ServicesPage'), 'ServicesPage')
-const UsagePage = lazyNamed(() => import('./pages/saas/UsagePage'), 'UsagePage')
-const OpenRouterPage = lazy(() => import('./pages/saas/OpenRouterPage'))
-const ProvidersPage = lazy(() => import('./pages/saas/ProvidersPage'))
 const Providers = lazy(() => import('./pages/Providers'))
 const Pools = lazy(() => import('./pages/Pools'))
 const PoolDetails = lazy(() => import('./pages/PoolDetails'))
@@ -135,8 +113,6 @@ function Dashboard() {
 function Sidebar() {
   const { t } = useI18n()
   const location = useLocation()
-  // The admin console lives under /admin so that its links do not collide with the
-  // marketing routes; the dashboard is only active on its exact path.
   const isActive = (path: string) =>
     path === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(path)
 
@@ -234,21 +210,6 @@ function PageLoading() {
   return <div className="p-8 text-sm text-zinc-500">{t('common.loading')}</div>
 }
 
-/** Marketing/app page shell: keeps the sidebar and header while a route chunk loads. */
-function SaasPage({ children }: { children: ReactNode }) {
-  return (
-    <SaasLayout>
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoading />}>{children}</Suspense>
-      </ErrorBoundary>
-    </SaasLayout>
-  )
-}
-
-/**
- * Keeps the pre-/admin links (`/pools/<id>` and friends) working by forwarding them to
- * the canonical admin console URL, splat included.
- */
 function LegacyAdminRedirect({ to }: { to: string }) {
   const params = useParams()
   const rest = params['*']
@@ -259,7 +220,6 @@ function AdminConsole() {
   const { t } = useI18n()
   const location = useLocation()
   const [navOpen, setNavOpen] = useState(false)
-  // Close the mobile nav drawer as soon as a link navigates to a new page.
   useEffect(() => setNavOpen(false), [location.pathname])
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden font-sans">
@@ -303,7 +263,6 @@ function AdminConsole() {
           </div>
         </header>
         <main className="p-4 lg:p-8">
-          {/* Paths below are relative to the /admin mount point. */}
           <ErrorBoundary>
             <Suspense fallback={<PageLoading />}>
               <Routes>
@@ -331,23 +290,6 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/register" element={<AuthPage mode="register" />} />
-          {/* /app renders SaasDashboard directly (without the SaasPage/SaasLayout wrapper
-              used by the other routes), so it needs its own provider mount. */}
-          <Route path="/app" element={<ModelServicesProvider><SaasDashboard /></ModelServicesProvider>} />
-          <Route path="/app/services" element={<SaasPage><ServicesPage /></SaasPage>} />
-          <Route path="/app/services/new" element={<SaasPage><NewServicePage /></SaasPage>} />
-          <Route path="/app/services/:id" element={<SaasPage><ServiceDetailsPage /></SaasPage>} />
-          <Route path="/app/providers" element={<SaasPage><ProvidersPage /></SaasPage>} />
-          <Route path="/app/keys" element={<SaasPage><KeysPage /></SaasPage>} />
-          <Route path="/app/openrouter" element={<SaasPage><OpenRouterPage /></SaasPage>} />
-          <Route path="/app/evaluation" element={<SaasPage><EvaluationPage /></SaasPage>} />
-          <Route path="/app/codex" element={<SaasPage><CodexPage /></SaasPage>} />
-          <Route path="/app/analytics" element={<SaasPage><AnalyticsPage /></SaasPage>} />
-          <Route path="/app/quality" element={<SaasPage><QualityPage /></SaasPage>} />
-          <Route path="/app/usage" element={<SaasPage><UsagePage /></SaasPage>} />
-          <Route path="/app/savings" element={<Navigate to="/app/usage" replace />} />
           <Route
             path="/admin/*"
             element={
@@ -356,8 +298,6 @@ function App() {
               </AdminTokenGate>
             }
           />
-          {/* Legacy admin URLs: these used to mount the console directly, which left the
-              nested console routes unable to match, so they rendered the dashboard. */}
           <Route path="/providers" element={<LegacyAdminRedirect to="/admin/providers" />} />
           <Route path="/pools/*" element={<LegacyAdminRedirect to="/admin/pools" />} />
           <Route path="/virtual-models" element={<LegacyAdminRedirect to="/admin/virtual-models" />} />

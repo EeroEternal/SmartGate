@@ -17,11 +17,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+RUN mkdir -p /app/data && chown -R 1000:1000 /app
 COPY --from=builder /app/target/release/smartgate /usr/local/bin/smartgate
 COPY --from=web-builder /web/dist /app/web/dist
 ENV RUST_LOG=smartgate=info,tower_http=info
+ENV DATABASE_URL=sqlite:///app/data/smartgate.db?mode=rwc
 EXPOSE 8080
-USER 1000:1000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD curl -fsS http://localhost:8080/health || exit 1
 CMD ["smartgate"]

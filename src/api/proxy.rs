@@ -1,7 +1,7 @@
-//! SmartGate chat proxy: Control (auth/budget) → Cost slim → route hints → data plane.
+//! SmartGate data-plane router & proxy:
+//! Control (auth/budget/quota) → Cost slim → Heuristic complexity scoring (Auto/Pro/Flash)
+//! → xlite high-performance forwarding (with direct multi-endpoint failover fallback).
 
-use crate::api::shadow::{extract_json_preview, run_shadow, ShadowJob};
-use crate::api::warm::warm_error;
 use crate::auth::{resolve_authorized_virtual_model, AuthContext};
 use crate::config::AppState;
 use crate::models::{ModelPool, VirtualModel};
@@ -11,34 +11,30 @@ use crate::policy::{
     extract_session_id, extract_user_prompt_preview, format_prefix_hash, get_sticky_endpoint,
     heuristic_difficulty, next_turn_index, prefix_stable, request_has_tools, resolve_prefix_hash,
     set_hint, slim_tool_messages, spent_today_for_key, tool_message_chars, BudgetOutcome,
-    HintGuard, RouteHint, SlimConfig, JUDGE_TRIGGER_MAX, JUDGE_TRIGGER_MIN,
+    HintGuard, RouteHint, SlimConfig, DIFFICULTY_HIGH_THRESHOLD, DIFFICULTY_MEDIUM_THRESHOLD,
 };
 use crate::quota::{QuotaLimits, QuotaPermit};
 use crate::routing::canonicalize_strategy;
-use crate::warm::{
-    install_session_gateway_context, parse_context_with_headers, strip_context, Delivery,
-    SessionKey, WarmContext, WarmError,
-};
+use crate::sync::{normalize_base_url, SyncEndpointRow};
+use crate::usage::{record_attempt_metric, record_request_usage, UsageRecordInput};
 use axum::{
+    body::Body,
     extract::{Json, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
+use futures_util::StreamExt;
+use std::collections::HashMap;
 use std::sync::Arc;
-use unigateway_sdk::core::{ExecutionTarget, ProxyChatRequest};
-use unigateway_sdk::host::{HostDispatchOutcome, HostError};
-use unigateway_sdk::protocol::{ProtocolHttpResponse, ProtocolResponseBody};
-
-use super::host::SmartGatePoolHost;
-use super::judge::{classify_with_judge, difficulty_tier, DifficultyTier, JudgeScope};
+use std::time::Instant;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ChatProtocol {
-    OpenAi,
-    Anthropic,
+    OpenAiChat,
+    AnthropicMessages,
+    OpenAiResponses,
 }
 
-/// Unwraps a stage result, returning the prepared error response from the handler.
 macro_rules! or_return {
     ($stage:expr) => {
         match $stage {
@@ -48,54 +44,22 @@ macro_rules! or_return {
     };
 }
 
-/// What the shadow stage needs to mirror a sampled request in the background.
-struct ShadowRequest<'a> {
-    state: &'a Arc<AppState>,
-    auth: &'a AuthContext,
-    headers: &'a HeaderMap,
-    payload: &'a serde_json::Value,
-    request_preview: &'a str,
-    main_preview: &'a str,
-    is_openai: bool,
-}
-
-/// Mirror one sampled request to the shadow model, or count a drop when no permit is
-/// available. Best-effort by design: the user-facing response is never affected.
-fn spawn_shadow(request: ShadowRequest<'_>, shadow_model_name: String) {
-    match request.state.shadow_semaphore.clone().try_acquire_owned() {
-        Ok(permit) => {
-            let job = ShadowJob {
-                state: Arc::clone(request.state),
-                auth: request.auth.clone(),
-                headers: request.headers.clone(),
-                payload: request.payload.clone(),
-                shadow_model_name,
-                request_preview: request.request_preview.to_string(),
-                main_preview: request.main_preview.to_string(),
-                is_openai: request.is_openai,
-            };
-            tokio::spawn(async move {
-                let _permit = permit;
-                run_shadow(job).await;
-            });
-        }
-        Err(_) => {
-            metrics::counter!("shadow_dropped_total").increment(1);
-        }
+fn difficulty_tier_str(difficulty: f64) -> &'static str {
+    if difficulty >= DIFFICULTY_HIGH_THRESHOLD {
+        "complex"
+    } else if difficulty >= DIFFICULTY_MEDIUM_THRESHOLD {
+        "medium"
+    } else {
+        "simple"
     }
 }
 
-/// Everything the data plane needs to know about the requested model service.
 struct PoolContext {
     virtual_model: VirtualModel,
     pool: Option<ModelPool>,
     strategy: String,
 }
 
-/// Resolve the caller's model service, its pool and its canonical strategy.
-///
-/// Shared by every proxy surface so authorization and pool lookup cannot drift
-/// between the chat completions, messages and responses entry points.
 async fn resolve_pool_context(
     state: &AppState,
     auth: &AuthContext,
@@ -151,7 +115,6 @@ async fn resolve_pool_context(
     })
 }
 
-/// Result of the progressive spend-budget stage.
 struct BudgetGate {
     outcome: BudgetOutcome,
     spent: f64,
@@ -159,10 +122,6 @@ struct BudgetGate {
     downshift: bool,
 }
 
-/// Enforce the key/project daily spend budget, or answer 429 with the budget headers.
-///
-/// `include_detail` keeps the verbose body the chat proxy has always returned; the
-/// responses surface has always used the short form.
 async fn enforce_spend_budget(
     state: &AppState,
     auth: &AuthContext,
@@ -175,7 +134,6 @@ async fn enforce_spend_budget(
     let spent = match spent_today_for_key(&state.db, &auth.api_key.id).await {
         Ok(spent) => spent,
         Err(error) => {
-            // Fail closed: without spend data we cannot enforce budgets.
             tracing::error!("Database error fetching spend for budget check: {}", error);
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -205,10 +163,6 @@ async fn enforce_spend_budget(
     })
 }
 
-/// Reserve the request against the key and project rate/concurrency limits.
-///
-/// Called before any auxiliary dispatch so judge usage counts towards the same
-/// admission decision, and the returned permit is held until the final response.
 async fn acquire_quota(state: &AppState, auth: &AuthContext) -> Result<QuotaPermit, Response> {
     let key_limits = QuotaLimits {
         rpm_limit: auth.api_key.rpm_limit.map(|value| value as u32),
@@ -239,9 +193,7 @@ async fn acquire_quota(state: &AppState, auth: &AuthContext) -> Result<QuotaPerm
     ))
 }
 
-/// Prompt-derived inputs shared by the routing hints and the recorded decision.
 struct RequestSignals {
-    prompt_text: String,
     input_tokens: u32,
     output_tokens: u32,
     difficulty: f64,
@@ -257,16 +209,11 @@ fn request_signals(payload: &serde_json::Value) -> RequestSignals {
         difficulty: heuristic_difficulty(payload),
         has_tools: request_has_tools(payload),
         signals: extract_complexity_signals(payload),
-        prompt_text,
     }
 }
 
-/// Stamp the metadata keys every protocol must carry for usage attribution.
-///
-/// Chat, messages and responses requests expose the same metadata map, so all three
-/// surfaces record identical attribution keys.
 fn stamp_core_metadata(
-    metadata: &mut std::collections::HashMap<String, String>,
+    metadata: &mut HashMap<String, String>,
     auth: &AuthContext,
     virtual_model: &VirtualModel,
     strategy: &str,
@@ -283,16 +230,26 @@ fn stamp_core_metadata(
     metadata.insert("output_tokens_est".to_string(), output_tokens.to_string());
 }
 
-/// Copy the budget headers onto a data-plane response.
-fn apply_budget_headers(response: &mut Response, gate: &BudgetGate) {
+fn apply_budget_headers(response: &mut Response, gate: &BudgetGate, slimmed_chars: usize) {
     for (name, value) in budget_headers(&gate.outcome, gate.spent, gate.limit) {
         if let Some(name) = name {
             response.headers_mut().insert(name, value);
         }
     }
+    if gate.downshift {
+        if let Ok(value) = HeaderValue::from_str("soft") {
+            response.headers_mut().insert("x-smartgate-budget", value);
+        }
+    }
+    if slimmed_chars > 0 {
+        if let Ok(value) = HeaderValue::from_str(&slimmed_chars.to_string()) {
+            response
+                .headers_mut()
+                .insert("x-smartgate-slim-chars", value);
+        }
+    }
 }
 
-/// Outcome of the chat-only context-slim stage.
 struct SlimStats {
     tool_chars_before: usize,
     slimmed_chars: usize,
@@ -300,17 +257,7 @@ struct SlimStats {
     dry_run: bool,
 }
 
-/// Trim oversized tool messages in place when the resolved pool enables it.
-///
-/// Returns the counters recorded in usage metadata. The stage is skipped entirely for
-/// Zene Warm snapshots (their context is already assembled) and while the pool is
-/// unknown, and `dry_run` defaults to `true` so a skipped or dry-run pool reports the
-/// same values as before.
-fn slim_request_context(
-    payload: &mut serde_json::Value,
-    warm_active: bool,
-    pool: Option<&ModelPool>,
-) -> SlimStats {
+fn slim_request_context(payload: &mut serde_json::Value, pool: Option<&ModelPool>) -> SlimStats {
     let tool_chars_before = tool_message_chars(payload);
     let mut stats = SlimStats {
         tool_chars_before,
@@ -318,9 +265,6 @@ fn slim_request_context(
         tools_touched: 0,
         dry_run: true,
     };
-    if warm_active {
-        return stats;
-    }
     let Some(pool) = pool else {
         return stats;
     };
@@ -338,52 +282,11 @@ fn slim_request_context(
     stats.dry_run = pool.tool_trim_dry_run != 0;
     if !stats.dry_run && result.modified {
         *payload = result.body;
-    } else if result.modified {
-        tracing::info!(
-            target: "smartgate.slim",
-            tool_chars_before = stats.tool_chars_before,
-            slimmed_chars = stats.slimmed_chars,
-            tools_touched = stats.tools_touched,
-            dry_run = true,
-            "context slim dry-run"
-        );
     }
     stats
 }
 
-/// Ask the pool's auxiliary judge about a borderline prompt.
-///
-/// Only consulted when the pool enables the judge and the heuristic difficulty sits in
-/// the ambiguous band; `None` means the heuristic score stands. Runs after the quota
-/// reservation so judge usage is admitted like any other request.
-async fn classify_borderline_difficulty(
-    state: &AppState,
-    auth: &AuthContext,
-    pool: Option<&ModelPool>,
-    virtual_model: &VirtualModel,
-    prompt_text: &str,
-    difficulty: f64,
-) -> Option<DifficultyTier> {
-    let pool = pool?;
-    if pool.judge_enabled == 0 {
-        return None;
-    }
-    let judge_endpoint_id = pool.judge_endpoint_id.as_ref()?;
-    if !(JUDGE_TRIGGER_MIN..=JUDGE_TRIGGER_MAX).contains(&difficulty) {
-        return None;
-    }
-    let scope = JudgeScope {
-        org_id: &auth.project.org_id,
-        project_id: &auth.project.id,
-        key_id: &auth.api_key.id,
-        virtual_model_id: &virtual_model.id,
-        source_pool_id: &virtual_model.pool_id,
-    };
-    classify_with_judge(state, judge_endpoint_id, prompt_text, &scope).await
-}
-
-/// Session, warming and affinity facts derived once per chat request.
-struct WarmAffinity {
+struct SessionAffinityInfo {
     session_id: Option<String>,
     context_epoch: u32,
     prefix_hash: Option<u64>,
@@ -396,31 +299,16 @@ struct WarmAffinity {
     is_prefix_stable: Option<bool>,
 }
 
-/// Derive the warming/session/affinity facts shared by the hint, the decision and the
-/// forwarded metadata.
-///
-/// Warm context wins over payload/header-derived values, and pool defaults apply while
-/// the pool is unknown. Every read of session state happens here, once, so the recorded
-/// decision and the forwarded metadata can never disagree.
-fn derive_warm_affinity(
+fn derive_session_affinity(
     state: &AppState,
     headers: &HeaderMap,
     payload: &serde_json::Value,
     virtual_model: &VirtualModel,
     pool: Option<&ModelPool>,
-    warm_context: Option<&WarmContext>,
-) -> WarmAffinity {
-    let session_id = warm_context
-        .and_then(|c| c.session_id.clone())
-        .or_else(|| extract_session_id(headers, payload));
-    let context_epoch = warm_context
-        .and_then(|c| c.epoch)
-        .map(|e| e.max(0) as u32)
-        .unwrap_or_else(|| extract_context_epoch(headers, payload));
-    let prefix_hash = warm_context
-        .and_then(|c| c.prefix_hash.as_ref())
-        .and_then(|h| u64::from_str_radix(h.trim_start_matches("0x"), 16).ok())
-        .or_else(|| resolve_prefix_hash(headers, payload));
+) -> SessionAffinityInfo {
+    let session_id = extract_session_id(headers, payload);
+    let context_epoch = extract_context_epoch(headers, payload);
+    let prefix_hash = resolve_prefix_hash(headers, payload);
     let affinity_ttl_secs = pool.map(|p| p.session_affinity_ttl_secs).unwrap_or(3600);
     let member_count = state
         .pool_members
@@ -454,7 +342,7 @@ fn derive_warm_affinity(
         .as_ref()
         .and_then(|sid| prefix_stable(&virtual_model.pool_id, sid, context_epoch, prefix_hash));
 
-    WarmAffinity {
+    SessionAffinityInfo {
         session_id,
         context_epoch,
         prefix_hash,
@@ -468,11 +356,6 @@ fn derive_warm_affinity(
     }
 }
 
-/// Publish the request's routing hint and return the candidate explanations.
-///
-/// The hint is stored under the pool id the data plane looks up and mirrored under the
-/// virtual-model id/name and the requested model, so every alias resolves to the same
-/// scoring input. The caller keeps the `HintGuard` alive for the request scope.
 fn install_route_hint(
     state: &AppState,
     virtual_model: &VirtualModel,
@@ -497,101 +380,161 @@ fn install_route_hint(
         .explain(&virtual_model.pool_id, route_hint.clone())
 }
 
-/// Inputs of the routing-decision document recorded in usage metadata.
-struct DecisionInput<'a> {
-    protocol: ChatProtocol,
-    strategy: &'a str,
-    signals: &'a RequestSignals,
-    difficulty: f64,
-    difficulty_source: &'a str,
-    judge_used: bool,
-    prompt_preview: &'a str,
-    budget: &'a BudgetGate,
-    candidates: &'a [serde_json::Value],
-    slim: &'a SlimStats,
-    affinity: &'a WarmAffinity,
-    warm_active: bool,
+pub async fn chat_completions(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    proxy_request_handler(state, auth, headers, payload, ChatProtocol::OpenAiChat).await
 }
 
-/// Render the routing decision recorded in usage logs.
-///
-/// Mirrors the scoring the data plane applies so any routed request can be explained
-/// from its usage row alone. Field names and nesting are part of that contract.
-fn routing_decision(input: DecisionInput<'_>) -> serde_json::Value {
-    serde_json::json!({
+pub async fn anthropic_messages(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    proxy_request_handler(
+        state,
+        auth,
+        headers,
+        payload,
+        ChatProtocol::AnthropicMessages,
+    )
+    .await
+}
+
+pub async fn responses(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    proxy_request_handler(
+        state,
+        auth,
+        HeaderMap::new(),
+        payload,
+        ChatProtocol::OpenAiResponses,
+    )
+    .await
+}
+
+async fn proxy_request_handler(
+    state: Arc<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    mut payload: serde_json::Value,
+    protocol: ChatProtocol,
+) -> Response {
+    let requested_model = payload
+        .get("model")
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if requested_model.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, "Invalid request: missing model").into_response();
+    }
+
+    let PoolContext {
+        virtual_model,
+        pool,
+        strategy,
+    } = or_return!(resolve_pool_context(&state, &auth, &requested_model).await);
+
+    let include_detail = protocol != ChatProtocol::OpenAiResponses;
+    let gate = or_return!(enforce_spend_budget(&state, &auth, include_detail).await);
+
+    let slim = if protocol == ChatProtocol::OpenAiResponses {
+        SlimStats {
+            tool_chars_before: 0,
+            slimmed_chars: 0,
+            tools_touched: 0,
+            dry_run: true,
+        }
+    } else {
+        slim_request_context(&mut payload, pool.as_ref())
+    };
+
+    let signals = request_signals(&payload);
+    let difficulty = signals.difficulty;
+    let _permit = or_return!(acquire_quota(&state, &auth).await);
+
+    let affinity =
+        derive_session_affinity(&state, &headers, &payload, &virtual_model, pool.as_ref());
+
+    let route_hint = RouteHint {
+        input_tokens: signals.input_tokens,
+        output_tokens: signals.output_tokens,
+        has_tools: signals.has_tools,
+        difficulty,
+        downshift: gate.downshift,
+        pool_id: virtual_model.pool_id.clone(),
+        affinity_enabled: affinity.affinity_enabled,
+        sticky_endpoint_id: affinity.sticky_endpoint_id.clone(),
+    };
+
+    let candidates = install_route_hint(&state, &virtual_model, &requested_model, &route_hint);
+    let ranked_endpoints = state
+        .feedback
+        .rank_endpoints(&virtual_model.pool_id, Some(route_hint.clone()));
+    let _hint_guard = HintGuard;
+
+    let prompt_preview = extract_user_prompt_preview(&payload);
+    let protocol_label = match protocol {
+        ChatProtocol::OpenAiChat => "openai_chat",
+        ChatProtocol::AnthropicMessages => "anthropic_messages",
+        ChatProtocol::OpenAiResponses => "responses",
+    };
+
+    let decision = serde_json::json!({
         "product": "smartgate",
-        "protocol": if input.protocol == ChatProtocol::Anthropic { "anthropic_messages" } else { "openai_chat" },
-        "strategy": input.strategy,
-        "input_tokens_est": input.signals.input_tokens,
-        "output_tokens_est": input.signals.output_tokens,
-        "difficulty": input.difficulty,
-        "difficulty_tier": difficulty_tier(input.difficulty).as_str(),
-        "difficulty_source": input.difficulty_source,
-        "judge_used": input.judge_used,
-        "prompt_preview": input.prompt_preview,
-        "signals": input.signals.signals,
-        "has_tools": input.signals.has_tools,
-        "downshift": input.budget.downshift,
-        "spent_today": input.budget.spent,
-        "daily_limit": input.budget.limit,
-        "candidates": input.candidates,
+        "protocol": protocol_label,
+        "strategy": strategy,
+        "input_tokens_est": signals.input_tokens,
+        "output_tokens_est": signals.output_tokens,
+        "difficulty": difficulty,
+        "difficulty_tier": difficulty_tier_str(difficulty),
+        "difficulty_source": "heuristic",
+        "judge_used": false,
+        "prompt_preview": prompt_preview,
+        "signals": signals.signals,
+        "has_tools": signals.has_tools,
+        "downshift": gate.downshift,
+        "spent_today": gate.spent,
+        "daily_limit": gate.limit,
+        "candidates": candidates,
         "context_slim": {
-            "tool_chars_before": input.slim.tool_chars_before,
-            "slimmed_chars": input.slim.slimmed_chars,
-            "tools_touched": input.slim.tools_touched,
-            "dry_run": input.slim.dry_run,
-            "session_id_required": input.warm_active,
+            "tool_chars_before": slim.tool_chars_before,
+            "slimmed_chars": slim.slimmed_chars,
+            "tools_touched": slim.tools_touched,
+            "dry_run": slim.dry_run,
+            "session_id_required": false,
         },
         "warming": {
-            "session_id": input.affinity.session_id,
-            "context_epoch": input.affinity.context_epoch,
-            "turn_index": input.affinity.turn_index,
-            "prefix_hash": input.affinity.prefix_hash.map(format_prefix_hash),
-            "affinity_enabled": input.affinity.affinity_enabled,
-            "affinity_applied": input.affinity.affinity_applied,
+            "session_id": affinity.session_id,
+            "context_epoch": affinity.context_epoch,
+            "turn_index": affinity.turn_index,
+            "prefix_hash": affinity.prefix_hash.map(format_prefix_hash),
+            "affinity_enabled": affinity.affinity_enabled,
+            "affinity_applied": affinity.affinity_applied,
             "affinity_hit": false,
-            "sticky_endpoint_id": input.affinity.sticky_endpoint_id,
-            "member_count": input.affinity.member_count,
-            "prefix_stable": input.affinity.is_prefix_stable,
+            "sticky_endpoint_id": affinity.sticky_endpoint_id,
+            "member_count": affinity.member_count,
+            "prefix_stable": affinity.is_prefix_stable,
         },
-    })
-}
+    });
 
-/// Stamp the chat-specific metadata keys on top of `stamp_core_metadata`.
-///
-/// Adds the Zene Warm provenance fields, the recorded routing decision, the cost-slim
-/// counters and the session/affinity facts the data plane echoes back. Key names and
-/// presence rules are part of the recorded usage contract.
-fn stamp_chat_metadata(
-    metadata: &mut std::collections::HashMap<String, String>,
-    warm_context: Option<&WarmContext>,
-    affinity: &WarmAffinity,
-    slim: &SlimStats,
-    decision: &serde_json::Value,
-    downshift: bool,
-) {
-    if let Some(context) = warm_context {
-        metadata.insert(
-            "zene_session_id".to_string(),
-            context.session_id.clone().unwrap_or_default(),
-        );
-        metadata.insert(
-            "zene_delivery".to_string(),
-            match context.delivery {
-                Delivery::Full => "full".to_string(),
-                Delivery::Delta => "delta".to_string(),
-            },
-        );
-        if let Some(epoch) = context.epoch {
-            metadata.insert("zene_context_epoch".to_string(), epoch.to_string());
-        }
-        if let Some(prefix_hash) = context.prefix_hash.clone() {
-            metadata.insert("zene_prefix_hash".to_string(), prefix_hash);
-        }
-        if let Some(request_id) = context.request_id.clone() {
-            metadata.insert("zene_request_id".to_string(), request_id);
-        }
-    }
+    let mut metadata = HashMap::new();
+    stamp_core_metadata(
+        &mut metadata,
+        &auth,
+        &virtual_model,
+        &strategy,
+        signals.input_tokens,
+        signals.output_tokens,
+    );
     metadata.insert("routing_decision".to_string(), decision.to_string());
     metadata.insert(
         "tool_message_chars".to_string(),
@@ -626,571 +569,567 @@ fn stamp_chat_metadata(
         "affinity_ttl_secs".to_string(),
         affinity.affinity_ttl_secs.to_string(),
     );
-    if downshift {
+    if gate.downshift {
         metadata.insert("budget_downshift".to_string(), "1".to_string());
     }
-}
 
-/// Parse the forwarded payload into the protocol-neutral chat request.
-///
-/// The OpenAI/Anthropic selection lives in one place, and a parse failure returns the
-/// handler's historic `Invalid request: ...` message for it to wrap in a 400.
-fn parse_chat_request(
-    payload: &serde_json::Value,
-    requested_model: &str,
-    protocol: ChatProtocol,
-) -> Result<ProxyChatRequest, String> {
-    let parsed = match protocol {
-        ChatProtocol::OpenAi => {
-            unigateway_sdk::protocol::openai_payload_to_chat_request(payload, requested_model)
-        }
-        ChatProtocol::Anthropic => {
-            unigateway_sdk::protocol::anthropic_payload_to_chat_request(payload, requested_model)
-        }
-    };
-    parsed.map_err(|error| format!("Invalid request: {}", error))
-}
-
-/// Engine dispatch outcome for the chat surface.
-///
-/// The outer `Result` carries warm-glue failures as prepared responses; the inner one
-/// is the raw engine result the handler maps to a status and body.
-type ChatDispatchResult = Result<Result<HostDispatchOutcome, HostError>, Response>;
-
-/// Install the warm-session glue, then dispatch the parsed chat request.
-///
-/// Warm failures keep their dedicated status/body mapping and are returned as the
-/// prepared response; any other dispatch outcome is handed back to the handler.
-async fn dispatch_chat_request(
-    state: &Arc<AppState>,
-    auth: &AuthContext,
-    warm_context: Option<&WarmContext>,
-    virtual_model: &VirtualModel,
-    protocol: ChatProtocol,
-    route_hint: RouteHint,
-    mut proxy_request: ProxyChatRequest,
-) -> ChatDispatchResult {
-    let warm_key = warm_context.and_then(|context| {
-        context.session_id.clone().map(|session_id| SessionKey {
-            project_id: auth.project.id.clone(),
-            api_key_id: auth.api_key.id.clone(),
-            session_id,
-        })
-    });
-    if let Err(error) = install_session_gateway_context(&mut proxy_request, warm_context) {
-        return Err(warm_error(warm_status(&error), error));
+    if ranked_endpoints.is_empty() {
+        return (StatusCode::NOT_FOUND, "Model pool has no active endpoints").into_response();
     }
-    if let Some(key) = warm_key.as_ref() {
-        if let Err(error) = state
-            .warm_store
-            .validate_virtual_model(key, Some(&virtual_model.id))
-            .await
-        {
-            return Err(warm_error(warm_status(&error), error));
-        }
-    }
-    let middleware = warm_key
-        .as_ref()
-        .map(|key| state.warm_store.host_middleware(key));
-    let pool_host = SmartGatePoolHost {
-        engine: state.engine.as_ref(),
-    };
-    let host_context =
-        unigateway_sdk::host::HostContext::from_parts(state.engine.as_ref(), &pool_host);
-    let request = unigateway_sdk::host::HostRequest::Chat(proxy_request);
-    let host_protocol = match protocol {
-        ChatProtocol::OpenAi => unigateway_sdk::host::HostProtocol::OpenAiChat,
-        ChatProtocol::Anthropic => unigateway_sdk::host::HostProtocol::AnthropicMessages,
-    };
-    Ok(crate::policy::TASK_ROUTE_HINT
-        .scope(
-            route_hint,
-            unigateway_sdk::host::dispatch_request_with_middleware(
-                &host_context,
-                unigateway_sdk::host::HostDispatchTarget::Service(&virtual_model.pool_id),
-                host_protocol,
-                None,
-                request,
-                middleware.as_ref(),
-            ),
+
+    // 1. If standalone `xlite` data plane is configured (`XLITE_UPSTREAM_URL`), try forwarding via `xlite` first!
+    if let Some(xlite_url) = state.config.xlite_url.as_deref() {
+        let primary_ep_id = ranked_endpoints[0].clone();
+        let xlite_target_model = format!("ep:{}", primary_ep_id);
+        if let Some(mut resp) = try_forward_via_xlite(
+            &state,
+            xlite_url,
+            &xlite_target_model,
+            &primary_ep_id,
+            &payload,
+            protocol,
+            &metadata,
         )
-        .await)
-}
-
-/// Inputs for the best-effort shadow mirroring of one successful response.
-struct ShadowMirror<'a> {
-    state: &'a Arc<AppState>,
-    auth: &'a AuthContext,
-    headers: &'a HeaderMap,
-    payload: &'a serde_json::Value,
-    request_preview: &'a str,
-    is_openai: bool,
-}
-
-/// Shadow Flighting: mirror a sample of non-streaming responses to the pool's flagship
-/// model in the background and compare response previews.
-///
-/// Sampling is unchanged: only JSON bodies are eligible and the pool's configured rate
-/// is compared against a fresh random draw. A dropped shadow permit still increments
-/// the drop counter, and the user-facing response is never affected.
-fn maybe_spawn_shadow(
-    pool: Option<&ModelPool>,
-    body: &ProtocolResponseBody,
-    mirror: ShadowMirror<'_>,
-) {
-    let is_json = matches!(body, ProtocolResponseBody::Json(_));
-    let shadow_config = pool.and_then(|p| {
-        if p.shadow_enabled == 0 {
-            return None;
-        }
-        let threshold = (p.shadow_sample_rate.clamp(0.0, 1.0) * 1_000_000.0) as u128;
-        p.shadow_virtual_model_id
-            .clone()
-            .map(|name| (name, threshold))
-    });
-    let should_shadow = is_json
-        && shadow_config
-            .as_ref()
-            .is_some_and(|(_, threshold)| uuid::Uuid::new_v4().as_u128() % 1_000_000 < *threshold);
-
-    let main_preview = if is_json {
-        match body {
-            ProtocolResponseBody::Json(json) => extract_json_preview(json),
-            _ => String::new(),
-        }
-    } else {
-        String::new()
-    };
-
-    if should_shadow {
-        if let Some((shadow_model_name, _)) = shadow_config {
-            spawn_shadow(
-                ShadowRequest {
-                    state: mirror.state,
-                    auth: mirror.auth,
-                    headers: mirror.headers,
-                    payload: mirror.payload,
-                    request_preview: mirror.request_preview,
-                    main_preview: &main_preview,
-                    is_openai: mirror.is_openai,
-                },
-                shadow_model_name,
-            );
+        .await
+        {
+            apply_budget_headers(&mut resp, &gate, slim.slimmed_chars);
+            return resp;
         }
     }
-}
 
-/// Convert a data-plane response and add the chat surface's budget/slim headers.
-///
-/// The soft-budget marker and the slimmed-character count are chat-only response
-/// decorations; the budget status/usage headers are shared by every proxy surface.
-fn decorate_proxy_response(
-    response: ProtocolHttpResponse,
-    gate: &BudgetGate,
-    slimmed_chars: usize,
-) -> Response {
-    let mut resp = protocol_response_to_axum(response);
-    apply_budget_headers(&mut resp, gate);
-    if gate.downshift {
-        if let Ok(value) = HeaderValue::from_str("soft") {
-            resp.headers_mut().insert("x-smartgate-budget", value);
-        }
-    }
-    if slimmed_chars > 0 {
-        if let Ok(value) = HeaderValue::from_str(&slimmed_chars.to_string()) {
-            resp.headers_mut().insert("x-smartgate-slim-chars", value);
-        }
-    }
+    // 2. Direct multi-endpoint dispatch with automatic failover across ranked candidates
+    let mut resp = dispatch_direct_with_failover(
+        &state,
+        &ranked_endpoints,
+        &strategy,
+        &payload,
+        protocol,
+        metadata,
+    )
+    .await;
+
+    apply_budget_headers(&mut resp, &gate, slim.slimmed_chars);
     resp
 }
 
-pub async fn chat_completions(
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-    headers: HeaderMap,
-    Json(payload): Json<serde_json::Value>,
-) -> Response {
-    chat_proxy(state, auth, headers, payload, ChatProtocol::OpenAi).await
-}
-
-pub async fn anthropic_messages(
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-    headers: HeaderMap,
-    Json(payload): Json<serde_json::Value>,
-) -> Response {
-    chat_proxy(state, auth, headers, payload, ChatProtocol::Anthropic).await
-}
-
-async fn chat_proxy(
-    state: Arc<AppState>,
-    auth: AuthContext,
-    headers: HeaderMap,
-    mut payload: serde_json::Value,
+async fn try_forward_via_xlite(
+    state: &Arc<AppState>,
+    xlite_url: &str,
+    xlite_model: &str,
+    primary_ep_id: &str,
+    payload: &serde_json::Value,
     protocol: ChatProtocol,
-) -> Response {
-    let requested_model = payload
-        .get("model")
-        .and_then(|m| m.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let PoolContext {
-        virtual_model,
-        pool,
-        strategy,
-    } = or_return!(resolve_pool_context(&state, &auth, &requested_model).await);
-
-    let warm_context = match parse_context_with_headers(&payload, Some(&headers)) {
-        Ok(context) => context,
-        Err(error) => return warm_error(warm_status(&error), error),
+    metadata: &HashMap<String, String>,
+) -> Option<Response> {
+    let path = match protocol {
+        ChatProtocol::OpenAiChat => "/v1/chat/completions",
+        ChatProtocol::AnthropicMessages => "/v1/messages",
+        ChatProtocol::OpenAiResponses => "/v1/responses",
     };
-
-    if let Some(context) = warm_context.as_ref() {
-        state.warm_store.record_delta_attempt(context.delivery);
-        if context.delivery == Delivery::Full {
-            strip_context(&mut payload);
-        }
+    let url = format!("{}{}", xlite_url.trim_end_matches('/'), path);
+    let mut body_val = payload.clone();
+    if let Some(obj) = body_val.as_object_mut() {
+        obj.insert(
+            "model".to_string(),
+            serde_json::Value::String(xlite_model.to_string()),
+        );
     }
 
-    // --- Control: progressive spend budget ---
-    let gate = or_return!(enforce_spend_budget(&state, &auth, true).await);
-
-    // --- Cost: context slim (disabled for Zene Warm snapshots) ---
-    let slim = slim_request_context(&mut payload, warm_context.is_some(), pool.as_ref());
-
-    // Hints for Cost/Capability scoring (after slim so token est matches forwarded body)
-    let mut signals = request_signals(&payload);
-    let mut difficulty = signals.difficulty;
-    let mut difficulty_source = "heuristic";
-    let mut judge_used = false;
-
-    let permit = or_return!(acquire_quota(&state, &auth).await);
-
-    // If auxiliary judge model is enabled on this pool and complexity is in the ambiguous zone.
-    if let Some(tier) = classify_borderline_difficulty(
-        &state,
-        &auth,
-        pool.as_ref(),
-        &virtual_model,
-        &signals.prompt_text,
-        difficulty,
-    )
-    .await
-    {
-        difficulty = tier.score();
-        difficulty_source = "judge";
-        judge_used = true;
-        signals
-            .signals
-            .push(format!("Auxiliary Judge: {}", tier.as_str().to_uppercase()));
-    }
-
-    let affinity = derive_warm_affinity(
-        &state,
-        &headers,
-        &payload,
-        &virtual_model,
-        pool.as_ref(),
-        warm_context.as_ref(),
-    );
-
-    let route_hint = RouteHint {
-        input_tokens: signals.input_tokens,
-        output_tokens: signals.output_tokens,
-        has_tools: signals.has_tools,
-        difficulty,
-        downshift: gate.downshift,
-        pool_id: virtual_model.pool_id.clone(),
-        affinity_enabled: affinity.affinity_enabled,
-        sticky_endpoint_id: affinity.sticky_endpoint_id.clone(),
-    };
-    // Same scoring the data plane will apply, recorded so the decision is visible
-    // in usage logs instead of only in server logs.
-    let candidates = install_route_hint(&state, &virtual_model, &requested_model, &route_hint);
-    let _hint_guard = HintGuard;
-
-    let prompt_preview = extract_user_prompt_preview(&payload);
-    let decision = routing_decision(DecisionInput {
-        protocol,
-        strategy: &strategy,
-        signals: &signals,
-        difficulty,
-        difficulty_source,
-        judge_used,
-        prompt_preview: &prompt_preview,
-        budget: &gate,
-        candidates: &candidates,
-        slim: &slim,
-        affinity: &affinity,
-        warm_active: warm_context.is_some(),
-    });
-
-    let mut proxy_request = match parse_chat_request(&payload, &requested_model, protocol) {
-        Ok(request) => request,
-        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
-    };
-
-    stamp_core_metadata(
-        &mut proxy_request.metadata,
-        &auth,
-        &virtual_model,
-        &strategy,
-        signals.input_tokens,
-        signals.output_tokens,
-    );
-    stamp_chat_metadata(
-        &mut proxy_request.metadata,
-        warm_context.as_ref(),
-        &affinity,
-        &slim,
-        &decision,
-        gate.downshift,
-    );
-
-    let dispatch = or_return!(
-        dispatch_chat_request(
-            &state,
-            &auth,
-            warm_context.as_ref(),
-            &virtual_model,
-            protocol,
-            route_hint,
-            proxy_request,
+    let start = Instant::now();
+    let resp = match state
+        .http_client
+        .post(&url)
+        .header(
+            "Authorization",
+            format!("Bearer {}", state.config.xlite_internal_key),
         )
+        .json(&body_val)
+        .send()
         .await
-    );
-
-    match dispatch {
-        Ok(HostDispatchOutcome::Response(response)) => {
-            permit.disarm();
-            if let Some(context) = warm_context.as_ref() {
-                if context.delivery == Delivery::Delta {
-                    state.warm_store.record_delta_result(true);
-                }
-            }
-
-            let (status, body) = response.into_parts();
-            maybe_spawn_shadow(
-                pool.as_ref(),
-                &body,
-                ShadowMirror {
-                    state: &state,
-                    auth: &auth,
-                    headers: &headers,
-                    payload: &payload,
-                    request_preview: &prompt_preview,
-                    is_openai: protocol == ChatProtocol::OpenAi,
-                },
-            );
-
-            let response = match body {
-                ProtocolResponseBody::Json(json) => ProtocolHttpResponse::json(status, json),
-                ProtocolResponseBody::ServerSentEvents(stream) => {
-                    ProtocolHttpResponse::ok_sse(stream)
-                }
-            };
-            decorate_proxy_response(response, &gate, slim.slimmed_chars)
-        }
-        Ok(HostDispatchOutcome::PoolNotFound) => {
-            (StatusCode::NOT_FOUND, "Model pool not found").into_response()
-        }
-        Ok(_) => (StatusCode::BAD_GATEWAY, "Unsupported host dispatch outcome").into_response(),
-        Err(e) => {
-            if warm_context
-                .as_ref()
-                .is_some_and(|context| context.delivery == Delivery::Delta)
-            {
-                state.warm_store.record_delta_result(false);
-            }
-            tracing::error!("Proxy error: {}", e);
-            host_error_response(e)
-        }
-    }
-}
-
-pub async fn responses(
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-    Json(payload): Json<serde_json::Value>,
-) -> Response {
-    let requested_model = payload
-        .get("model")
-        .and_then(|model| model.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let PoolContext {
-        virtual_model,
-        pool: _pool,
-        strategy,
-    } = or_return!(resolve_pool_context(&state, &auth, &requested_model).await);
-
-    let gate = or_return!(enforce_spend_budget(&state, &auth, false).await);
-    let spent = gate.spent;
-    let limit = gate.limit;
-    let downshift = gate.downshift;
-
-    let RequestSignals {
-        prompt_text,
-        input_tokens,
-        output_tokens,
-        difficulty,
-        has_tools,
-        signals,
-    } = request_signals(&payload);
-    let difficulty_source = "heuristic";
-    let judge_used = false;
-    set_hint(RouteHint {
-        input_tokens,
-        output_tokens,
-        has_tools,
-        difficulty,
-        downshift,
-        pool_id: virtual_model.pool_id.clone(),
-        affinity_enabled: false,
-        sticky_endpoint_id: None,
-    });
-    let _hint_guard = HintGuard;
-
-    let permit = or_return!(acquire_quota(&state, &auth).await);
-
-    let mut proxy_request = match unigateway_sdk::protocol::openai_payload_to_responses_request(
-        &payload,
-        &requested_model,
-    ) {
-        Ok(request) => request,
-        Err(error) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                format!("Invalid request: {}", error),
-            )
-                .into_response();
-        }
-    };
-    stamp_core_metadata(
-        &mut proxy_request.metadata,
-        &auth,
-        &virtual_model,
-        &strategy,
-        input_tokens,
-        output_tokens,
-    );
-    let prompt_preview = prompt_text.chars().take(200).collect::<String>();
-    let difficulty_tier = difficulty_tier(difficulty);
-    proxy_request.metadata.insert(
-        "routing_decision".to_string(),
-        serde_json::json!({
-            "product": "smartgate",
-            "protocol": "responses",
-            "input_tokens_est": input_tokens,
-            "output_tokens_est": output_tokens,
-            "difficulty": difficulty,
-            "difficulty_tier": difficulty_tier.as_str(),
-            "difficulty_source": difficulty_source,
-            "judge_used": judge_used,
-            "prompt_preview": prompt_preview,
-            "signals": signals,
-            "has_tools": has_tools,
-            "downshift": downshift,
-            "spent_today": spent,
-            "daily_limit": limit,
-        })
-        .to_string(),
-    );
-
-    let target = ExecutionTarget::Pool {
-        pool_id: virtual_model.pool_id,
-    };
-    match state.engine.proxy_responses(proxy_request, target).await {
-        Ok(session) => {
-            permit.disarm();
-            let response = unigateway_sdk::protocol::render_openai_responses_session(session);
-            let mut response = protocol_response_to_axum(response);
-            apply_budget_headers(&mut response, &gate);
-            response
-        }
-        Err(error) => {
-            tracing::error!("Responses proxy error: {}", error);
-            (
-                StatusCode::BAD_GATEWAY,
-                format!("Upstream error: {}", error),
-            )
-                .into_response()
-        }
-    }
-}
-
-fn host_error_response(error: HostError) -> Response {
-    match error {
-        HostError::CoreInvalidRequest(message) => {
-            if let Some(warm) = warm_error_from_message(&message) {
-                return warm_error(warm_status(&warm), warm);
-            }
-            (
-                StatusCode::BAD_REQUEST,
-                format!("Invalid request: {message}"),
-            )
-                .into_response()
-        }
-        HostError::CorePoolNotFound(_) | HostError::CoreEndpointNotFound(_) => {
-            (StatusCode::NOT_FOUND, error.to_string()).into_response()
-        }
-        _ => (StatusCode::BAD_GATEWAY, format!("Upstream error: {error}")).into_response(),
-    }
-}
-
-fn warm_error_from_message(message: &str) -> Option<WarmError> {
-    let lower = message.to_ascii_lowercase();
-    if lower.contains("session not found") {
-        Some(WarmError::SessionNotFound)
-    } else if lower.contains("session expired") {
-        Some(WarmError::SessionExpired)
-    } else if lower.contains("epoch mismatch") {
-        Some(WarmError::EpochMismatch)
-    } else if lower.contains("fingerprint mismatch") {
-        Some(WarmError::PrefixHashMismatch)
-    } else if lower.contains("tail_start mismatch") {
-        let expected = parse_error_number(&lower, "expected ").unwrap_or_default();
-        let actual = parse_error_number(&lower, "got ").unwrap_or_default();
-        Some(WarmError::TailStartMismatch { expected, actual })
-    } else if lower.contains("tail too large") {
-        Some(WarmError::TailTooLarge)
-    } else if lower.contains("assembled request too large") || lower.contains("assembled too large")
     {
-        Some(WarmError::AssembledTooLarge)
+        Ok(r) => r,
+        Err(err) => {
+            tracing::warn!(
+                target: "smartgate.xlite",
+                error = %err,
+                "xlite data-plane unreachable; falling back to direct upstream dispatch"
+            );
+            return None;
+        }
+    };
+
+    let status = resp.status();
+    let latency_ms = start.elapsed().as_millis() as u64;
+
+    // xlite already fanned out across the candidate's backup channels; if even that failed with a
+    // retryable status, let the direct dispatcher try the remaining ranked endpoints instead.
+    if status == StatusCode::TOO_MANY_REQUESTS
+        || status == StatusCode::NOT_FOUND
+        || status.is_server_error()
+    {
+        tracing::warn!(
+            target: "smartgate.xlite",
+            endpoint_id = %primary_ep_id,
+            status = status.as_u16(),
+            "xlite returned a retryable status; failing over to direct upstream dispatch"
+        );
+        record_attempt_metric(state, primary_ep_id, false, latency_ms as f64).await;
+        return None;
+    }
+
+    record_attempt_metric(state, primary_ep_id, status.is_success(), latency_ms as f64).await;
+
+    let account_id = state
+        .endpoints
+        .get(primary_ep_id)
+        .map(|ep| ep.account_id.clone());
+
+    Some(
+        convert_upstream_response(
+            state.clone(),
+            resp,
+            primary_ep_id.to_string(),
+            account_id,
+            latency_ms,
+            vec![format!("{}:{}", primary_ep_id, status.as_u16())],
+            metadata.clone(),
+        )
+        .await,
+    )
+}
+
+async fn dispatch_direct_with_failover(
+    state: &Arc<AppState>,
+    ranked_endpoints: &[String],
+    strategy: &str,
+    payload: &serde_json::Value,
+    protocol: ChatProtocol,
+    metadata: HashMap<String, String>,
+) -> Response {
+    let max_attempts = match strategy {
+        "fallback" | "capability_aware" | "cost_aware" => ranked_endpoints.len().max(1),
+        _ => ranked_endpoints.len().clamp(1, 2),
+    };
+
+    let mut attempts = Vec::new();
+    let mut last_error: Option<(StatusCode, String)> = None;
+
+    for (idx, ep_id) in ranked_endpoints.iter().take(max_attempts).enumerate() {
+        let Some(ep) = resolve_endpoint(state, ep_id).await else {
+            continue;
+        };
+
+        let mut upstream_body = payload.clone();
+        if let Some(obj) = upstream_body.as_object_mut() {
+            obj.insert(
+                "model".to_string(),
+                serde_json::Value::String(ep.upstream_model_id.clone()),
+            );
+        }
+
+        let base = normalize_base_url(&ep.base_url);
+        let url = match protocol {
+            ChatProtocol::OpenAiChat => format!("{}chat/completions", base),
+            ChatProtocol::AnthropicMessages => format!("{}messages", base),
+            ChatProtocol::OpenAiResponses => format!("{}responses", base),
+        };
+
+        let start = Instant::now();
+        let mut req = state.http_client.post(&url);
+        if ep.protocol.eq_ignore_ascii_case("anthropic")
+            || protocol == ChatProtocol::AnthropicMessages
+        {
+            req = req
+                .header("x-api-key", &ep.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("Authorization", format!("Bearer {}", ep.api_key));
+        } else {
+            req = req.header("Authorization", format!("Bearer {}", ep.api_key));
+        }
+
+        match req.json(&upstream_body).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                let latency_ms = start.elapsed().as_millis() as u64;
+                // 404 is retried as well: free upstream catalogs retire models often, so a dead
+                // model id on one candidate must not fail the whole request.
+                let should_retry = (status == StatusCode::TOO_MANY_REQUESTS
+                    || status == StatusCode::NOT_FOUND
+                    || status.is_server_error())
+                    && (idx + 1 < max_attempts);
+
+                attempts.push(format!("{}:{}", ep.id, status.as_u16()));
+                record_attempt_metric(state, &ep.id, status.is_success(), latency_ms as f64).await;
+
+                if should_retry {
+                    let body_text = resp.text().await.unwrap_or_default();
+                    tracing::warn!(
+                        target: "smartgate.routing",
+                        endpoint_id = %ep.id,
+                        status = status.as_u16(),
+                        "primary endpoint returned retryable status; failing over to next candidate"
+                    );
+                    last_error = Some((status, body_text));
+                    continue;
+                }
+
+                return convert_upstream_response(
+                    state.clone(),
+                    resp,
+                    ep.id.clone(),
+                    Some(ep.account_id.clone()),
+                    latency_ms,
+                    attempts,
+                    metadata,
+                )
+                .await;
+            }
+            Err(err) => {
+                let latency_ms = start.elapsed().as_millis() as u64;
+                attempts.push(format!("{}:transport_error", ep.id));
+                record_attempt_metric(state, &ep.id, false, latency_ms as f64).await;
+                last_error = Some((StatusCode::BAD_GATEWAY, format!("Upstream error: {}", err)));
+                if idx + 1 < max_attempts {
+                    continue;
+                }
+            }
+        }
+    }
+
+    let (status, msg) = last_error.unwrap_or((
+        StatusCode::BAD_GATEWAY,
+        "No healthy upstream endpoint".to_string(),
+    ));
+    record_request_usage(
+        state,
+        UsageRecordInput {
+            endpoint_id: ranked_endpoints
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "unknown".to_string()),
+            provider_account_id: None,
+            latency_ms: 0,
+            status_code: status.as_u16(),
+            error_message: Some(msg.clone()),
+            provider_input_tokens: None,
+            provider_output_tokens: None,
+            provider_total_tokens: None,
+            cache_hit_tokens: None,
+            cache_write_tokens: None,
+            ttft_ms: None,
+            attempts,
+            metadata,
+        },
+    )
+    .await;
+
+    (status, msg).into_response()
+}
+
+async fn resolve_endpoint(state: &AppState, endpoint_id: &str) -> Option<SyncEndpointRow> {
+    if let Some(ep) = state.endpoints.get(endpoint_id) {
+        return Some(ep.clone());
+    }
+    sqlx::query_as::<_, SyncEndpointRow>(
+        "SELECT e.id, e.account_id, e.upstream_model_id, e.enabled,
+                0 AS pool_priority, 0 AS pool_weight,
+                pa.provider_type, pa.protocol, pa.base_url, pa.api_key, pa.name AS account_name,
+                e.input_price_per_1m, e.output_price_per_1m,
+                e.capability_score, e.supports_tools, e.context_length,
+                e.health_status, e.cooldown_until
+         FROM endpoints e
+         JOIN provider_accounts pa ON pa.id = e.account_id
+         WHERE e.id = $1 AND e.enabled = TRUE AND pa.status = 'active'",
+    )
+    .bind(endpoint_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+}
+
+async fn convert_upstream_response(
+    state: Arc<AppState>,
+    resp: reqwest::Response,
+    endpoint_id: String,
+    provider_account_id: Option<String>,
+    latency_ms: u64,
+    attempts: Vec<String>,
+    metadata: HashMap<String, String>,
+) -> Response {
+    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let is_sse = resp
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| ct.contains("text/event-stream"))
+        .unwrap_or(false);
+
+    if is_sse {
+        let byte_stream = resp.bytes_stream();
+        let stream_start = Instant::now();
+        let out_stream = sse_stream_with_usage(
+            state,
+            endpoint_id,
+            provider_account_id,
+            status.as_u16(),
+            stream_start,
+            attempts,
+            metadata,
+            byte_stream,
+        );
+        return Response::builder()
+            .status(status)
+            .header("content-type", "text/event-stream")
+            .header("cache-control", "no-cache")
+            .header("connection", "keep-alive")
+            .body(Body::from_stream(out_stream))
+            .expect("valid SSE response");
+    }
+
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(err) => {
+            let msg = format!("Failed to read upstream body: {}", err);
+            record_request_usage(
+                &state,
+                UsageRecordInput {
+                    endpoint_id,
+                    provider_account_id,
+                    latency_ms,
+                    status_code: 502,
+                    error_message: Some(msg.clone()),
+                    provider_input_tokens: None,
+                    provider_output_tokens: None,
+                    provider_total_tokens: None,
+                    cache_hit_tokens: None,
+                    cache_write_tokens: None,
+                    ttft_ms: None,
+                    attempts,
+                    metadata,
+                },
+            )
+            .await;
+            return (StatusCode::BAD_GATEWAY, msg).into_response();
+        }
+    };
+
+    let parsed_json: Option<serde_json::Value> = serde_json::from_slice(&bytes).ok();
+    let (in_tok, out_tok, tot_tok, cache_hit, cache_write) = parsed_json
+        .as_ref()
+        .map(extract_usage_tokens)
+        .unwrap_or((None, None, None, None, None));
+
+    let error_message = if !status.is_success() {
+        Some(String::from_utf8_lossy(&bytes).chars().take(300).collect())
     } else {
         None
+    };
+
+    record_request_usage(
+        &state,
+        UsageRecordInput {
+            endpoint_id,
+            provider_account_id,
+            latency_ms,
+            status_code: status.as_u16(),
+            error_message,
+            provider_input_tokens: in_tok,
+            provider_output_tokens: out_tok,
+            provider_total_tokens: tot_tok,
+            cache_hit_tokens: cache_hit,
+            cache_write_tokens: cache_write,
+            ttft_ms: None,
+            attempts,
+            metadata,
+        },
+    )
+    .await;
+
+    if let Some(json_val) = parsed_json {
+        (status, Json(json_val)).into_response()
+    } else {
+        Response::builder()
+            .status(status)
+            .header("content-type", "application/json")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| (status, "").into_response())
     }
 }
 
-fn parse_error_number(message: &str, marker: &str) -> Option<usize> {
-    let start = message.find(marker)? + marker.len();
-    let digits = message[start..]
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect::<String>();
-    digits.parse().ok()
+#[allow(clippy::too_many_arguments)]
+fn sse_stream_with_usage<S>(
+    state: Arc<AppState>,
+    endpoint_id: String,
+    provider_account_id: Option<String>,
+    status_code: u16,
+    stream_start: Instant,
+    attempts: Vec<String>,
+    metadata: HashMap<String, String>,
+    byte_stream: S,
+) -> impl futures_util::Stream<Item = Result<axum::body::Bytes, std::io::Error>>
+where
+    S: futures_util::Stream<Item = Result<axum::body::Bytes, reqwest::Error>>
+        + Unpin
+        + Send
+        + 'static,
+{
+    struct SseState<S> {
+        inner: S,
+        state: Arc<AppState>,
+        endpoint_id: String,
+        provider_account_id: Option<String>,
+        status_code: u16,
+        stream_start: Instant,
+        ttft_ms: Option<i32>,
+        in_tok: Option<u64>,
+        out_tok: Option<u64>,
+        tot_tok: Option<u64>,
+        cache_hit: Option<u64>,
+        cache_write: Option<u64>,
+        attempts: Vec<String>,
+        metadata: HashMap<String, String>,
+        done: bool,
+    }
+
+    let init = SseState {
+        inner: byte_stream,
+        state,
+        endpoint_id,
+        provider_account_id,
+        status_code,
+        stream_start,
+        ttft_ms: None,
+        in_tok: None,
+        out_tok: None,
+        tot_tok: None,
+        cache_hit: None,
+        cache_write: None,
+        attempts,
+        metadata,
+        done: false,
+    };
+
+    futures_util::stream::unfold(init, |mut st| async move {
+        if st.done {
+            return None;
+        }
+        match st.inner.next().await {
+            Some(Ok(chunk)) => {
+                if st.ttft_ms.is_none() {
+                    st.ttft_ms = Some(st.stream_start.elapsed().as_millis() as i32);
+                }
+                if let Ok(text) = std::str::from_utf8(&chunk) {
+                    for line in text.lines() {
+                        if let Some(data) = line.strip_prefix("data:") {
+                            let data = data.trim();
+                            if data != "[DONE]" && data.contains("\"usage\"") {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                                    let (i, o, t, ch, cw) = extract_usage_tokens(&val);
+                                    if i.is_some() {
+                                        st.in_tok = i;
+                                    }
+                                    if o.is_some() {
+                                        st.out_tok = o;
+                                    }
+                                    if t.is_some() {
+                                        st.tot_tok = t;
+                                    }
+                                    if ch.is_some() {
+                                        st.cache_hit = ch;
+                                    }
+                                    if cw.is_some() {
+                                        st.cache_write = cw;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Some((Ok(chunk), st))
+            }
+            Some(Err(err)) => {
+                st.done = true;
+                record_request_usage(
+                    &st.state,
+                    UsageRecordInput {
+                        endpoint_id: st.endpoint_id.clone(),
+                        provider_account_id: st.provider_account_id.clone(),
+                        latency_ms: st.stream_start.elapsed().as_millis() as u64,
+                        status_code: st.status_code,
+                        error_message: Some(err.to_string()),
+                        provider_input_tokens: st.in_tok,
+                        provider_output_tokens: st.out_tok,
+                        provider_total_tokens: st.tot_tok,
+                        cache_hit_tokens: st.cache_hit,
+                        cache_write_tokens: st.cache_write,
+                        ttft_ms: st.ttft_ms,
+                        attempts: st.attempts.clone(),
+                        metadata: st.metadata.clone(),
+                    },
+                )
+                .await;
+                Some((Err(std::io::Error::other(err.to_string())), st))
+            }
+            None => {
+                st.done = true;
+                record_request_usage(
+                    &st.state,
+                    UsageRecordInput {
+                        endpoint_id: st.endpoint_id.clone(),
+                        provider_account_id: st.provider_account_id.clone(),
+                        latency_ms: st.stream_start.elapsed().as_millis() as u64,
+                        status_code: st.status_code,
+                        error_message: None,
+                        provider_input_tokens: st.in_tok,
+                        provider_output_tokens: st.out_tok,
+                        provider_total_tokens: st.tot_tok,
+                        cache_hit_tokens: st.cache_hit,
+                        cache_write_tokens: st.cache_write,
+                        ttft_ms: st.ttft_ms,
+                        attempts: st.attempts.clone(),
+                        metadata: st.metadata.clone(),
+                    },
+                )
+                .await;
+                None
+            }
+        }
+    })
 }
 
-fn warm_status(error: &WarmError) -> StatusCode {
-    match error {
-        WarmError::InvalidContext(_) | WarmError::InvalidPublish(_) => StatusCode::BAD_REQUEST,
-        WarmError::SessionNotFound | WarmError::SessionExpired => StatusCode::NOT_FOUND,
-        WarmError::StoreUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-        WarmError::PrefixTooLarge | WarmError::TailTooLarge | WarmError::AssembledTooLarge => {
-            StatusCode::PAYLOAD_TOO_LARGE
-        }
-        WarmError::VirtualModelUnauthorized | WarmError::VirtualModelRequired => {
-            StatusCode::FORBIDDEN
-        }
-        WarmError::EpochConflict
-        | WarmError::StaleEpoch
-        | WarmError::EpochMismatch
-        | WarmError::PrefixHashMismatch
-        | WarmError::TailStartMismatch { .. }
-        | WarmError::VirtualModelMismatch => StatusCode::CONFLICT,
-    }
+/// `(input, output, total, cache_hit, cache_write)` token counts parsed from a provider payload.
+type UsageTokens = (
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+);
+
+fn extract_usage_tokens(val: &serde_json::Value) -> UsageTokens {
+    let Some(usage) = val.get("usage") else {
+        return (None, None, None, None, None);
+    };
+    let input = usage
+        .get("prompt_tokens")
+        .or_else(|| usage.get("input_tokens"))
+        .and_then(|v| v.as_u64());
+    let output = usage
+        .get("completion_tokens")
+        .or_else(|| usage.get("output_tokens"))
+        .and_then(|v| v.as_u64());
+    let total = usage.get("total_tokens").and_then(|v| v.as_u64());
+    let cache_hit = usage
+        .get("prompt_tokens_details")
+        .and_then(|d| d.get("cached_tokens"))
+        .or_else(|| usage.get("cache_read_input_tokens"))
+        .or_else(|| usage.get("prompt_cache_hit_tokens"))
+        .and_then(|v| v.as_u64());
+    let cache_write = usage
+        .get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64());
+    (input, output, total, cache_hit, cache_write)
 }
 
 fn budget_headers(budget: &BudgetOutcome, spent: f64, limit: Option<f64>) -> HeaderMap {
@@ -1213,23 +1152,4 @@ fn budget_headers(budget: &BudgetOutcome, spent: f64, limit: Option<f64>) -> Hea
         }
     }
     headers
-}
-
-fn protocol_response_to_axum(resp: ProtocolHttpResponse) -> Response {
-    use axum::body::Body;
-
-    let (status, body) = resp.into_parts();
-    match body {
-        ProtocolResponseBody::Json(json) => (status, Json(json)).into_response(),
-        ProtocolResponseBody::ServerSentEvents(stream) => {
-            let body = Body::from_stream(stream);
-            Response::builder()
-                .status(status)
-                .header("content-type", "text/event-stream")
-                .header("cache-control", "no-cache")
-                .header("connection", "keep-alive")
-                .body(body)
-                .expect("valid static response headers")
-        }
-    }
 }

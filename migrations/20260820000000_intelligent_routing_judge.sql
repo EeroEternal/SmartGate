@@ -1,2 +1,0 @@
-ALTER TABLE model_pools ADD COLUMN IF NOT EXISTS judge_enabled INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE model_pools ADD COLUMN IF NOT EXISTS judge_endpoint_id TEXT;

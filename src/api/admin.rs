@@ -6,7 +6,6 @@ use crate::api::models::{
     VirtualModelView,
 };
 pub use crate::api::stats_handler::get_stats;
-pub use crate::api::warming_stats::get_warming_stats;
 use crate::config::AppState;
 use crate::models::{ApiKey, Endpoint, ModelPool, Org, Project, ProviderAccount, VirtualModel};
 use axum::{
@@ -18,14 +17,8 @@ use axum::{
 use sqlx::FromRow;
 use std::sync::Arc;
 
-/// Resolve the organization a legacy admin write belongs to.
-///
-/// `provider_accounts.org_id` and `model_pools.org_id` are nullable for historical
-/// reasons, but rows written without one are invisible to every org-scoped query (the
-/// SaaS API filters by `org_id`). An explicit `org_id` always wins; otherwise it is
-/// inferred, and only when the deployment has exactly one organization.
 async fn resolve_admin_org_id(
-    db: &sqlx::PgPool,
+    db: &sqlx::SqlitePool,
     requested: Option<&str>,
 ) -> Result<String, (StatusCode, Json<ApiResponse<()>>)> {
     if let Some(org_id) = requested.map(str::trim).filter(|value| !value.is_empty()) {
@@ -93,7 +86,6 @@ pub fn admin_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/api-keys/:id", patch(update_api_key_quota))
         // Statistics
         .route("/stats", get(get_stats))
-        .route("/stats/warming", get(get_warming_stats))
         // Free Token Pool
         .route("/free-pool", get(crate::free_token::get_admin_free_pool))
         .route(
@@ -188,15 +180,7 @@ async fn create_provider(
                 )
             })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(provider)))
 }
@@ -258,15 +242,7 @@ async fn create_pool(
             )
         })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(pool)))
 }
@@ -342,15 +318,7 @@ async fn update_pool(
             )
         })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(updated)))
 }
@@ -474,15 +442,7 @@ async fn create_endpoint(
             )
         })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(endpoint)))
 }
@@ -563,15 +523,7 @@ async fn create_virtual_model(
             )
         })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(model)))
 }
@@ -596,15 +548,7 @@ async fn bind_endpoint_to_pool(
         (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error("Database error")))
     })?;
 
-    let _ = crate::sync::sync_all_pools(
-        &state.engine,
-        &state.db,
-        &state.pools,
-        &state.pool_members,
-        &state.profiles,
-        &state.metrics,
-    )
-    .await;
+    let _ = crate::sync::sync_state_and_xlite(&state).await;
 
     Ok(Json(ApiResponse::success(())))
 }
