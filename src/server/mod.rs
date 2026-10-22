@@ -4,7 +4,7 @@ use crate::quota::QuotaLimiter;
 use crate::routing::SmartGateFeedbackProvider;
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{header::CONTENT_TYPE, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
@@ -258,9 +258,15 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         .with_state(app_state);
 
     let app = if std::path::Path::new("web/dist").exists() {
-        app.fallback_service(
-            ServeDir::new("web/dist").not_found_service(ServeFile::new("web/dist/index.html")),
-        )
+        // Assets are served from disk; every other path renders the SPA shell so client-side
+        // routes such as `/admin/pools` survive a hard refresh.
+        let index_html = std::fs::read("web/dist/index.html").unwrap_or_default();
+        app.nest_service("/assets", ServeDir::new("web/dist/assets"))
+            .route_service("/favicon.svg", ServeFile::new("web/dist/favicon.svg"))
+            .fallback(get(move || {
+                let body = index_html.clone();
+                async move { ([(CONTENT_TYPE, "text/html; charset=utf-8")], body) }
+            }))
     } else {
         app.fallback(get(|| async {
             "SmartGate API is running. Admin UI: http://localhost:18764"
